@@ -1,0 +1,2 @@
+module Data.GraphQL () where
+

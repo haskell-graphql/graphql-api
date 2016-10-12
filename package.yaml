@@ -19,30 +19,6 @@ dependencies:
 
 library:
   source-dirs: src
-  dependencies:
-    - aeson
-    - bytestring
-    - http-media
-    - http-types
-    - logging-effect
-    - neat-interpolation
-    - optparse-applicative
-    - prometheus-client
-    - prometheus-metrics-ghc
-    - servant-server
-    - time
-    - wai
-    - wai-extra
-    - wai-middleware-prometheus
-    - warp
-    - wl-pprint-text
-
-executables:
-  graphql-haskell:
-    main: Main.hs
-    source-dirs: cmd
-    dependencies:
-      - graphql-haskell
 
 tests:
   graphql-haskell-tests:
