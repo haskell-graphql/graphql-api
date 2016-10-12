@@ -1,0 +1,53 @@
+name: graphql-haskell
+version: 0.1.0
+synopsis: Sketch of GraphQL stuff
+description: Please see README.md
+maintainer: Jonathan M. Lange <jml@mumak.net>
+license: Apache
+github: jml/graphql-haskell
+category: Web
+
+ghc-options: -Wall -Werror
+default-extensions:
+  - NoImplicitPrelude
+  - OverloadedStrings
+  - RecordWildCards
+
+dependencies:
+  - base >= 4.9 && < 5
+  - protolude
+
+library:
+  source-dirs: src
+  dependencies:
+    - aeson
+    - bytestring
+    - http-media
+    - http-types
+    - logging-effect
+    - neat-interpolation
+    - optparse-applicative
+    - prometheus-client
+    - prometheus-metrics-ghc
+    - servant-server
+    - time
+    - wai
+    - wai-extra
+    - wai-middleware-prometheus
+    - warp
+    - wl-pprint-text
+
+executables:
+  graphql-haskell:
+    main: Main.hs
+    source-dirs: cmd
+    dependencies:
+      - graphql-haskell
+
+tests:
+  graphql-haskell-tests:
+    main: Spec.hs
+    source-dirs: tests
+    dependencies:
+      - graphql-haskell
+      - tasty

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -e
+
+HINDENT=hindent
+GIT=git
+
+function hindent_file {
+    filename="$1"
+    output_filename="${filename}.hindented"
+    ${HINDENT} < "${filename}" > "${output_filename}"
+    mv "${output_filename}" "${filename}"
+}
+
+function list_haskell_files {
+    # TODO: Figure out if it's a Haskell file in a more reliable way, e.g.
+    # using `file`, or just running hindent on everything.
+    ${GIT} ls-files '*.hs'
+}
+
+function indent_everything {
+    for filename in $(list_haskell_files); do
+        hindent_file "${filename}"
+    done
+}
+
+indent_everything

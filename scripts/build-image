@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+image_tag="${1}"
+
+
+image_id=$(stack --docker image container --build  | tail -n-1 | awk '{{ print $3 }}')
+image_name=$(docker images --format '{{ .Repository }}\t{{ .ID }}' | grep "${image_id}" | head -n1 | cut -f1)
+
+
+docker tag "${image_id}" "${image_name}:${image_tag}"
+echo "${image_name}:${image_tag}"

@@ -1,0 +1,12 @@
+resolver: lts-7.2
+
+packages:
+  - '.'
+
+extra-deps:
+  - logging-effect-1.1.0
+
+image:
+  container:
+    base: fpco/haskell-scratch:integer-gmp
+    name: awesome-service

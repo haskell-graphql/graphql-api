@@ -1,0 +1,20 @@
+dependencies:
+  cache_directories:
+    - "~/.cabal"
+    - "~/.local"
+    - "~/.stack"
+    - ".stack-work"
+  pre:
+    - wget -q -O- https://s3.amazonaws.com/download.fpcomplete.com/ubuntu/fpco.key | sudo apt-key add -
+    - echo 'deb http://download.fpcomplete.com/ubuntu/trusty stable main'|sudo tee /etc/apt/sources.list.d/fpco.list
+    - sudo apt-get update
+    - sudo apt-get install -y stack
+  override:
+    - stack --no-terminal setup
+    - stack --no-terminal build --test --only-dependencies -j1
+
+test:
+  override:
+    - stack --no-terminal build --test
+    - stack --no-terminal test
+    - ./scripts/hindent-everything && git diff --exit-code

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+BRANCH_PREFIX=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ -z "${BRANCH_PREFIX}" ]; then
+    echo "unversioned"
+else
+    WORKING_SUFFIX=$(if ! git diff --exit-code --quiet HEAD >&2; \
+                     then echo "-WIP"; \
+                     else echo ""; \
+                     fi)
+    echo "${BRANCH_PREFIX//\//-}-$(git rev-parse --short HEAD)$WORKING_SUFFIX"
+fi
