@@ -5,6 +5,15 @@
 -- in that there are no type references.
 --
 -- Intended as a first step on the path to a type-level GraphQL schema definition.
+--
+-- There are two paths from here:
+--
+-- 1. Revert back to the NamedType / type reference thing and do value-level
+-- schema definition.
+--
+-- 2. Figure out how to take these values and translate them to types.
+
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Data.GraphQL.Schema where
 
@@ -12,8 +21,23 @@ import Protolude hiding (Type)
 
 import Data.Text (Text)
 
+-- | Example
 
-newtype Name = Name Text deriving (Eq, Show) -- XXX: Phantom type?
+hi' :: EnumTypeDefinition
+hi' = EnumTypeDefinition "Hi" [EnumValueDefinition "HELLO", EnumValueDefinition "HEY"]
+
+hi :: Type
+hi = DefinedType (TypeDefinitionEnum hi')
+
+thing' :: ObjectTypeDefinition
+thing' = ObjectTypeDefinition "Thing" [] (NonEmptyList [ FieldDefinition "hero" [] (TypeNamed hi) ])
+
+thing :: Type
+thing = DefinedType (TypeDefinitionObject thing')
+
+-- | Types
+
+newtype Name = Name Text deriving (Eq, Show, IsString) -- XXX: Phantom type?
 
 newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show)
 
