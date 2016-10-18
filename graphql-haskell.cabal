@@ -27,8 +27,10 @@ library
   build-depends:
       base >= 4.9 && < 5
     , protolude
+    , text
   exposed-modules:
       Data.GraphQL
+      Data.GraphQL.Schema
   default-language: Haskell2010
 
 test-suite graphql-haskell-tests

@@ -8,7 +8,10 @@
 
 module Data.GraphQL.Schema where
 
+import Protolude hiding (Type)
+
 import Data.Text (Text)
+
 
 newtype Name = Name Text deriving (Eq, Show) -- XXX: Phantom type?
 
@@ -25,6 +28,7 @@ data NonNullType t = NonNullTypeNamed t
                    | NonNullTypeList  (ListType t)
                    deriving (Eq,Show)
 
+data Type = DefinedType TypeDefinition | BuiltinType Builtin deriving (Eq, Show)
 
 data TypeDefinition = TypeDefinitionObject        ObjectTypeDefinition
                     | TypeDefinitionInterface     InterfaceTypeDefinition
@@ -40,10 +44,10 @@ data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces (NonEmptyList F
 
 type Interfaces = [InterfaceTypeDefinition]
 
-data FieldDefinition = FieldDefinition Name [ArgumentDefinition] (AnnotatedType TypeDefinition)
+data FieldDefinition = FieldDefinition Name [ArgumentDefinition] (AnnotatedType Type)
                        deriving (Eq, Show)
 
-data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputTypeDefinition) (Maybe DefaultValue)
+data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                           deriving (Eq, Show)
 
 data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmptyList FieldDefinition)
@@ -55,6 +59,8 @@ data UnionTypeDefinition = UnionTypeDefinition Name (NonEmptyList ObjectTypeDefi
 data ScalarTypeDefinition = ScalarTypeDefinition Name
                             deriving (Eq, Show)
 
+data Builtin = GInt | GBool | GString | GFloat | GID deriving (Eq, Show)
+
 data EnumTypeDefinition = EnumTypeDefinition Name [EnumValueDefinition]
                           deriving (Eq, Show)
 
@@ -64,12 +70,14 @@ newtype EnumValueDefinition = EnumValueDefinition Name
 data InputObjectTypeDefinition = InputObjectTypeDefinition Name (NonEmptyList InputObjectFieldDefinition)
                                  deriving (Eq, Show)
 
-data InputObjectFieldDefinition = InputObjectFieldDefinition Name (AnnotatedType InputTypeDefinition) (Maybe DefaultValue)
+data InputObjectFieldDefinition = InputObjectFieldDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                                   deriving (Eq, Show) -- XXX: spec is unclear about default value for input object field definitions
 
 newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
                                   deriving (Eq, Show)
 
+
+data InputType = DefinedInputType InputTypeDefinition | BuiltinInputType Builtin deriving (Eq, Show)
 
 data InputTypeDefinition = InputTypeDefinitionObject        ObjectTypeDefinition
                          | InputTypeDefinitionScalar        ScalarTypeDefinition
