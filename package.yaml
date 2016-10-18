@@ -17,6 +17,13 @@ dependencies:
   - base >= 4.9 && < 5
   - protolude
 
+executables:
+  graphql-haskell-example:
+    main: Main.hs
+    source-dirs: cmd
+    dependencies:
+      - graphql-haskell
+
 library:
   source-dirs: src
   dependencies:
