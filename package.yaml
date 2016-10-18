@@ -19,6 +19,8 @@ dependencies:
 
 library:
   source-dirs: src
+  dependencies:
+    - text
 
 tests:
   graphql-haskell-tests:
