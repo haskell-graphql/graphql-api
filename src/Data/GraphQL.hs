@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 
-module Data.GraphQL () where
+module Data.GraphQL where
 
 import Protolude
 
@@ -33,7 +33,7 @@ data OperationType
 data VariableDefinitions
 data Directives
 
-data SelectionSet = SelectionSet [Selection]
+data SelectionSet = SelectionSetDfn [Selection]
 
 data Selection = Field | FragmentSpread | InlineFragment
 
