@@ -1,3 +1,4 @@
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -37,3 +38,35 @@ instance HasValue Hole where
 
 valueOf :: HasValue a => Proxy a -> Value a Int
 valueOf p = valOf p identity
+
+
+-- XXX: In Servant, RoutingApplication is a thin wrapper over WAI.Application.
+-- Maybe we want to return a WAI Application, but it seems to me (jml) that we
+-- could just as well have something non-webby.
+--
+-- XXX: Really unclear what type this should be. Does it need IO? Generic
+-- across Monad? Something analogous to the continuation-passing style of
+-- WAI.Application?
+
+{-
+data CanonicalQuery
+data GraphQLResponse
+type GraphQLApplication = CanonicalQuery -> IO GraphQLResponse
+
+-- | A field within an object.
+--
+-- e.g.
+--  "foo" :> Foo
+data (name :: k) :> a deriving (Typeable)
+
+class HasGraph api where
+  type Graph api r :: *
+  resolve :: Proxy api -> Graph api r -> GraphQLApplication
+
+instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
+  type Graph (name :> api) r = Graph api r
+  resolve Proxy subApi query =
+    case lookup query fieldName of
+      Nothing -> empty
+      Just subQuery -> buildField fieldName (resolve (Proxy :: api) subApi subQuery)
+-}
