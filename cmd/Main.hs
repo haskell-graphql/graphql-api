@@ -1,13 +1,13 @@
 {-# LANGUAGE TypeOperators #-}
 
--- | Launch graphql-haskell server.
+-- | Run graphql-api experiments.
 module Main
   ( main
   ) where
 
 import Protolude
 
-import Data.GraphQL.Muckaround (One, (:+), Hole, valueOf)
+import GraphQL.Muckaround (One, (:+), Hole, valueOf)
 
 type Two = One :+ One
 type Holes = Hole :+ One :+ Hole

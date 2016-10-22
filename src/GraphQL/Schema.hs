@@ -15,7 +15,7 @@
 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Data.GraphQL.Schema where
+module GraphQL.Schema where
 
 import Protolude hiding (Type)
 

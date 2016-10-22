@@ -2,13 +2,13 @@
 --
 -- see: https://github.com/sol/hpack
 
-name:           graphql-haskell
+name:           graphql-api
 version:        0.1.0
 synopsis:       Sketch of GraphQL stuff
 description:    Please see README.md
 category:       Web
-homepage:       https://github.com/jml/graphql-haskell#readme
-bug-reports:    https://github.com/jml/graphql-haskell/issues
+homepage:       https://github.com/jml/graphql-api#readme
+bug-reports:    https://github.com/jml/graphql-api/issues
 maintainer:     Jonathan M. Lange <jml@mumak.net>
 license:        Apache
 license-file:   LICENSE
@@ -17,7 +17,7 @@ cabal-version:  >= 1.10
 
 source-repository head
   type: git
-  location: https://github.com/jml/graphql-haskell
+  location: https://github.com/jml/graphql-api
 
 library
   hs-source-dirs:
@@ -27,14 +27,15 @@ library
   build-depends:
       base >= 4.9 && < 5
     , protolude
+    , graphql
     , text
   exposed-modules:
-      Data.GraphQL
-      Data.GraphQL.Muckaround
-      Data.GraphQL.Schema
+      GraphQL
+      GraphQL.Muckaround
+      GraphQL.Schema
   default-language: Haskell2010
 
-executable graphql-haskell-example
+executable graphql-api-example
   main-is: Main.hs
   hs-source-dirs:
       cmd
@@ -43,10 +44,10 @@ executable graphql-haskell-example
   build-depends:
       base >= 4.9 && < 5
     , protolude
-    , graphql-haskell
+    , graphql-api
   default-language: Haskell2010
 
-test-suite graphql-haskell-tests
+test-suite graphql-api-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   hs-source-dirs:
@@ -56,6 +57,6 @@ test-suite graphql-haskell-tests
   build-depends:
       base >= 4.9 && < 5
     , protolude
-    , graphql-haskell
+    , graphql-api
     , tasty
   default-language: Haskell2010
