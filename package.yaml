@@ -1,10 +1,10 @@
-name: graphql-haskell
+name: graphql-api
 version: 0.1.0
 synopsis: Sketch of GraphQL stuff
 description: Please see README.md
 maintainer: Jonathan M. Lange <jml@mumak.net>
 license: Apache
-github: jml/graphql-haskell
+github: jml/graphql-api
 category: Web
 
 ghc-options: -Wall -Werror
@@ -18,21 +18,22 @@ dependencies:
   - protolude
 
 executables:
-  graphql-haskell-example:
+  graphql-api-example:
     main: Main.hs
     source-dirs: cmd
     dependencies:
-      - graphql-haskell
+      - graphql-api
 
 library:
   source-dirs: src
   dependencies:
+    - graphql
     - text
 
 tests:
-  graphql-haskell-tests:
+  graphql-api-tests:
     main: Spec.hs
     source-dirs: tests
     dependencies:
-      - graphql-haskell
+      - graphql-api
       - tasty

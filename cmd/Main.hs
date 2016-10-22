@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeOperators #-}
 
--- | Launch graphql-haskell server.
+-- | Run graphql-api experiments.
 module Main
   ( main
   ) where
