@@ -30,9 +30,9 @@ library
     , graphql
     , text
   exposed-modules:
-      Data.GraphQL
-      Data.GraphQL.Muckaround
-      Data.GraphQL.Schema
+      GraphQL
+      GraphQL.Muckaround
+      GraphQL.Schema
   default-language: Haskell2010
 
 executable graphql-api-example

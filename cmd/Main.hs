@@ -7,7 +7,7 @@ module Main
 
 import Protolude
 
-import Data.GraphQL.Muckaround (One, (:+), Hole, valueOf)
+import GraphQL.Muckaround (One, (:+), Hole, valueOf)
 
 type Two = One :+ One
 type Holes = Hole :+ One :+ Hole

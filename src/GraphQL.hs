@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 
-module Data.GraphQL where
+module GraphQL where
 
 import Protolude
 

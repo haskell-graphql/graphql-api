@@ -7,7 +7,7 @@
 -- | Example from Servant paper:
 --
 -- http://alpmestan.com/servant/servant-wgp.pdf
-module Data.GraphQL.Muckaround (One, (:+), Hole, valueOf) where
+module GraphQL.Muckaround (One, (:+), Hole, valueOf) where
 
 import Protolude
 
