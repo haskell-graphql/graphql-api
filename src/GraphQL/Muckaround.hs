@@ -7,7 +7,20 @@
 -- | Example from Servant paper:
 --
 -- http://alpmestan.com/servant/servant-wgp.pdf
-module GraphQL.Muckaround (One, (:+), Hole, valueOf) where
+module GraphQL.Muckaround
+  (
+  -- | Experimental things for understanding servant type classes.
+    One
+  , (:+)
+  , Hole
+  , valueOf
+  -- | Actual GraphQL stuff.
+  , (:>)
+  , runQuery
+  , GetJSON
+  , Graphable
+  , Handler
+  ) where
 
 import Protolude
 
@@ -51,8 +64,33 @@ valueOf p = valOf p identity
 -- it still has places for directives and other symbolic values.
 type CanonicalQuery = AST.SelectionSet
 
--- | GraphQL responses are JSON values: objects, to be precise. They have a
--- "data" key and an "errors" key.
+-- | GraphQL response.
+--
+-- A GraphQL response must:
+--
+--   * be a map
+--   * have a "data" key iff the operation executed
+--   * have an "errors" key iff the operation encountered errors
+--   * not include "data" if operation failed before execution (e.g. syntax errors,
+--     validation errors, missing info)
+--   * not have keys other than "data", "errors", and "extensions"
+--
+-- Other interesting things:
+--
+--   * Doesn't have to be JSON, but does have to have maps, strings, lists,
+--     and null
+--   * Can also support bool, int, enum, and float
+--   * Value of "extensions" must be a map
+--
+-- "data" must be null if an error was encountered during execution that
+-- prevented a valid response.
+--
+-- "errors"
+--
+--   * must be a non-empty list
+--   * each error is a map with "message", optionally "locations" key
+--     with list of locations
+--   * locations are maps with 1-indexed "line" and "column" keys.
 type Response = Aeson.Value
 
 -- | A GraphQL application takes a canonical query and returns a response.
@@ -77,6 +115,17 @@ class HasGraph api where
   type GraphT api (m :: * -> *) :: *
   resolve :: Proxy api -> Graphable api -> Application
 
+data GetJSON (t :: *)
+
+runQuery :: HasGraph api => Proxy api -> Graphable api -> CanonicalQuery -> IO Response
+runQuery = resolve
+
+instance Aeson.ToJSON t => HasGraph (GetJSON t) where
+  type GraphT (GetJSON t) Handler = Handler t
+
+  resolve Proxy handler [] = Aeson.toJSON <$> handler
+  resolve _ _ _ = empty
+
 -- | A field within an object.
 --
 -- e.g.
@@ -86,10 +135,11 @@ instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
 
   resolve Proxy subApi query =
     case lookup query fieldName of
-      Nothing -> empty
+      Nothing -> empty  -- XXX: Does this even work?
       Just (alias, subQuery) -> buildField alias (resolve (Proxy :: Proxy api) subApi subQuery)
     where
       fieldName = toS (symbolVal (Proxy :: Proxy name))
+      -- XXX: What to do if there are argumentS?
       lookup q f = listToMaybe [ (a, s) | AST.SelectionField (AST.Field a n [] _ s) <- q
                                         , n == f
                                         ]

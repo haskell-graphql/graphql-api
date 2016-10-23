@@ -60,4 +60,5 @@ test-suite graphql-api-tests
     , protolude
     , graphql-api
     , tasty
+    , tasty-hspec
   default-language: Haskell2010

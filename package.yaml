@@ -38,3 +38,4 @@ tests:
     dependencies:
       - graphql-api
       - tasty
+      - tasty-hspec
