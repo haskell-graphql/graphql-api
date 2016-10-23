@@ -12,6 +12,7 @@ module GraphQL.Muckaround (One, (:+), Hole, valueOf) where
 import Protolude
 
 import qualified Data.Aeson as Aeson
+import Data.Aeson ((.=))
 import qualified Data.GraphQL.AST as AST
 import Data.Proxy (Proxy)
 import GHC.TypeLits (KnownSymbol, symbolVal)
@@ -76,6 +77,10 @@ class HasGraph api where
   type GraphT api (m :: * -> *) :: *
   resolve :: Proxy api -> Graphable api -> Application
 
+-- | A field within an object.
+--
+-- e.g.
+--  "foo" :> Foo
 instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
   type GraphT (name :> api) m = GraphT api m
 
@@ -85,31 +90,10 @@ instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
       Just (alias, subQuery) -> buildField alias (resolve (Proxy :: Proxy api) subApi subQuery)
     where
       fieldName = toS (symbolVal (Proxy :: Proxy name))
-      lookup q f = listToMaybe [ (a, s) | AST.SelectionField (AST.Field a n _ _ s) <- q
+      lookup q f = listToMaybe [ (a, s) | AST.SelectionField (AST.Field a n [] _ s) <- q
                                         , n == f
                                         ]
-      buildField _alias _result = notImplemented -- Field alias result
-
-
-{-
-data CanonicalQuery
-data GraphQLResponse
-type GraphQLApplication = CanonicalQuery -> IO GraphQLResponse
-
--- | A field within an object.
---
--- e.g.
---  "foo" :> Foo
-data (name :: k) :> a deriving (Typeable)
-
-class HasGraph api where
-  type Graph api r :: *
-  resolve :: Proxy api -> Graph api r -> GraphQLApplication
-
-instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
-  type Graph (name :> api) r = Graph api r
-  resolve Proxy subApi query =
-    case lookup query fieldName of
-      Nothing -> empty
-      Just subQuery -> buildField fieldName (resolve (Proxy :: api) subApi subQuery)
--}
+      buildField alias' value = do
+        value' <- value
+        -- XXX: An object? Really?
+        pure (Aeson.object [alias' .= value'])
