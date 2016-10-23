@@ -27,6 +27,7 @@ executables:
 library:
   source-dirs: src
   dependencies:
+    - aeson
     - graphql
     - text
 

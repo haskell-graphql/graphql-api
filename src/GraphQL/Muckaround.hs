@@ -11,7 +11,10 @@ module GraphQL.Muckaround (One, (:+), Hole, valueOf) where
 
 import Protolude
 
+import qualified Data.Aeson as Aeson
+import qualified Data.GraphQL.AST as AST
 import Data.Proxy (Proxy)
+import GHC.TypeLits (KnownSymbol, symbolVal)
 
 data One
 data e1 :+ e2
@@ -40,13 +43,53 @@ valueOf :: HasValue a => Proxy a -> Value a Int
 valueOf p = valOf p identity
 
 
--- XXX: In Servant, RoutingApplication is a thin wrapper over WAI.Application.
--- Maybe we want to return a WAI Application, but it seems to me (jml) that we
--- could just as well have something non-webby.
+-- | A query that has all its fragments, variables, and directives evaluated,
+-- so that all that is left is a query with literal values.
 --
+-- 'SelectionSet' is maybe the closest type, but isn't quite what we want, as
+-- it still has places for directives and other symbolic values.
+type CanonicalQuery = AST.SelectionSet
+
+-- | GraphQL responses are JSON values: objects, to be precise. They have a
+-- "data" key and an "errors" key.
+type Response = Aeson.Value
+
+-- | A GraphQL application takes a canonical query and returns a response.
 -- XXX: Really unclear what type this should be. Does it need IO? Generic
 -- across Monad? Something analogous to the continuation-passing style of
 -- WAI.Application?
+type Application = CanonicalQuery -> IO Response
+
+
+-- | A field within an object.
+--
+-- e.g.
+--  "foo" :> Foo
+data (name :: k) :> a deriving (Typeable)
+
+-- XXX: This structure is cargo-culted from Servant, even though jml doesn't fully
+-- understand it yet.
+type Handler = IO
+type Graphable api = GraphT api Handler
+
+class HasGraph api where
+  type GraphT api (m :: * -> *) :: *
+  resolve :: Proxy api -> Graphable api -> Application
+
+instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
+  type GraphT (name :> api) m = GraphT api m
+
+  resolve Proxy subApi query =
+    case lookup query fieldName of
+      Nothing -> empty
+      Just (alias, subQuery) -> buildField alias (resolve (Proxy :: Proxy api) subApi subQuery)
+    where
+      fieldName = toS (symbolVal (Proxy :: Proxy name))
+      lookup q f = listToMaybe [ (a, s) | AST.SelectionField (AST.Field a n _ _ s) <- q
+                                        , n == f
+                                        ]
+      buildField _alias _result = notImplemented -- Field alias result
+
 
 {-
 data CanonicalQuery

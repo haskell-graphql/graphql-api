@@ -27,6 +27,7 @@ library
   build-depends:
       base >= 4.9 && < 5
     , protolude
+    , aeson
     , graphql
     , text
   exposed-modules:
