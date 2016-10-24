@@ -58,6 +58,8 @@ test-suite graphql-api-tests
   build-depends:
       base >= 4.9 && < 5
     , protolude
+    , aeson
+    , graphql
     , graphql-api
     , tasty
     , tasty-hspec

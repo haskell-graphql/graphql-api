@@ -121,7 +121,7 @@ runQuery :: HasGraph api => Proxy api -> Server api -> CanonicalQuery -> IO Resp
 runQuery = resolve
 
 instance Aeson.ToJSON t => HasGraph (GetJSON t) where
-  type ServerT (GetJSON t) Handler = Handler t
+  type ServerT (GetJSON t) m = m t
 
   resolve Proxy handler [] = Aeson.toJSON <$> handler
   resolve _ _ _ = empty

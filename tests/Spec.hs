@@ -7,12 +7,12 @@ module Main
 
 import Protolude
 
-import Test.Tasty (defaultMain, TestTree, testGroup)
+import Test.Tasty (defaultMain, TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import Data.Aeson (ToJSON, object, (.=))
+import Data.Aeson (ToJSON(..), object, (.=))
 import qualified Data.GraphQL.AST as AST
-import GraphQL.Muckaround ((:>), runQuery, Handler, GetJSON, Server)
+import GraphQL.Muckaround ((:>), runQuery, GetJSON, Server)
 
 main :: IO ()
 main = defaultMain =<< tests
@@ -26,9 +26,15 @@ handler = pure (Foo "qux")
 
 tests :: IO TestTree
 tests = testSpec "GraphQL API" $ do
-  describe "\"foo\" :> Foo" $
+  describe "GetJSON Foo" $
+    it "Happy cases happily" $ do
+      let input = []
+      let expected = toJSON (Foo "qux")
+      result <- runQuery (Proxy :: Proxy (GetJSON Foo)) handler input
+      result `shouldBe` expected
+  describe "\"foo\" :> GetJSON Foo" $
     it "Happy cases happily" $ do
       let input = [AST.SelectionField (AST.Field "bar" "foo" [] [] []) ]
-      let expected = object ["bar" .= (Foo "qux")]
-      result <- runQuery (Proxy :: Proxy Foo) handler input
+      let expected = object ["bar" .= Foo "qux"]
+      result <- runQuery (Proxy :: Proxy API) handler input
       result `shouldBe` expected
