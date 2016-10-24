@@ -18,8 +18,8 @@ module GraphQL.Muckaround
   , (:>)
   , runQuery
   , GetJSON
-  , Graphable
   , Handler
+  , Server
   ) where
 
 import Protolude
@@ -109,19 +109,19 @@ data (name :: k) :> a deriving (Typeable)
 -- XXX: This structure is cargo-culted from Servant, even though jml doesn't fully
 -- understand it yet.
 type Handler = IO
-type Graphable api = GraphT api Handler
+type Server api = ServerT api Handler
 
 class HasGraph api where
-  type GraphT api (m :: * -> *) :: *
-  resolve :: Proxy api -> Graphable api -> Application
+  type ServerT api (m :: * -> *) :: *
+  resolve :: Proxy api -> Server api -> Application
 
 data GetJSON (t :: *)
 
-runQuery :: HasGraph api => Proxy api -> Graphable api -> CanonicalQuery -> IO Response
+runQuery :: HasGraph api => Proxy api -> Server api -> CanonicalQuery -> IO Response
 runQuery = resolve
 
 instance Aeson.ToJSON t => HasGraph (GetJSON t) where
-  type GraphT (GetJSON t) Handler = Handler t
+  type ServerT (GetJSON t) Handler = Handler t
 
   resolve Proxy handler [] = Aeson.toJSON <$> handler
   resolve _ _ _ = empty
@@ -131,7 +131,7 @@ instance Aeson.ToJSON t => HasGraph (GetJSON t) where
 -- e.g.
 --  "foo" :> Foo
 instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
-  type GraphT (name :> api) m = GraphT api m
+  type ServerT (name :> api) m = ServerT api m
 
   resolve Proxy subApi query =
     case lookup query fieldName of
