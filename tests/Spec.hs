@@ -12,7 +12,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import Data.Aeson (ToJSON(..), object, (.=))
 import qualified Data.GraphQL.AST as AST
-import GraphQL.Muckaround ((:>), runQuery, GetJSON, Server)
+import GraphQL.API ((:>), runQuery, GetJSON, Server)
 
 main :: IO ()
 main = defaultMain =<< tests
