@@ -29,7 +29,7 @@ import GraphQL.Application (CanonicalQuery, Response)
 -- | A GraphQL application takes a canonical query and returns a response.
 -- XXX: Really unclear what type this should be. Does it need IO? Generic
 -- across Monad? Something analogous to the continuation-passing style of
--- WAI.Application?
+-- WAI.Application? Can we make `HasGraph` parametrized on this?
 type Application = CanonicalQuery -> IO Response
 
 
@@ -53,7 +53,9 @@ class HasGraph api where
   resolve :: Proxy api -> Server api -> Application
 
 -- XXX: GraphQL responses don't *have* to be JSON. See 'Response'
--- documentation for more details.
+-- documentation for more details. I think actually we don't *want* JSON in
+-- the API type, but rather want to specify the content types allowed when we
+-- graft it into the HTTP application.
 data GetJSON (t :: *)
 
 runQuery :: HasGraph api => Proxy api -> Server api -> CanonicalQuery -> IO Response
@@ -88,3 +90,36 @@ instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
         -- XXX: An object? Really? jml thinks this should just be a key/value
         -- pair and that some other layer should assemble an object.
         pure (Aeson.object [alias' .= value'])
+
+
+-- TODO: Something with arguments
+
+-- XXX: I expect we can do something with typeclasses such that we can map
+-- Haskell types to GraphQL types via a restricted set of constructors that
+-- only allow building valid GraphQL objects and provide methods that allow
+-- for the instances *here* to introspect them.
+--
+-- e.g.
+--
+-- class GraphQLObject a where
+--   toGraphQLObject :: a -> GraphQLObject
+--   getField :: Name -> a -> GraphQLObject
+
+data a :<|> b = a :<|> b
+infixr 8 :<|>
+
+-- XXX: I wonder if this would be better as:
+--
+--   name1 :> api1 :<|> name2 :> api2
+--
+-- Then that might merging easier.
+instance (HasGraph api1, HasGraph api2)
+  => HasGraph (api1 :<|> api2) where
+  type ServerT (api1 :<|> api2) m = ServerT api1 m :<|> ServerT api2 m
+
+  resolve Proxy (api1 :<|> api2) query =
+    merge <$> resolve (Proxy :: Proxy api1) api1 query
+          <*> resolve (Proxy :: Proxy api2) api2 query
+
+    where
+      merge x y = notImplemented
