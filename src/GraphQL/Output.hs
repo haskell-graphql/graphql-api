@@ -1,23 +1,11 @@
--- | GraphQL inputs & outputs.
+-- | GraphQL output.
 --
--- We need ways to encode GraphQL responses, and also to 'evaluate' incoming
--- requests into canonical form.
---
--- Note: 'Application' is a terrible name.
-module GraphQL.Application
-  ( CanonicalQuery
-  , Response
+-- How we encode GraphQL responses.
+module GraphQL.Output
+  ( Response
   ) where
 
 import qualified Data.Aeson as Aeson
-import qualified Data.GraphQL.AST as AST
-
--- | A query that has all its fragments, variables, and directives evaluated,
--- so that all that is left is a query with literal values.
---
--- 'SelectionSet' is maybe the closest type, but isn't quite what we want, as
--- it still has places for directives and other symbolic values.
-type CanonicalQuery = AST.SelectionSet
 
 -- | GraphQL response.
 --

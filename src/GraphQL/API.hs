@@ -23,7 +23,8 @@ import Data.Aeson ((.=))
 import qualified Data.GraphQL.AST as AST
 import GHC.TypeLits (KnownSymbol, symbolVal)
 
-import GraphQL.Application (CanonicalQuery, Response)
+import GraphQL.Input (CanonicalQuery)
+import GraphQL.Output (Response)
 
 
 -- | A GraphQL application takes a canonical query and returns a response.
@@ -122,4 +123,4 @@ instance (HasGraph api1, HasGraph api2)
           <*> resolve (Proxy :: Proxy api2) api2 query
 
     where
-      merge x y = notImplemented
+      merge _ _ = notImplemented
