@@ -38,6 +38,7 @@ tests:
     source-dirs: tests
     dependencies:
       - aeson
+      - containers
       - graphql
       - graphql-api
       - tasty

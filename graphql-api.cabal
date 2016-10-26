@@ -64,6 +64,7 @@ test-suite graphql-api-tests
       base >= 4.9 && < 5
     , protolude
     , aeson
+    , containers
     , graphql
     , graphql-api
     , tasty

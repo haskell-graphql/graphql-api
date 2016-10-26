@@ -19,22 +19,39 @@ module GraphQL.API
 import Protolude
 
 import qualified Data.GraphQL.AST as AST
+import qualified Data.List.NonEmpty as NonEmpty
 import GHC.TypeLits (KnownSymbol, symbolVal)
 
 import GraphQL.Input (CanonicalQuery)
-import GraphQL.Output (Response)
+import GraphQL.Output (Response(..), Error(..))
 import GraphQL.Value
   ( ToValue(..)
   , Field(..)
+  , Value(..)
   , singleton
   )
 
--- | A GraphQL application takes a canonical query and returns a response.
--- XXX: Really unclear what type this should be. Does it need IO? Generic
--- across Monad? Something analogous to the continuation-passing style of
--- WAI.Application? Can we make `HasGraph` parametrized on this?
-type Application = CanonicalQuery -> IO Response
+-- | A GraphQL resolver? handler? takes a canonical query and returns a response.
+--
+-- TODO: Pick a better name than 'Application' and rename to it.
+type Application = CanonicalQuery -> IO Value
 
+-- TODO: Add a "real" Application type that takes a GraphQL Document and
+-- returns a Response. Probably can get away with it being generic across
+-- monad, or even functor (because we don't need to do much with the result).
+--
+-- 'runApplication' would then:
+--   - transform the document into a canonical query, returning
+--     validation / syntax errors if it failed
+--   - send the canonical query to the designated handler (really need to
+--     settle on terminology)
+--   - ensure the result of that is a valid response
+--
+-- NB: All of this is separate from the web, HTTP, JSON, etc.
+--
+-- We can then have another layer which embeds a GraphQL Application into WAI.
+--
+-- This is made much easier by GraphQL not supporting streaming.
 
 -- | A field within an object.
 --
@@ -58,8 +75,18 @@ class HasGraph api where
 data GraphQLValue (t :: *)
 
 runQuery :: HasGraph api => Proxy api -> Server api -> CanonicalQuery -> IO Response
-runQuery = resolve
+runQuery p s q = do
+  result <- resolve p s q
+  case result of
+    ValueMap m -> pure (Success m)
+    -- XXX: Can we push this check up to the type level? After all, the person
+    -- who constructs the Server knows whether it returns a Map or something
+    -- else.
+    _ -> pure (ExecutionFailure (NonEmpty.fromList [Error "Top-level must return map." []]))
 
+
+-- XXX: I think this allows for leaves of queries to be non-scalars, which is
+-- forbidden in the GraphQL spec.
 instance ToValue t => HasGraph (GraphQLValue t) where
   type ServerT (GraphQLValue t) m = m t
 
@@ -93,6 +120,12 @@ instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
 
 -- TODO: Something with arguments
 
+-- TODO: GraphQLObject as distinct from GraphQLValue. Will probably need a new
+-- typeclass that allows getting fields by name. Might even be where we do the
+-- argument handling. Might also let us move the map/object check in runQuery
+-- to type level.
+--
+-- Notes from earlier:
 -- XXX: I expect we can do something with typeclasses such that we can map
 -- Haskell types to GraphQL types via a restricted set of constructors that
 -- only allow building valid GraphQL objects and provide methods that allow

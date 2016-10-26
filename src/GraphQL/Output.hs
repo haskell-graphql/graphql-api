@@ -2,10 +2,16 @@
 --
 -- How we encode GraphQL responses.
 module GraphQL.Output
-  ( Response
+  ( Response(..)
+  , Errors
+  , Error(..)  -- XXX: Maybe export helper functions rather than constructors.
   ) where
 
-import GraphQL.Value (Value)
+import Protolude hiding (Location, Map)
+
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.Map as Map
+import GraphQL.Value (Map, ToValue(..), Value(ValueNull))
 
 -- | GraphQL response.
 --
@@ -34,4 +40,37 @@ import GraphQL.Value (Value)
 --   * each error is a map with "message", optionally "locations" key
 --     with list of locations
 --   * locations are maps with 1-indexed "line" and "column" keys.
-type Response = Value
+data Response
+  = Success Map
+  | PreExecutionFailure Errors
+  | ExecutionFailure Errors
+  | PartialSuccess Map Errors
+  deriving (Eq, Ord, Show)
+
+instance ToValue Response where
+  toValue (Success x) = toValue (Map.singleton ("data" :: Text) (toValue x))
+  toValue (PreExecutionFailure e) = toValue (Map.singleton ("errors" :: Text) (toValue e))
+  toValue (ExecutionFailure e) = toValue (Map.fromList [("data" :: Text, ValueNull)
+                                                       ,("errors", toValue e)
+                                                       ])
+  toValue (PartialSuccess x e) = toValue (Map.fromList [("data" :: Text, toValue x)
+                                                       ,("errors", toValue e)
+                                                       ])
+
+type Errors = NonEmpty Error
+
+data Error = Error Text [Location] deriving (Eq, Ord, Show)
+
+instance ToValue Error where
+  toValue (Error message []) = toValue (Map.singleton ("message" :: Text) message)
+  toValue (Error message locations) = toValue (Map.fromList [("message" :: Text, toValue message)
+                                                            ,("locations", toValue locations)
+                                                            ])
+
+data Location = Location Line Column deriving (Eq, Ord, Show)
+type Line = Int32  -- XXX: 1-indexed natural number
+type Column = Int32  -- XXX: 1-indexed natural number
+
+instance ToValue Location where
+  toValue (Location line column) = toValue (Map.fromList [("line" :: Text, line)
+                                                         ,("column", column)])

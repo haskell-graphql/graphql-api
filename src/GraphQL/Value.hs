@@ -5,7 +5,7 @@
 module GraphQL.Value
   (
     -- | GraphQL values
-    Value(..)
+    GraphQL.Value.Value(..)
   , ToValue(..)
   , Name
   , List
@@ -18,6 +18,7 @@ module GraphQL.Value
   , GraphQL.Value.empty
   , singleton
   , fromList
+  , fieldSetToMap
   , union
   , unions
   ) where
@@ -25,10 +26,11 @@ module GraphQL.Value
 import Protolude hiding (Map)
 
 import Data.Foldable (foldrM)
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.GraphQL.AST (Name)
-import Data.Aeson (ToJSON(..))
+import Data.Aeson (ToJSON(..), Value(Null))
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -40,9 +42,10 @@ data Value
   | ValueEnum Name
   | ValueList List
   | ValueMap Map
+  | ValueNull
   deriving (Eq, Ord, Show)
 
-instance ToJSON Value where
+instance ToJSON GraphQL.Value.Value where
 
   toJSON (ValueInt x) = toJSON x
   toJSON (ValueFloat x) = toJSON x
@@ -51,25 +54,32 @@ instance ToJSON Value where
   toJSON (ValueEnum x) = toJSON x
   toJSON (ValueList x) = toJSON x
   toJSON (ValueMap x) = toJSON x
+  toJSON ValueNull = Null
 
 newtype String = String Text deriving (Eq, Ord, Show)
 
 instance ToJSON String where
   toJSON (String x) = toJSON x
 
-newtype List = List [Value] deriving (Eq, Ord, Show)
+newtype List = List [GraphQL.Value.Value] deriving (Eq, Ord, Show)
+
+makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
+makeList = List . toList . map toValue
 
 instance ToJSON List where
   toJSON (List x) = toJSON x
 
 -- XXX: This is ObjectValue [ObjectField]; ObjectField Name Value upstream.
-newtype Map = Map (Map.Map Name Value) deriving (Eq, Ord, Show)
+-- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
+-- jml hasn't read 100% clearly. Let's find something and stick to it, and
+-- make sure that there isn't a real distinction between to the two.
+newtype Map = Map (Map.Map Name GraphQL.Value.Value) deriving (Eq, Ord, Show)
 
 instance ToJSON Map where
   toJSON (Map x) = toJSON x
 
 
-data Field = Field Name Value deriving (Eq, Show, Ord)
+data Field = Field Name GraphQL.Value.Value deriving (Eq, Show, Ord)
 
 makeField :: (StringConv name Name, ToValue value) => name -> value -> Field
 makeField name value = Field (toS name) (toValue value)
@@ -103,14 +113,20 @@ fromList = pure . FieldSet . Set.fromList
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
-  toValue :: a -> Value
+  toValue :: a -> GraphQL.Value.Value
 
-instance ToValue Value where
+instance ToValue GraphQL.Value.Value where
   toValue = identity
 
 -- XXX: Should this just be for Foldable?
 instance ToValue a => ToValue [a] where
   toValue = toValue . List . map toValue
+
+instance ToValue a => ToValue (NonEmpty a) where
+  toValue = toValue . makeList
+
+instance ToValue a => ToValue (Maybe a) where
+  toValue = maybe ValueNull toValue
 
 instance ToValue Bool where
   toValue = ValueBoolean
