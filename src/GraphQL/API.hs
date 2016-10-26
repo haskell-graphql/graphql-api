@@ -22,13 +22,12 @@ import qualified Data.GraphQL.AST as AST
 import GHC.TypeLits (KnownSymbol, symbolVal)
 
 import GraphQL.Input (CanonicalQuery)
-import GraphQL.Output
-  ( Response
-  , ToValue(..)
+import GraphQL.Output (Response)
+import GraphQL.Value
+  ( ToValue(..)
   , Field(..)
   , singleton
   )
-
 
 -- | A GraphQL application takes a canonical query and returns a response.
 -- XXX: Really unclear what type this should be. Does it need IO? Generic

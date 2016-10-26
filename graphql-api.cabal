@@ -38,6 +38,7 @@ library
       GraphQL.Muckaround
       GraphQL.Output
       GraphQL.Schema
+      GraphQL.Value
   default-language: Haskell2010
 
 executable graphql-api-example

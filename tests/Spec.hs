@@ -12,7 +12,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import qualified Data.GraphQL.AST as AST
 import GraphQL.API ((:>), runQuery, GraphQLValue, Server)
-import GraphQL.Output (makeField, singleton, ToValue(..))
+import GraphQL.Value (makeField, singleton, ToValue(..))
 
 main :: IO ()
 main = defaultMain =<< tests
