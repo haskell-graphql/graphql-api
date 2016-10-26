@@ -11,20 +11,23 @@ module GraphQL.API
   (
     (:>)
   , runQuery
-  , GetJSON
   , Handler
   , Server
+  , GraphQLValue
   ) where
 
 import Protolude
 
-import qualified Data.Aeson as Aeson
-import Data.Aeson ((.=))
 import qualified Data.GraphQL.AST as AST
 import GHC.TypeLits (KnownSymbol, symbolVal)
 
 import GraphQL.Input (CanonicalQuery)
-import GraphQL.Output (Response)
+import GraphQL.Output
+  ( Response
+  , ToValue(..)
+  , Field(..)
+  , singleton
+  )
 
 
 -- | A GraphQL application takes a canonical query and returns a response.
@@ -53,19 +56,15 @@ class HasGraph api where
   type ServerT api (m :: * -> *) :: *
   resolve :: Proxy api -> Server api -> Application
 
--- XXX: GraphQL responses don't *have* to be JSON. See 'Response'
--- documentation for more details. I think actually we don't *want* JSON in
--- the API type, but rather want to specify the content types allowed when we
--- graft it into the HTTP application.
-data GetJSON (t :: *)
+data GraphQLValue (t :: *)
 
 runQuery :: HasGraph api => Proxy api -> Server api -> CanonicalQuery -> IO Response
 runQuery = resolve
 
-instance Aeson.ToJSON t => HasGraph (GetJSON t) where
-  type ServerT (GetJSON t) m = m t
+instance ToValue t => HasGraph (GraphQLValue t) where
+  type ServerT (GraphQLValue t) m = m t
 
-  resolve Proxy handler [] = Aeson.toJSON <$> handler
+  resolve Proxy handler [] = toValue <$> handler
   resolve _ _ _ = empty
 
 -- | A field within an object.
@@ -78,7 +77,7 @@ instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
   resolve Proxy subApi query =
     case lookup query fieldName of
       Nothing -> empty  -- XXX: Does this even work?
-      Just (alias, subQuery) -> buildField alias (resolve (Proxy :: Proxy api) subApi subQuery)
+      Just (alias, subQuery) -> toValue <$> buildField alias (resolve (Proxy :: Proxy api) subApi subQuery)
     where
       fieldName = toS (symbolVal (Proxy :: Proxy name))
       -- XXX: What to do if there are argumentS?
@@ -90,7 +89,7 @@ instance (KnownSymbol name, HasGraph api) => HasGraph (name :> api) where
         value' <- value
         -- XXX: An object? Really? jml thinks this should just be a key/value
         -- pair and that some other layer should assemble an object.
-        pure (Aeson.object [alias' .= value'])
+        pure (singleton (Field alias' value'))
 
 
 -- TODO: Something with arguments

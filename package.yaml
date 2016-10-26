@@ -28,6 +28,7 @@ library:
   source-dirs: src
   dependencies:
     - aeson
+    - containers
     - graphql
     - text
 

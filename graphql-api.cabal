@@ -28,6 +28,7 @@ library
       base >= 4.9 && < 5
     , protolude
     , aeson
+    , containers
     , graphql
     , text
   exposed-modules:
