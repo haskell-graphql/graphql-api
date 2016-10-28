@@ -14,6 +14,7 @@ import qualified Data.Map as Map
 import qualified Data.GraphQL.AST as AST
 import GraphQL.API ((:>), runQuery, GraphQLValue, Server)
 import GraphQL.Output (Response(..))
+import GraphQL.Validation (validate)
 import GraphQL.Value (fieldSetToMap, makeField, singleton, ToValue(..))
 
 main :: IO ()
@@ -48,3 +49,16 @@ tests = testSpec "GraphQL API" $ do
       let input = [AST.SelectionField (AST.Field "bar" "foo" [] [] []) ]
       result <- runQuery (Proxy :: Proxy API) handler input
       result `shouldBe` Success (fieldSetToMap (singleton (makeField ("bar" :: Text) (Foo "qux"))))
+
+  describe "Validation" $
+    it "Treats simple queries as valid" $ do
+      let doc = AST.Document
+                [ AST.DefinitionOperation
+                  ( AST.Query
+                    ( AST.Node "me" [] []
+                      [ AST.SelectionField (AST.Field "name" "name" [] [] [])
+                      ]
+                    )
+                  )
+                ]
+      isJust (validate doc) `shouldBe` True
