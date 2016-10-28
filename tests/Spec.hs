@@ -14,7 +14,7 @@ import qualified Data.Map as Map
 import qualified Data.GraphQL.AST as AST
 import GraphQL.API ((:>), runQuery, GraphQLValue, Server)
 import GraphQL.Output (Response(..))
-import GraphQL.Validation (validate)
+import GraphQL.Validation (ValidationError(..), getErrors)
 import GraphQL.Value (fieldSetToMap, makeField, singleton, ToValue(..))
 
 main :: IO ()
@@ -50,7 +50,7 @@ tests = testSpec "GraphQL API" $ do
       result <- runQuery (Proxy :: Proxy API) handler input
       result `shouldBe` Success (fieldSetToMap (singleton (makeField ("bar" :: Text) (Foo "qux"))))
 
-  describe "Validation" $
+  describe "Validation" $ do
     it "Treats simple queries as valid" $ do
       let doc = AST.Document
                 [ AST.DefinitionOperation
@@ -61,4 +61,23 @@ tests = testSpec "GraphQL API" $ do
                     )
                   )
                 ]
-      isJust (validate doc) `shouldBe` True
+      getErrors doc `shouldBe` []
+
+    it "Detects duplicate operation names" $ do
+      let doc = AST.Document
+                [ AST.DefinitionOperation
+                  ( AST.Query
+                    ( AST.Node "me" [] []
+                      [ AST.SelectionField (AST.Field "name" "name" [] [] [])
+                      ]
+                    )
+                  )
+                , AST.DefinitionOperation
+                  ( AST.Query
+                    ( AST.Node "me" [] []
+                      [ AST.SelectionField (AST.Field "name" "name" [] [] [])
+                      ]
+                    )
+                  )
+                ]
+      getErrors doc `shouldBe` [DuplicateOperation "me"]
