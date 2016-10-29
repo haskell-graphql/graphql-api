@@ -103,7 +103,8 @@ newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
 
 data InputType = DefinedInputType InputTypeDefinition | BuiltinInputType Builtin deriving (Eq, Show)
 
-data InputTypeDefinition = InputTypeDefinitionObject        ObjectTypeDefinition
+
+data InputTypeDefinition = InputTypeDefinitionObject        ObjectTypeDefinition -- tom: This is wrong I think?
                          | InputTypeDefinitionScalar        ScalarTypeDefinition
                          | InputTypeDefinitionEnum          EnumTypeDefinition
                          | InputTypeDefinitionInputObject   InputObjectTypeDefinition
