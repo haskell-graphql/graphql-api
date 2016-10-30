@@ -4,8 +4,10 @@
 {-# LANGUAGE KindSignatures, FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
 module MuckTom where
 
--- :load src/GraphQL/MuckTom.hs
--- :set -XGADTs  -XDataKinds -XKindSignatures -XTypeApplications
+{-
+:load src/GraphQL/MuckTom.hs
+:set -XGADTs  -XDataKinds -XKindSignatures -XTypeApplications
+-}
 
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
@@ -14,24 +16,25 @@ import qualified Prelude (show)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import Data.Typeable (typeRep)
 
--- Why have this funky operator? It's meant to be resemble monoid
--- composition. We can't use list prepend (':) because that changes
--- the kind to [Type] and then we can't unpack in the resolve handler.
-data a :<> b = a :<> b
-infixl 9 :<>
-
 data a :> b = a :> b -- arguments
 infixr 8 :>
 
-data a :^^ b = a :^^ b -- nested objects each get the parent as first argument
-infixl 8 :^^
-
 data Object (name :: Symbol) (definition :: [Type])
+
 
 -- TODO(tom): AFACIT We can't constrain "fields" to e.g. have at least
 -- one field in it - is this a problem?
 data Interface (typeName :: Symbol) (fields :: Type)
 data Field (name :: Symbol) (fieldType :: Type)
+data Argument (name :: Symbol) (argType :: Type)
+
+
+-- Can't set the value for default arguments via types, but can
+-- distinguish to force users to provide a default argument somewhere
+-- in their function (using Maybe? ore some new type like
+-- https://hackage.haskell.org/package/optional-args-1.0.1)
+data DefaultArgument (name :: Symbol) (argType :: Type)
+
 
 -- Transform into a Schema definition
 class HasObjectDefinition a where
@@ -61,6 +64,12 @@ instance forall t ks ts. (KnownSymbol ks, HasFieldDefinition ts, HasAnnotatedTyp
 instance HasFieldDefinition '[] where
   getFieldDefinitions = []
 
+
+instance forall ks t b. (KnownSymbol ks, HasAnnotatedType t, HasFieldDefinition b) => HasFieldDefinition ((Argument ks t) :> b) where
+  getFieldDefinitions =
+    let fd = getFieldDefinitions @b
+    in fd
+
 instance forall ks t ts. (KnownSymbol ks, HasFieldDefinition t) => HasObjectDefinition (Object ks t) where
   getDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
@@ -69,7 +78,9 @@ instance forall ks t ts. (KnownSymbol ks, HasFieldDefinition t) => HasObjectDefi
 
 type TestField = Field "test-field" Int
 type TestField2 = Field "test-field-2" Int
-type User = Object "User" '[TestField, TestField2, Field "address" (Object "Address" '[])]
+type User = Object "User" '[TestField, TestField2, Field "address" (Object "Address" '[TestField2])]
+
+type X = Argument "test-arg" Int :> TestField
 
 -- TODO the following should break but I don't know how to encode
 -- non-empty type-lists without overlapping instances.
