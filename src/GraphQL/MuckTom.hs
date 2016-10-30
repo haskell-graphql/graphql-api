@@ -41,40 +41,57 @@ class HasObjectDefinition a where
   getDefinition :: ObjectTypeDefinition
 
 class HasFieldDefinition a where
+  getFieldDefinition :: FieldDefinition
+
+class HasFieldDefinitions a where
   getFieldDefinitions :: [FieldDefinition]
+
+instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasFieldDefinitions (a:as) where
+  getFieldDefinitions = (getFieldDefinition @a):(getFieldDefinitions @as)
+
+instance HasFieldDefinitions '[] where
+  getFieldDefinitions = []
 
 class HasAnnotatedType a where
   getAnnotatedType :: AnnotatedType GraphQL.Schema.Type
 
+class HasAnnotatedInputType a where
+  getAnnotatedInputType :: AnnotatedType InputType
+
 instance HasAnnotatedType Int where
   getAnnotatedType = TypeNamed (BuiltinType GInt)
 
-instance forall ks ts. (KnownSymbol ks, HasFieldDefinition ts) => HasAnnotatedType (Object ks ts) where
+instance HasAnnotatedInputType Int where
+  getAnnotatedInputType = TypeNamed (BuiltinInputType GInt)
+
+instance forall ks t ts. (KnownSymbol ks, HasFieldDefinitions ts) => HasAnnotatedType (Object ks ts) where
   getAnnotatedType =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
         obj = getDefinition @(Object ks ts)
     in TypeNamed (DefinedType (TypeDefinitionObject obj))
 
-instance forall t ks ts. (KnownSymbol ks, HasFieldDefinition ts, HasAnnotatedType t) => HasFieldDefinition ((Field ks t):ts) where
-  getFieldDefinitions =
+
+instance forall t ks ts. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
+  getFieldDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-    in [FieldDefinition name [] (getAnnotatedType @t)] ++ (getFieldDefinitions @ts)
+    in FieldDefinition name [] (getAnnotatedType @t)
 
 
-instance HasFieldDefinition '[] where
-  getFieldDefinitions = []
+instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition ((Argument ks t) :> b) where
+  getFieldDefinition =
+    let (FieldDefinition name argDefs at) = getFieldDefinition @b
+        arg = ArgumentDefinition (Name "testarg") (getAnnotatedInputType @t) Nothing
+    in (FieldDefinition name (arg:argDefs) at)
 
 
-instance forall ks t b. (KnownSymbol ks, HasAnnotatedType t, HasFieldDefinition b) => HasFieldDefinition ((Argument ks t) :> b) where
-  getFieldDefinitions =
-    let fd = getFieldDefinitions @b
-    in fd
-
-instance forall ks t ts. (KnownSymbol ks, HasFieldDefinition t) => HasObjectDefinition (Object ks t) where
+instance forall ks ts. (KnownSymbol ks, HasFieldDefinitions ts) => HasObjectDefinition (Object ks ts) where
   getDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-    in ObjectTypeDefinition name [] (NonEmptyList (getFieldDefinitions @t))
+    in ObjectTypeDefinition name [] (NonEmptyList (getFieldDefinitions @ts))
 
+
+
+--- TEST STUFF BELOW
 
 type TestField = Field "test-field" Int
 type TestField2 = Field "test-field-2" Int
