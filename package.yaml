@@ -27,6 +27,8 @@ executables:
 library:
   source-dirs: src
   dependencies:
+    - aeson
+    - containers
     - graphql
     - text
 
@@ -35,5 +37,9 @@ tests:
     main: Spec.hs
     source-dirs: tests
     dependencies:
+      - aeson
+      - containers
+      - graphql
       - graphql-api
       - tasty
+      - tasty-hspec

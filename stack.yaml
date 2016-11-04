@@ -1,4 +1,4 @@
-resolver: lts-7.2
+resolver: lts-7.4
 
 extra-deps:
   - graphql-0.3
