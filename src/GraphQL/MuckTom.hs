@@ -1,30 +1,33 @@
 {-# LANGUAGE TypeFamilies, ScopedTypeVariables #-}
-{-# LANGUAGE GADTs, AllowAmbiguousTypes #-}
+{-# LANGUAGE GADTs, AllowAmbiguousTypes, UndecidableInstances #-}
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, RankNTypes #-}
 {-# LANGUAGE KindSignatures, FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
 module MuckTom where
 
-{-
-:load src/GraphQL/MuckTom.hs
-:set -XGADTs  -XDataKinds -XKindSignatures -XTypeApplications
--}
 
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
-import Protolude
-import qualified Prelude (show)
+import Protolude hiding (Enum)
+import qualified Prelude (show, String)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
+import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import Data.Typeable (typeRep)
 
-data a :> b = a :> b -- arguments
+-- | Argument operator.
+data a :> b = a :> b
 infixr 8 :>
 
-data Object (name :: Symbol) (definition :: [Type])
+-- | Uniotn type
+data a :<|> b = a :<|> b
+infixr 8 :<|>
 
+
+data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
+data Enum (values :: [Symbol])
 
 -- TODO(tom): AFACIT We can't constrain "fields" to e.g. have at least
 -- one field in it - is this a problem?
-data Interface (typeName :: Symbol) (fields :: Type)
+data Interface (name :: Symbol) (fields :: [Type])
 data Field (name :: Symbol) (fieldType :: Type)
 data Argument (name :: Symbol) (argType :: Type)
 
@@ -43,6 +46,8 @@ class HasObjectDefinition a where
 class HasFieldDefinition a where
   getFieldDefinition :: FieldDefinition
 
+
+-- Fields
 class HasFieldDefinitions a where
   getFieldDefinitions :: [FieldDefinition]
 
@@ -52,6 +57,35 @@ instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasField
 instance HasFieldDefinitions '[] where
   getFieldDefinitions = []
 
+-- symbols
+class GetSymbolList a where
+  getSymbolList :: [Prelude.String]
+
+instance forall a as. (KnownSymbol a, GetSymbolList as) => GetSymbolList (a:as) where
+  getSymbolList = (symbolVal (Proxy :: Proxy a)):(getSymbolList @as)
+
+instance GetSymbolList '[] where
+  getSymbolList = []
+
+-- Interfaces
+class HasInterfaceDefinitions a where
+  getInterfaceDefinitions :: Interfaces
+
+instance forall a as. (HasInterfaceDefinition a, HasInterfaceDefinitions as) => HasInterfaceDefinitions (a:as) where
+  getInterfaceDefinitions = (getInterfaceDefinition @a):(getInterfaceDefinitions @as)
+
+instance HasInterfaceDefinitions '[] where
+  getInterfaceDefinitions = []
+
+class HasInterfaceDefinition a where
+  getInterfaceDefinition :: InterfaceTypeDefinition
+
+instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasInterfaceDefinition (Interface ks fields) where
+  getInterfaceDefinition =
+    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        in InterfaceTypeDefinition name (NonEmptyList (getFieldDefinitions @fields))
+
+-- annotated types
 class HasAnnotatedType a where
   getAnnotatedType :: AnnotatedType GraphQL.Schema.Type
 
@@ -61,15 +95,52 @@ class HasAnnotatedInputType a where
 instance HasAnnotatedType Int where
   getAnnotatedType = TypeNamed (BuiltinType GInt)
 
-instance HasAnnotatedInputType Int where
-  getAnnotatedInputType = TypeNamed (BuiltinInputType GInt)
+instance HasAnnotatedType Bool where
+  getAnnotatedType = TypeNonNull (NonNullTypeNamed (BuiltinType GInt))
 
-instance forall ks t ts. (KnownSymbol ks, HasFieldDefinitions ts) => HasAnnotatedType (Object ks ts) where
+-- Example for how to do type errors:
+instance GHC.TypeLits.TypeError (GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
+         HasAnnotatedType Integer where
+  getAnnotatedType = undefined
+
+-- Give users some help if they don't terminate Arguments with a Field:
+instance forall ks t. GHC.TypeLits.TypeError (GHC.TypeLits.Text ":> Arguments must end with a Field") =>
+         HasFieldDefinition (Argument ks t) where
+  getFieldDefinition = undefined
+
+instance HasAnnotatedType Text where
+  getAnnotatedType = TypeNamed (BuiltinType GString)
+
+instance HasAnnotatedType User where
+  getAnnotatedType =
+    let fieldDefinitions = NonEmptyList
+          [ getFieldDefinition @(Field "name" Text)
+          , getFieldDefinition @(Field "age" Int)
+          , getFieldDefinition @(Field "id" Int)
+          ]
+    in TypeNamed (DefinedType (TypeDefinitionObject (ObjectTypeDefinition (Name "User") [] fieldDefinitions)))
+
+instance forall ks. (GetSymbolList ks) => HasAnnotatedInputType (Enum ks) where
+  getAnnotatedInputType =
+    let et = EnumTypeDefinition (Name "todo") (map (EnumValueDefinition . Name . toS) (getSymbolList @ks))
+    in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
+
+instance HasAnnotatedInputType Int where
+  getAnnotatedInputType = TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt))
+
+instance HasAnnotatedInputType Bool where
+  getAnnotatedInputType = TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt))
+
+instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) where
+  getAnnotatedInputType =
+    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedInputType @a
+    in TypeNamed t
+
+instance forall ks t is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        obj = getDefinition @(Object ks ts)
+        obj = getDefinition @(Object ks is ts)
     in TypeNamed (DefinedType (TypeDefinitionObject obj))
-
 
 instance forall t ks ts. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
   getFieldDefinition =
@@ -80,24 +151,57 @@ instance forall t ks ts. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinit
 instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition ((Argument ks t) :> b) where
   getFieldDefinition =
     let (FieldDefinition name argDefs at) = getFieldDefinition @b
-        arg = ArgumentDefinition (Name "testarg") (getAnnotatedInputType @t) Nothing
+        argName = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        arg = ArgumentDefinition argName (getAnnotatedInputType @t) Nothing
     in (FieldDefinition name (arg:argDefs) at)
 
 
-instance forall ks ts. (KnownSymbol ks, HasFieldDefinitions ts) => HasObjectDefinition (Object ks ts) where
+instance forall ks is fields. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) => HasObjectDefinition (Object ks is fields) where
   getDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-    in ObjectTypeDefinition name [] (NonEmptyList (getFieldDefinitions @ts))
+    in ObjectTypeDefinition name [] (NonEmptyList (getFieldDefinitions @fields))
 
+
+data User = User { name :: Text, age :: Int, id :: Int }
 
 
 --- TEST STUFF BELOW
 
-type TestField = Field "test-field" Int
-type TestField2 = Field "test-field-2" Int
-type User = Object "User" '[TestField, TestField2, Field "address" (Object "Address" '[TestField2])]
+-- Alternative might be a sum type with deriving Generic and 0-arity constructors?
+type DogCommand = Enum '["SIT", "DOWN", "HEEL"]
 
-type X = Argument "test-arg" Int :> TestField
+
+type Dog = Object "Dog" '[Pet]
+  '[ Field "name" Text
+   , Field "nickname" Text
+   , Field "barkVolume" Int
+   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
+   , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
+   , Field "owner" Human
+   ]
+
+type Sentient = Interface "Sentient" '[Field "name" Text]
+type Pet = Interface "Pet" '[Field "name" Text]
+
+type Alien = Object "Alien" '[Sentient] [Field "name" Text, Field "homePlanet" Text]
+
+type Human = Object "Human" '[Sentient] '[Field "name" Text]
+
+type CatCommand = Enum '["JUMP"]
+
+type Cat = Object "Cat" '[Pet]
+  '[ Field "name" Text
+   , Field "nickName" (Maybe Text)
+   , Argument "catCommand" CatCommand :> Field "doesKnowCommand" Bool
+   , Field "meowVolume" Int
+   ]
+
+type CatOrDog = Cat :<|> Dog
+type DogOrHuman = Dog :<|> Human
+type HumanOrAlien = Human :<|> Alien
+
+type QueryRoot = Object "QueryRoot" '[Field "dog" Dog]
+
 
 -- TODO the following should break but I don't know how to encode
 -- non-empty type-lists without overlapping instances.
@@ -105,4 +209,4 @@ type X = Argument "test-arg" Int :> TestField
 type Home = Object "Home" '[]
 
 testDefinition :: ObjectTypeDefinition
-testDefinition = getDefinition @User
+testDefinition = getDefinition @Dog
