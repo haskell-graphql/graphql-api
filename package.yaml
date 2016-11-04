@@ -7,7 +7,7 @@ license: Apache
 github: jml/graphql-api
 category: Web
 
-ghc-options: -Wall -Werror
+ghc-options: -Wall -Werror -fno-warn-redundant-constraints
 default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings

@@ -1,8 +1,8 @@
 {-# LANGUAGE TypeFamilies, ScopedTypeVariables #-}
 {-# LANGUAGE GADTs, AllowAmbiguousTypes, UndecidableInstances #-}
-{-# LANGUAGE DataKinds, MultiParamTypeClasses, RankNTypes #-}
-{-# LANGUAGE KindSignatures, FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
-module MuckTom where
+{-# LANGUAGE MultiParamTypeClasses, RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
+module GraphQL.MuckTom where
 
 
 import GraphQL.Schema hiding (Type)
