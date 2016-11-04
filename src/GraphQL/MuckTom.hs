@@ -8,10 +8,9 @@ module MuckTom where
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
 import Protolude hiding (Enum)
-import qualified Prelude (show, String)
+import qualified Prelude (String)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
-import Data.Typeable (typeRep)
 
 -- | Argument operator.
 data a :> b = a :> b
@@ -23,7 +22,7 @@ infixr 8 :<|>
 
 
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
-data Enum (values :: [Symbol])
+data Enum (name :: Symbol) (values :: [Symbol])
 
 -- TODO(tom): AFACIT We can't constrain "fields" to e.g. have at least
 -- one field in it - is this a problem?
@@ -99,12 +98,14 @@ instance HasAnnotatedType Bool where
   getAnnotatedType = TypeNonNull (NonNullTypeNamed (BuiltinType GInt))
 
 -- Example for how to do type errors:
-instance GHC.TypeLits.TypeError (GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
+-- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
+instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
          HasAnnotatedType Integer where
   getAnnotatedType = undefined
 
 -- Give users some help if they don't terminate Arguments with a Field:
-instance forall ks t. GHC.TypeLits.TypeError (GHC.TypeLits.Text ":> Arguments must end with a Field") =>
+-- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
+instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments must end with a Field") =>
          HasFieldDefinition (Argument ks t) where
   getFieldDefinition = undefined
 
@@ -120,9 +121,10 @@ instance HasAnnotatedType User where
           ]
     in TypeNamed (DefinedType (TypeDefinitionObject (ObjectTypeDefinition (Name "User") [] fieldDefinitions)))
 
-instance forall ks. (GetSymbolList ks) => HasAnnotatedInputType (Enum ks) where
+instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputType (Enum ks sl) where
   getAnnotatedInputType =
-    let et = EnumTypeDefinition (Name "todo") (map (EnumValueDefinition . Name . toS) (getSymbolList @ks))
+    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (getSymbolList @sl))
     in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
 
 instance HasAnnotatedInputType Int where
@@ -136,13 +138,12 @@ instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) wh
     let TypeNonNull (NonNullTypeNamed t) = getAnnotatedInputType @a
     in TypeNamed t
 
-instance forall ks t is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
+instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        obj = getDefinition @(Object ks is ts)
+    let obj = getDefinition @(Object ks is ts)
     in TypeNamed (DefinedType (TypeDefinitionObject obj))
 
-instance forall t ks ts. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
+instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
   getFieldDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
     in FieldDefinition name [] (getAnnotatedType @t)
@@ -156,10 +157,12 @@ instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefini
     in (FieldDefinition name (arg:argDefs) at)
 
 
-instance forall ks is fields. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) => HasObjectDefinition (Object ks is fields) where
+instance forall ks is fields.
+  (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) =>
+  HasObjectDefinition (Object ks is fields) where
   getDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-    in ObjectTypeDefinition name [] (NonEmptyList (getFieldDefinitions @fields))
+    in ObjectTypeDefinition name (getInterfaceDefinitions @is) (NonEmptyList (getFieldDefinitions @fields))
 
 
 data User = User { name :: Text, age :: Int, id :: Int }
@@ -168,7 +171,7 @@ data User = User { name :: Text, age :: Int, id :: Int }
 --- TEST STUFF BELOW
 
 -- Alternative might be a sum type with deriving Generic and 0-arity constructors?
-type DogCommand = Enum '["SIT", "DOWN", "HEEL"]
+type DogCommand = Enum "DogCommand" '["SIT", "DOWN", "HEEL"]
 
 
 type Dog = Object "Dog" '[Pet]
@@ -187,7 +190,7 @@ type Alien = Object "Alien" '[Sentient] [Field "name" Text, Field "homePlanet" T
 
 type Human = Object "Human" '[Sentient] '[Field "name" Text]
 
-type CatCommand = Enum '["JUMP"]
+type CatCommand = Enum "CatCommand" '["JUMP"]
 
 type Cat = Object "Cat" '[Pet]
   '[ Field "name" Text
@@ -202,11 +205,6 @@ type HumanOrAlien = Human :<|> Alien
 
 type QueryRoot = Object "QueryRoot" '[Field "dog" Dog]
 
-
--- TODO the following should break but I don't know how to encode
--- non-empty type-lists without overlapping instances.
--- cf https://wiki.haskell.org/GHC/AdvancedOverlap
-type Home = Object "Home" '[]
 
 testDefinition :: ObjectTypeDefinition
 testDefinition = getDefinition @Dog
