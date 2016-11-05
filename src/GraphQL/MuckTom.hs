@@ -97,61 +97,11 @@ instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasIn
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
         in InterfaceTypeDefinition name (NonEmptyList (getFieldDefinitions @fields))
 
--- annotated types
-class HasAnnotatedType a where
-  getAnnotatedType :: AnnotatedType GraphQL.Schema.Type
-
-class HasAnnotatedInputType a where
-  getAnnotatedInputType :: AnnotatedType InputType
-
-instance HasAnnotatedType Int where
-  getAnnotatedType = TypeNamed (BuiltinType GInt)
-
-instance HasAnnotatedType Bool where
-  getAnnotatedType = TypeNonNull (NonNullTypeNamed (BuiltinType GInt))
-
--- Example for how to do type errors:
--- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
-instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
-         HasAnnotatedType Integer where
-  getAnnotatedType = undefined
-
 -- Give users some help if they don't terminate Arguments with a Field:
 -- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
 instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments must end with a Field") =>
          HasFieldDefinition (Argument ks t) where
   getFieldDefinition = undefined
-
-instance HasAnnotatedType Text where
-  getAnnotatedType = TypeNonNull (NonNullTypeNamed (BuiltinType GString))
-
-instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
-  getAnnotatedType =
-    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedType @a
-    in TypeNamed t
-
-instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
-  getAnnotatedType =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        types = NonEmptyList (getUnionTypeObjectTypeDefinitions @as)
-    in TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition name types)))
-
-instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputType (Enum ks sl) where
-  getAnnotatedInputType =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (getSymbolList @sl))
-    in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
-
-instance HasAnnotatedInputType Int where
-  getAnnotatedInputType = TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt))
-
-instance HasAnnotatedInputType Bool where
-  getAnnotatedInputType = TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt))
-
-instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) where
-  getAnnotatedInputType =
-    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedInputType @a
-    in TypeNamed t
 
 instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
@@ -178,3 +128,76 @@ instance forall ks is fields.
   getDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
     in ObjectTypeDefinition name (getInterfaceDefinitions @is) (NonEmptyList (getFieldDefinitions @fields))
+
+-- Builtin output types (annotated types)
+class HasAnnotatedType a where
+  -- TODO - the fact that we have to return TypeNonNull for normal
+  -- types will amost certainly lead to bugs because people will
+  -- forget this. Maybe we can flip the internal encoding to be
+  -- non-null by default and needing explicit null-encoding (via
+  -- Maybe).
+  getAnnotatedType :: AnnotatedType GraphQL.Schema.Type
+
+instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
+  -- see TODO in HasAnnotatedType class
+  getAnnotatedType =
+    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedType @a
+    in TypeNamed t
+
+instance HasAnnotatedType Int where
+  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GInt
+
+instance HasAnnotatedType Bool where
+  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GBool
+
+instance HasAnnotatedType Text where
+  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GString
+
+instance HasAnnotatedType Double where
+  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GFloat
+
+instance HasAnnotatedType Float where
+  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GFloat
+
+instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
+  getAnnotatedType =
+    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        types = NonEmptyList (getUnionTypeObjectTypeDefinitions @as)
+    in TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition name types)))
+
+-- Help users with better type errors
+instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
+         HasAnnotatedType Integer where
+  getAnnotatedType = undefined
+
+
+-- Builtin input types
+class HasAnnotatedInputType a where
+  -- See TODO comment in "HasAnnotatedType" class for nullability.
+  getAnnotatedInputType :: AnnotatedType InputType
+
+instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) where
+  getAnnotatedInputType =
+    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedInputType @a
+    in TypeNamed t
+
+instance HasAnnotatedInputType Int where
+  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GInt
+
+instance HasAnnotatedInputType Bool where
+  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GBool
+
+instance HasAnnotatedInputType Text where
+  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GString
+
+instance HasAnnotatedInputType Double where
+  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GFloat
+
+instance HasAnnotatedInputType Float where
+  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GFloat
+
+instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputType (Enum ks sl) where
+  getAnnotatedInputType =
+    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (getSymbolList @sl))
+    in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
