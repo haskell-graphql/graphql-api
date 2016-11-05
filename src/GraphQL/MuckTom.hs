@@ -4,6 +4,9 @@
 {-# LANGUAGE FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
 module GraphQL.MuckTom where
 
+-- TODO
+-- * input objects - I'm not super clear from the spec on how
+--   they differ from normal objects.
 
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
@@ -20,7 +23,7 @@ infixr 8 :>
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
 data Enum (name :: Symbol) (values :: [Symbol])
 data Union (name :: Symbol) (types :: [Type])
-
+data List (elemType :: Type)
 
 -- TODO(tom): AFACIT We can't constrain "fields" to e.g. have at least
 -- one field in it - is this a problem?
@@ -159,6 +162,9 @@ instance HasAnnotatedType Double where
 instance HasAnnotatedType Float where
   getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GFloat
 
+instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
+  getAnnotatedType = TypeList (ListType (getAnnotatedType @t))
+
 instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedType (Enum ks sl) where
   getAnnotatedType =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
@@ -201,6 +207,9 @@ instance HasAnnotatedInputType Double where
 
 instance HasAnnotatedInputType Float where
   getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GFloat
+
+instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) where
+  getAnnotatedInputType = TypeList (ListType (getAnnotatedInputType @t))
 
 instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputType (Enum ks sl) where
   getAnnotatedInputType =

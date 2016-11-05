@@ -88,3 +88,7 @@ typeTests = testSpec "Type" $ do
                       , getDefinition @Dog
                       ]
         )))))
+  describe "List" $
+    it "encodes correctly" $ do
+    getAnnotatedType @(List Int) `shouldBe` (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinType GInt)))))
+    getAnnotatedInputType @(List Int) `shouldBe` (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt)))))

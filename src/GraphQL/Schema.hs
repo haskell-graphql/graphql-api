@@ -45,7 +45,7 @@ data AnnotatedType t = TypeNamed t
                      | TypeNonNull (NonNullType t)
                      deriving (Eq,Show)
 
-data ListType t = ListType (AnnotatedType t) deriving (Eq,Show)
+data ListType t = ListType (AnnotatedType t) deriving (Eq, Show)
 
 data NonNullType t = NonNullTypeNamed t
                    | NonNullTypeList  (ListType t)
