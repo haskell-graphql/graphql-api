@@ -56,6 +56,14 @@ typeTests = testSpec "Type" $ do
   describe "Field" $
     it "encodes correctly" $ do
     getFieldDefinition @(Field "hello" Int) `shouldBe` (FieldDefinition (Name "hello") [] (TypeNamed (BuiltinType GInt)))
+  describe "Interface" $
+    it "encodes correctly" $ do
+    getInterfaceDefinition @Sentient `shouldBe` (
+      InterfaceTypeDefinition
+        (Name "Sentient")
+        (NonEmptyList [FieldDefinition (Name "name") [] (TypeNamed (BuiltinType GString))])
+      )
+
   describe "Spec" $
     it "encodes correctly" $ do
     getDefinition @Human `shouldBe` (
