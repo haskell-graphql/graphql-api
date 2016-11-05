@@ -16,13 +16,11 @@ import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 data a :> b = a :> b
 infixr 8 :>
 
--- | Uniotn type
-data a :<|> b = a :<|> b
-infixr 8 :<|>
-
 
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
 data Enum (name :: Symbol) (values :: [Symbol])
+data Union (name :: Symbol) (types :: [Type])
+
 
 -- TODO(tom): AFACIT We can't constrain "fields" to e.g. have at least
 -- one field in it - is this a problem?
@@ -40,6 +38,7 @@ data DefaultArgument (name :: Symbol) (argType :: Type)
 
 -- Transform into a Schema definition
 class HasObjectDefinition a where
+  -- Todo rename to getObjectTypeDefinition
   getDefinition :: ObjectTypeDefinition
 
 class HasFieldDefinition a where
@@ -65,6 +64,20 @@ instance forall a as. (KnownSymbol a, GetSymbolList as) => GetSymbolList (a:as) 
 
 instance GetSymbolList '[] where
   getSymbolList = []
+
+
+-- object types from union type lists, e.g. for
+-- Union "Horse" '[Leg, Head, Tail]
+--               ^^^^^^^^^^^^^^^^^^ this part
+class UnionTypeObjectTypeDefinitionList a where
+  getUnionTypeObjectTypeDefinitions :: [ObjectTypeDefinition]
+
+instance forall a as. (HasObjectDefinition a, UnionTypeObjectTypeDefinitionList as) => UnionTypeObjectTypeDefinitionList (a:as) where
+  getUnionTypeObjectTypeDefinitions = (getDefinition @a):(getUnionTypeObjectTypeDefinitions @as)
+
+instance UnionTypeObjectTypeDefinitionList '[] where
+  getUnionTypeObjectTypeDefinitions = []
+
 
 -- Interfaces
 class HasInterfaceDefinitions a where
@@ -110,16 +123,18 @@ instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments m
   getFieldDefinition = undefined
 
 instance HasAnnotatedType Text where
-  getAnnotatedType = TypeNamed (BuiltinType GString)
+  getAnnotatedType = TypeNonNull (NonNullTypeNamed (BuiltinType GString))
 
-instance HasAnnotatedType User where
+instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
   getAnnotatedType =
-    let fieldDefinitions = NonEmptyList
-          [ getFieldDefinition @(Field "name" Text)
-          , getFieldDefinition @(Field "age" Int)
-          , getFieldDefinition @(Field "id" Int)
-          ]
-    in TypeNamed (DefinedType (TypeDefinitionObject (ObjectTypeDefinition (Name "User") [] fieldDefinitions)))
+    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedType @a
+    in TypeNamed t
+
+instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
+  getAnnotatedType =
+    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        types = NonEmptyList (getUnionTypeObjectTypeDefinitions @as)
+    in TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition name types)))
 
 instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputType (Enum ks sl) where
   getAnnotatedInputType =
@@ -163,6 +178,3 @@ instance forall ks is fields.
   getDefinition =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
     in ObjectTypeDefinition name (getInterfaceDefinitions @is) (NonEmptyList (getFieldDefinitions @fields))
-
-
-data User = User { name :: Text, age :: Int, id :: Int }

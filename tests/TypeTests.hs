@@ -40,9 +40,9 @@ type Cat = Object "Cat" '[Pet]
    , Field "meowVolume" Int
    ]
 
-type CatOrDog = Cat :<|> Dog
-type DogOrHuman = Dog :<|> Human
-type HumanOrAlien = Human :<|> Alien
+type CatOrDog = Union "CatOrDog" '[Cat, Dog]
+type DogOrHuman = Union "DogOrHuman" '[Dog, Human]
+type HumanOrAlien = Union "HumanOrAlien" '[Human, Alien]
 
 type QueryRoot = Object "QueryRoot" '[Field "dog" Dog]
 
@@ -61,13 +61,22 @@ typeTests = testSpec "Type" $ do
     getInterfaceDefinition @Sentient `shouldBe` (
       InterfaceTypeDefinition
         (Name "Sentient")
-        (NonEmptyList [FieldDefinition (Name "name") [] (TypeNamed (BuiltinType GString))])
+        (NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
       )
-
   describe "Spec" $
     it "encodes correctly" $ do
     getDefinition @Human `shouldBe` (
       ObjectTypeDefinition (Name "Human")
-        [InterfaceTypeDefinition (Name "Sentient") (NonEmptyList [FieldDefinition (Name "name") [] (TypeNamed (BuiltinType GString))])]
-        (NonEmptyList [FieldDefinition (Name "name") [] (TypeNamed (BuiltinType GString))])
+        [ InterfaceTypeDefinition (Name "Sentient") (
+            NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
+        ]
+        (NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
       )
+  describe "Union type" $
+    it "encodes correctly" $ do
+    getAnnotatedType @CatOrDog `shouldBe` (
+      TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition (Name "CatOrDog")
+        (NonEmptyList [ getDefinition @Cat
+                      , getDefinition @Dog
+                      ]
+        )))))

@@ -22,7 +22,6 @@ import Protolude hiding (Type)
 import Data.Text (Text)
 
 -- | Example
-
 hi' :: EnumTypeDefinition
 hi' = EnumTypeDefinition "Hi" [EnumValueDefinition "HELLO", EnumValueDefinition "HEY"]
 
