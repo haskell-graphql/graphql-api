@@ -55,7 +55,7 @@ typeTests :: IO TestTree
 typeTests = testSpec "Type" $ do
   describe "Field" $
     it "encodes correctly" $ do
-    getFieldDefinition @(Field "hello" Int) `shouldBe` (FieldDefinition (Name "hello") [] (TypeNamed (BuiltinType GInt)))
+    getFieldDefinition @(Field "hello" Int) `shouldBe` (FieldDefinition (Name "hello") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))
   describe "Interface" $
     it "encodes correctly" $ do
     getInterfaceDefinition @Sentient `shouldBe` (
@@ -63,7 +63,7 @@ typeTests = testSpec "Type" $ do
         (Name "Sentient")
         (NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
       )
-  describe "Spec" $
+  describe "full example" $
     it "encodes correctly" $ do
     getDefinition @Human `shouldBe` (
       ObjectTypeDefinition (Name "Human")
@@ -72,6 +72,14 @@ typeTests = testSpec "Type" $ do
         ]
         (NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
       )
+  describe "output Enum" $
+    it "encodes correctly" $ do
+    getAnnotatedType @DogCommand `shouldBe` (
+       TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum (EnumTypeDefinition (Name "DogCommand")
+         [ EnumValueDefinition (Name "SIT")
+         , EnumValueDefinition (Name "DOWN")
+         , EnumValueDefinition (Name "HEEL")
+         ])))))
   describe "Union type" $
     it "encodes correctly" $ do
     getAnnotatedType @CatOrDog `shouldBe` (

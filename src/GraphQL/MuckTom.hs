@@ -159,6 +159,12 @@ instance HasAnnotatedType Double where
 instance HasAnnotatedType Float where
   getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GFloat
 
+instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedType (Enum ks sl) where
+  getAnnotatedType =
+    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (getSymbolList @sl))
+    in TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum et)))
+
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
   getAnnotatedType =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
