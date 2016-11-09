@@ -46,9 +46,26 @@ type HumanOrAlien = Union "HumanOrAlien" '[Human, Alien]
 
 type QueryRoot = Object "QueryRoot" '[Field "dog" Dog]
 
+-- Placeholder
+cat :: GraphHandler Cat
+cat object = object "test-name" (Just "test-nick-name") (\command -> True) 10
 
-testDefinition :: ObjectTypeDefinition
-testDefinition = getDefinition @Dog
+cat = "cat-name-kitty"
+  :<> Just "kitty"
+  :<> \command -> True
+  :<> 10
+
+human :: GraphHandler Human
+human = pure
+  ( Identity "my-name-is-teh" )
+
+dog :: GraphHandler Dog
+dog cb = pure $ "dog-name"
+  :<> "dog nickname"
+  :<> 10
+  :<> \command -> True
+  :<> \atOtherHomes -> True
+  :<> human
 
 
 typeTests :: IO TestTree

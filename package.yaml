@@ -32,6 +32,8 @@ library:
     - containers
     - graphql
     - text
+    - bookkeeper
+    - type-level-sets
 
 tests:
   graphql-api-tests:
