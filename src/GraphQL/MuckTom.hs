@@ -290,7 +290,7 @@ instance ReadValue Int where
 instance ReadValue Int32 where
   readValue = 32
 
-instance ReadValue Float where
+instance ReadValue Double where
   readValue = 14.0
 
 
