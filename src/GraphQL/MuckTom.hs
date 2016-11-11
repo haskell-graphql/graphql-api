@@ -298,6 +298,7 @@ class UnpackField a where
   type FieldHandler a :: Type
   unpackField :: FieldHandler a -> Query -> (Text, IO ValueOrSubmap)
 
+
 instance forall ks t. (KnownSymbol ks, HasGraph t) => UnpackField (Field ks t) where
   type FieldHandler (Field ks t) = HandlerType t
   unpackField h q =
@@ -333,17 +334,20 @@ instance RunFields '[] where
 instance forall typeName interfaces fields.
          ( RunFields fields
          ) => HasGraph (Object typeName interfaces fields) where
-  type HandlerType (Object typeName interfaces fields) = RunFieldsType fields
+  type HandlerType (Object typeName interfaces fields) = IO (RunFieldsType fields)
 
-  buildResolver handler = \query -> do
+  buildResolver handler query = do
+    h <- handler
     -- TODO handler should run in MonadIO so it can run do e.g. dbQueries
-    let rf = runFields @fields handler ["hi"]
-    pure rf
+    pure $ runFields @fields h ["hi"]
+
 
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int :> Field "t" Int32]
 
 tHandler :: HandlerType T
-tHandler = (pure 10) :<> (\_ -> pure 10) :<> ()
+tHandler = do
+  conn <- print @IO @Text "HI"
+  pure $ (pure 10) :<> (\_ -> pure 10) :<> ()
 
 type Calculator = Object "Calculator" '[]
   '[ Argument "a" Int32 :> Argument "b" Int32 :> Field "add" Int32
@@ -354,10 +358,10 @@ type API = Object "API" '[] '[Field "calc" Calculator]
 
 calculatorHandler :: HandlerType Calculator
 calculatorHandler =
-  add' :<> log' :<> ()
+  pure (add' :<> log' :<> ())
   where
     add' a b = pure (a + b)
     log' a = pure (log a)
 
 api :: HandlerType API
-api = calculatorHandler :<> ()
+api = pure (calculatorHandler :<> ())
