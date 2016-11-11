@@ -356,12 +356,16 @@ type Calculator = Object "Calculator" '[]
 
 type API = Object "API" '[] '[Field "calc" Calculator]
 
-calculatorHandler :: HandlerType Calculator
-calculatorHandler =
+type FakeUser = ()
+
+calculatorHandler :: FakeUser -> HandlerType Calculator
+calculatorHandler _fakeUser =
   pure (add' :<> log' :<> ())
   where
     add' a b = pure (a + b)
     log' a = pure (log a)
 
 api :: HandlerType API
-api = pure (calculatorHandler :<> ())
+api = do
+  fakeUser <- print @IO @Text "fake lookup user"
+  pure (calculatorHandler fakeUser :<> ())
