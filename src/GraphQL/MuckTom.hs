@@ -23,9 +23,6 @@ import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import GHC.OverloadedLabels (IsLabel(..))
 import GHC.Exts  (Proxy#, proxy#)
 
-import Bookkeeper ((:=>), Book, emptyBook, (=:))
-import qualified Bookkeeper
-import qualified Bookkeeper.Internal as Bookkeeper
 import Data.Type.Map (Mapping)
 import qualified Data.Type.Map as Map
 import qualified GraphQL.Value as Value
@@ -256,83 +253,111 @@ instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputTy
 -- Only solution B allows us to only run actions when the user
 -- requested them. It's more to write though!
 
-
-type family FieldArgument a :: Type
-type instance FieldArgument Int = Int
-type instance FieldArgument Int32 = Int32
-type instance FieldArgument Text = Text
-type instance FieldArgument Float = Float
-
-
-type family FieldReturnType (m :: Type -> Type) (a :: Type) :: Type
-type instance FieldReturnType m (Field ks next) = (FieldReturnType m next)
-type instance FieldReturnType m (Argument a0 t :> next) = (FieldArgument t) -> FieldReturnType m next
-type instance FieldReturnType m (Object ks interfaces fields) = HandlerType m (Object ks interfaces fields)
-
-type instance FieldReturnType m Int = m Int
-type instance FieldReturnType m Text = m Text
-type instance FieldReturnType m Float = m Float
--- TODO: If we don't have a type instance for a type we get:
--- "Couldn't match type ‘FieldReturnType IO Int32’ with ‘f0 a0’"
--- Can we make that a nicer error message? Doesn't seem trivial ...
-type instance FieldReturnType m Int32 = m Int32
-
-
 type family FieldName (a :: Type) :: Symbol
 type instance FieldName (Field ks t) = ks
 type instance FieldName (Argument a0 a1 :> a) = FieldName a
 
-type family ObjectReturnType (m :: Type -> Type) (a :: [Type]) :: [Mapping Symbol Type]
-type instance ObjectReturnType m (a:as) = ((FieldName a) :=> (FieldReturnType m a)):(ObjectReturnType m as)
-type instance ObjectReturnType m '[] = '[]
-
-type family HandlerType (m :: Type -> Type) (a :: Type) :: Type
-type instance HandlerType m (Object ks interfaces fields) = Bookkeeper.Book' (ObjectReturnType m fields)
-
 -- simple text placeholder query for now
 type Query = [Text]
 
-class HasGraph a where
-  buildResolver :: HandlerType IO a -> Query -> IO (M.Map Text (IO Value.Value))
+-- xx do we need this intermediate step for evaluation? I think so
+-- because I can't see how we're getting the (MonadIO m) in otherwise
+data ValueOrSubmap' m = VValue Value.Value | VSubmap (M.Map Text (m ValueOrSubmap))
+type ValueOrSubmap = ValueOrSubmap' IO
 
+class HasGraph a where
+  type HandlerType a
+  buildResolver :: HandlerType a -> Query -> IO ValueOrSubmap
+
+-- TODO not super hot on individual values having to be instances of
+-- HasGraph but not sure how else we can nest either types or
+-- (Object _ _ fields). Maybe we need an object-subfield?
+instance HasGraph Int32 where
+  type HandlerType Int32 = IO Int32
+  buildResolver h q =  fmap (VValue . Value.toValue) h
+
+instance HasGraph Double where
+  type HandlerType Double = IO Double
+  buildResolver h q =  fmap (VValue . Value.toValue) h
+
+-- Parse a value of the right type from an argument
+class ReadValue a where
+  readValue :: a
+
+instance ReadValue Int where
+  readValue = 14
+
+instance ReadValue Int32 where
+  readValue = 32
+
+instance ReadValue Float where
+  readValue = 14.0
+
+
+class UnpackField a where
+  type FieldHandler a :: Type
+  unpackField :: FieldHandler a -> Query -> (Text, IO ValueOrSubmap)
+
+instance forall ks t. (KnownSymbol ks, HasGraph t) => UnpackField (Field ks t) where
+  type FieldHandler (Field ks t) = HandlerType t
+  unpackField h q =
+    let childResolver = buildResolver @t h q
+        name = toS (symbolVal (Proxy :: Proxy ks))
+    in (name, childResolver)
+
+instance forall ks t f. (KnownSymbol ks, UnpackField f, ReadValue t) => UnpackField (Argument ks t :> f) where
+  type FieldHandler (Argument ks t :> f) = t -> FieldHandler f
+  -- TODO readValue needs to extract the value from the query
+  unpackField h q = unpackField @f (h (readValue @t)) q
 
 class RunFields a where
-  runFields :: HandlerType IO a -> M.Map Text (IO Value.Value)
+  type RunFieldsType a :: Type
+  runFields :: RunFieldsType a -> Query -> ValueOrSubmap
 
-instance forall ks x interfaces fields v xs.
-  ( KnownSymbol ks
---  , HandlerType IO (Object x interfaces fields) ~ Bookkeeper.Book' ((ks :=> v) ': xs)
-  ) => RunFields (Object x interfaces fields) where
-  runFields (Bookkeeper.Book (Map.Ext key ioValue rest)) = traceShow key M.empty
+instance forall f fs.
+         ( UnpackField f
+         , RunFields fs
+         ) => RunFields (f:fs) where
+  type RunFieldsType (f:fs) = (FieldHandler f) :<> (RunFieldsType fs)
+  runFields handler@(lh :<> rh) query =
+    let (k, v) = unpackField @f lh query
+    in case runFields @fs rh query of
+          VSubmap m -> VSubmap (M.insert k v m)
+          _ -> error "unexpected non VSubmap value - programming error."
 
+instance RunFields '[] where
+  type RunFieldsType '[] = ()
+  runFields _ _ = VSubmap M.empty
 
 -- todo: arguments. The interpreter
-instance forall ks interfaces fields x.
-  ( KnownSymbol ks
-  ) => HasGraph (Object ks interfaces fields) where
+instance forall typeName interfaces fields.
+         ( RunFields fields
+         ) => HasGraph (Object typeName interfaces fields) where
+  type HandlerType (Object typeName interfaces fields) = RunFieldsType fields
+
   buildResolver handler = \query -> do
-    let r = handler -- TODO handler should run in MonadIO so it can run do e.g. dbQueries
-    let rf = runFields @(Object ks interfaces fields) r
+    -- TODO handler should run in MonadIO so it can run do e.g. dbQueries
+    let rf = runFields @fields handler ["hi"]
     pure rf
 
+type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int :> Field "t" Int32]
 
-type T = Object "T" '[] '[Field "z" Int32, Field "t" Int32]
-tHandler :: HandlerType IO T
-tHandler = emptyBook &  #t =: pure 10 & #z =: pure 10
+tHandler :: HandlerType T
+tHandler = (pure 10) :<> (\_ -> pure 10) :<> ()
 
 type Calculator = Object "Calculator" '[]
-  '[ Argument "a" Int :> Argument "b" Int :> Field "add" Int
-   , Argument "a" Float :> Field "log" Float
+  '[ Argument "a" Int32 :> Argument "b" Int32 :> Field "add" Int32
+   , Argument "a" Double :> Field "log" Double
    ]
 
 type API = Object "API" '[] '[Field "calc" Calculator]
 
-calculatorHandler :: HandlerType IO Calculator
+calculatorHandler :: HandlerType Calculator
 calculatorHandler =
-  emptyBook & #add =: add' & #log =: log'
+  add' :<> log' :<> ()
   where
     add' a b = pure (a + b)
     log' a = pure (log a)
 
-api :: HandlerType IO API
-api = emptyBook & #calc =: calculatorHandler
+api :: HandlerType API
+api = calculatorHandler :<> ()
