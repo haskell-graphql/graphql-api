@@ -14,17 +14,13 @@ module GraphQL.MuckTom where
 -- * Directives (https://facebook.github.io/graphql/#sec-Type-System.Directives)
 -- * Enforce non-empty lists (might only be doable via value-level validation)
 
+import qualified Prelude
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
 import Protolude hiding (Enum)
-import qualified Prelude (String, Show(show))
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
-import GHC.OverloadedLabels (IsLabel(..))
-import GHC.Exts  (Proxy#, proxy#)
 
-import Data.Type.Map (Mapping)
-import qualified Data.Type.Map as Map
 import qualified GraphQL.Value as Value
 import qualified Data.Map as M
 

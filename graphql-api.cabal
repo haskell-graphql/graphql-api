@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.14.1.
+-- This file has been generated from package.yaml by hpack version 0.14.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -31,8 +31,6 @@ library
     , containers
     , graphql
     , text
-    , bookkeeper
-    , type-level-sets
   exposed-modules:
       GraphQL
       GraphQL.API
@@ -50,7 +48,7 @@ executable graphql-api-example
   hs-source-dirs:
       cmd
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards
-  ghc-options: -Wall -Werror -fno-warn-redundant-constraints
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -63,7 +61,7 @@ test-suite graphql-api-tests
   hs-source-dirs:
       tests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards
-  ghc-options: -Wall -Werror -fno-warn-redundant-constraints
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
