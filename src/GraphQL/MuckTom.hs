@@ -259,96 +259,138 @@ type instance FieldName (Argument a0 a1 :> a) = FieldName a
 
 -- simple text placeholder query for now
 type Query = [Text]
+type QueryArgs = [Text]
 
--- xx do we need this intermediate step for evaluation? I think so
--- because I can't see how we're getting the (MonadIO m) in otherwise
-data ValueOrSubmap' m = VValue Value.Value | VSubmap (M.Map Text (m ValueOrSubmap))
+-- One of the constraints of the query is that we return fields in the
+-- same order as queried. I.e. evaluation is query-directed, and
+-- handlers need to be invoked accordingly. That means we need to
+-- build a map of MonadIO thunks that can be run as needed in the
+-- evaluation. That's why we have this intermediate ValueOrSubmap.
+--
+-- Because we're query driven we only look at the query fragment when
+-- examining, so the query needs to be available.
+data ValueOrSubmap' m =
+    VValue (Value.Value)
+  | VSubmap ((M.Map Text (m ValueOrSubmap)))
 type ValueOrSubmap = ValueOrSubmap' IO
 
 class HasGraph a where
   type HandlerType a
-  buildResolver :: HandlerType a -> Query -> IO ValueOrSubmap
+  buildResolver :: HandlerType a -> IO ValueOrSubmap
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
--- (Object _ _ fields). Maybe we need an object-subfield?
+-- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
 instance HasGraph Int32 where
   type HandlerType Int32 = IO Int32
-  buildResolver h q =  fmap (VValue . Value.toValue) h
+  buildResolver handler =  fmap (VValue . (Value.toValue)) handler
 
 instance HasGraph Double where
   type HandlerType Double = IO Double
-  buildResolver h q =  fmap (VValue . Value.toValue) h
+  buildResolver handler =  fmap (VValue . (Value.toValue)) handler
 
 -- Parse a value of the right type from an argument
 class ReadValue a where
-  readValue :: a
+  readValue :: QueryArgs -> a
 
 instance ReadValue Int where
-  readValue = 14
+  readValue _ = 14
 
 instance ReadValue Int32 where
-  readValue = 32
+  readValue _ = 32
 
 instance ReadValue Double where
-  readValue = 14.0
+  readValue _ = 14.0
 
 
-class UnpackField a where
+class BuildFieldResolver a where
   type FieldHandler a :: Type
-  unpackField :: FieldHandler a -> Query -> (Text, IO ValueOrSubmap)
+  buildFieldResolver :: FieldHandler a -> (Text, IO ValueOrSubmap)
 
-
-instance forall ks t. (KnownSymbol ks, HasGraph t) => UnpackField (Field ks t) where
+instance forall ks t. (KnownSymbol ks, HasGraph t) => BuildFieldResolver (Field ks t) where
   type FieldHandler (Field ks t) = HandlerType t
-  unpackField h q =
-    let childResolver = buildResolver @t h q
+  buildFieldResolver handler =
+    let childResolver = buildResolver @t handler -- need query access here...
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
 
-instance forall ks t f. (KnownSymbol ks, UnpackField f, ReadValue t) => UnpackField (Argument ks t :> f) where
+-- Fundamental problem: queryArgs are not available yet when I run
+-- buildFieldResolver because they depend on the actual part of the
+-- query I am evaluating right now.
+instance forall ks t f. (KnownSymbol ks, BuildFieldResolver f, ReadValue t) => BuildFieldResolver (Argument ks t :> f) where
   type FieldHandler (Argument ks t :> f) = t -> FieldHandler f
-  -- TODO readValue needs to extract the value from the query
-  unpackField h q = unpackField @f (h (readValue @t)) q
+  buildFieldResolver handler =
+    let partiallyAppliedHandler = handler (readValue @t []) -- need query args access here
+    in buildFieldResolver @f partiallyAppliedHandler
+
 
 class RunFields a where
   type RunFieldsType a :: Type
-  runFields :: RunFieldsType a -> Query -> ValueOrSubmap
+  runFields :: RunFieldsType a -> ValueOrSubmap
 
 instance forall f fs.
-         ( UnpackField f
+         ( BuildFieldResolver f
          , RunFields fs
          ) => RunFields (f:fs) where
   type RunFieldsType (f:fs) = (FieldHandler f) :<> (RunFieldsType fs)
-  runFields handler@(lh :<> rh) query =
-    let (k, v) = unpackField @f lh query
-    in case runFields @fs rh query of
-          VSubmap m -> VSubmap (M.insert k v m)
-          _ -> error "unexpected non VSubmap value - programming error."
+
+  -- Deconstruct object type signature and handler value at the same
+  -- time and run type-directed code for each field.
+  runFields handler@(lh :<> rh) =
+    let (k, v) = buildFieldResolver @f lh
+        mapped = case runFields @fs rh of
+                   VSubmap m -> VSubmap (M.insert k v m)
+                   _ -> error "unexpected non VSubmap value - programming error."
+    in mapped
 
 instance RunFields '[] where
   type RunFieldsType '[] = ()
-  runFields _ _ = VSubmap M.empty
+  runFields _ = VSubmap M.empty
 
--- todo: arguments. The interpreter
+-- TODO: arguments. The interpreter
 instance forall typeName interfaces fields.
          ( RunFields fields
          ) => HasGraph (Object typeName interfaces fields) where
   type HandlerType (Object typeName interfaces fields) = IO (RunFieldsType fields)
 
-  buildResolver handler query = do
+  buildResolver handler = do
     h <- handler
     -- TODO handler should run in MonadIO so it can run do e.g. dbQueries
-    pure $ runFields @fields h ["hi"]
+    pure $ runFields @fields h
+{-e
 
+evalFirst :: IO ()
+evalFirst = do
+  let (name, vsm') = buildResolver @T tHandler
+  vsm <- vsm'
+  print name
 
+eval :: Query -> IO ValueOrSubmap -> IO ()
+eval (q:qs) vsm = do
+  value <- vsm
+  case value of
+    -- the "object case".
+    VSubmap thunk -> do
+      let submap = thunk [q]
+      eval [q] submap -- lookup?
+      print "submap"
+    VValue thunk -> do
+      let value = thunk [q]
+      print value
+-}
+
+--- test code below
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int :> Field "t" Int32]
 
 tHandler :: HandlerType T
 tHandler = do
   conn <- print @IO @Text "HI"
-  pure $ (pure 10) :<> (\_ -> pure 10) :<> ()
+  pure $ (pure 10) :<> (\tArg -> pure 10) :<> ()
 
+hlist :: a -> (a :<> ())
+hlist a = a :<> ()
+
+{-
 type Calculator = Object "Calculator" '[]
   '[ Argument "a" Int32 :> Argument "b" Int32 :> Field "add" Int32
    , Argument "a" Double :> Field "log" Double
@@ -369,3 +411,4 @@ api :: HandlerType API
 api = do
   fakeUser <- print @IO @Text "fake lookup user"
   pure (calculatorHandler fakeUser :<> ())
+-}
