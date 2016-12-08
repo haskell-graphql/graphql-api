@@ -1,8 +1,11 @@
-{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeFamilyDependencies #-}
-{-# LANGUAGE GADTs, AllowAmbiguousTypes, UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses, RankNTypes #-}
-{-# LANGUAGE FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
-{-# LANGUAGE OverloadedLabels, MagicHash #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeInType #-}
 
 module GraphQL.MuckTom where
 
