@@ -32,6 +32,7 @@ library:
     - containers
     - graphql
     - text
+    - attoparsec
 
 tests:
   graphql-api-tests:

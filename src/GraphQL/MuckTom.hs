@@ -22,20 +22,30 @@ import Protolude hiding (Enum)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 
-import qualified GraphQL.Value as Value
+import qualified GraphQL.Value as GValue
 import qualified Data.Map as M
+
+import Data.GraphQL.Parser (document)
+import Data.Attoparsec.Text (parseOnly, endOfInput)
+
 
 import GraphQL.Definitions
 
+-- import Data.GraphQL.AST (SelectionSet, Selection(..), Field(..), Alias, Name, Argument(..), Value(..))
+import qualified Data.GraphQL.AST as AST
 
--- simple text placeholder query for now
-type QueryTerm = Text
-type QueryArgs = [Text]
-type Query = [QueryTerm] -- also know as a `SelectionSet`
 
+-- TODO instead of SelectionSet we want something like
+-- NormalizedSelectionSet which has query fragments etc. resolved.
 class HasGraph a where
   type HandlerType a
-  buildResolver :: HandlerType a -> Query -> IO Value.Value
+  buildResolver :: HandlerType a -> AST.SelectionSet -> IO GValue.Value
+
+
+-- Parse a value of the right type from an argument
+class ReadValue a where
+  readValue :: AST.Name -> [AST.Argument] -> a
+
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
@@ -43,52 +53,63 @@ class HasGraph a where
 instance HasGraph Int32 where
   type HandlerType Int32 = IO Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  fmap Value.toValue handler
+  buildResolver handler _ =  fmap GValue.toValue handler
 
 
 instance HasGraph Double where
   type HandlerType Double = IO Double
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  fmap Value.toValue handler
+  buildResolver handler _ =  fmap GValue.toValue handler
 
 
--- Parse a value of the right type from an argument
-class ReadValue a where
-  readValue :: QueryArgs -> a
-
-instance ReadValue Int where
-  readValue _ = 14
-
+-- TODO: lookup is O(N^2) in number of arguments (we linearly search
+-- each argument in the list) but considering the graphql use case
+-- where N usually < 10 this is probably OK.
+-- TODO (Maybe Int) types that can convert Nothing
 instance ReadValue Int32 where
-  readValue _ = 32
+  readValue name args =
+    case find (\(AST.Argument name' _) -> name' == name) args of
+      Nothing -> error ("Mandatory Int argument of name " <> name <> "not provided by query")
+      Just (AST.Argument _ value) -> case value of
+        AST.ValueInt v -> v
+        _ -> error ("Not an Int:" <> (show value))
 
 instance ReadValue Double where
-  readValue _ = 14.0
+  readValue name args =
+    case find (\(AST.Argument name' _) -> name' == name) args of
+      Nothing -> error ("Mandatory Float argument of name " <> name <> "not provided by query")
+      Just (AST.Argument _ value) -> case value of
+        AST.ValueFloat v -> v
+        _ -> error ("Not a Float:" <> (show value))
 
+-- TODO plug in remaining values from: https://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html#t:Value
 
 class BuildFieldResolver a where
   type FieldHandler a :: Type
-  buildFieldResolver :: FieldHandler a -> QueryArgs -> (Text, IO Value.Value)
+  buildFieldResolver :: FieldHandler a -> AST.Selection -> (Text, IO GValue.Value)
+
 
 instance forall ks t. (KnownSymbol ks, HasGraph t) => BuildFieldResolver (Field ks t) where
   type FieldHandler (Field ks t) = HandlerType t
-  buildFieldResolver handler queryArgs =
-    let childResolver = buildResolver @t handler [] -- need sub query access so can't just pass queryargs
+  buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
+    let childResolver = buildResolver @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
 
+
 instance forall ks t f. (KnownSymbol ks, BuildFieldResolver f, ReadValue t) => BuildFieldResolver (Argument ks t :> f) where
   type FieldHandler (Argument ks t :> f) = t -> FieldHandler f
-  buildFieldResolver handler queryArgs =
-    let partiallyAppliedHandler = handler (readValue @t []) -- need query args access here
-    in buildFieldResolver @f partiallyAppliedHandler queryArgs
+  buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
+    let argName = toS (symbolVal (Proxy :: Proxy ks))
+        partiallyAppliedHandler = handler (readValue @t argName arguments)
+    in buildFieldResolver @f partiallyAppliedHandler selection
 
 
 class RunFields a where
   type RunFieldsType a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
   -- one (Text, Value)
-  runFields :: RunFieldsType a -> QueryTerm -> IO (Text, Value.Value)
+  runFields :: RunFieldsType a -> AST.Selection -> IO (Text, GValue.Value)
 
 
 instance forall f fs.
@@ -98,19 +119,21 @@ instance forall f fs.
   type RunFieldsType (f:fs) = (FieldHandler f) :<> (RunFieldsType fs)
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
-  runFields handler@(lh :<> rh) term =
-    let (k, valueIO) = buildFieldResolver @f lh [] -- TODO query args
-    in case term == k of
+  runFields handler@(lh :<> rh) selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
+    let (k, valueIO) = buildFieldResolver @f lh selection -- TODO query args
+    in case name == k of
       True -> do
         value <- valueIO
-        pure (k, value)
-      False -> runFields @fs rh term
+        pure (if alias == "" then name else alias, value)
+      False -> runFields @fs rh selection
+
+  runFields _ f = error ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
 instance RunFields '[] where
   type RunFieldsType '[] = ()
   -- TODO maybe better to return Either?
-  runFields _ term = error ("Query for undefined term:" <> (show term))
+  runFields _ selection = error ("Query for undefined selection:" <> (show selection))
 
 
 -- TODO: arguments. The interpreter
@@ -119,7 +142,7 @@ instance forall typeName interfaces fields.
          ) => HasGraph (Object typeName interfaces fields) where
   type HandlerType (Object typeName interfaces fields) = IO (RunFieldsType fields)
 
-  buildResolver handlerIO query = do
+  buildResolver handlerIO selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- handlerIO
     -- considering that this is an object we'll need to collect (name,
@@ -127,17 +150,22 @@ instance forall typeName interfaces fields.
 
     -- might need https://hackage.haskell.org/package/linkedhashmap to
     -- keep insertion order. (TODO)
-    r <- forM query $ \term -> runFields @fields handler term
-    pure $ Value.toValue $ M.fromList r
+    r <- forM selectionSet $ \selection -> runFields @fields handler selection
+    pure $ GValue.toValue $ M.fromList r
 
 
 --- test code below
-type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int :> Field "t" Int32]
+type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
 tHandler :: HandlerType T
 tHandler = do
   conn <- print @IO @Text "HI"
-  pure $ (pure 10) :<> (\tArg -> pure 10) :<> ()
+  pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
+
+
+tQuery =
+  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) = parseOnly (document <* endOfInput) "{ t(t: 12) }"
+  in selectionSet
 
 -- hlist :: a -> (a :<> ()) TODO
 -- hlist a = a :<> ()
