@@ -73,6 +73,9 @@ instance ToJSON List where
 -- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
 -- jml hasn't read 100% clearly. Let's find something and stick to it, and
 -- make sure that there isn't a real distinction between to the two.
+--
+-- TODO: the "map" needs to keep track of insertion order so we can
+-- return fields in query order as mandated by the spec.
 newtype Map = Map (Map.Map Name GraphQL.Value.Value) deriving (Eq, Ord, Show)
 
 instance ToJSON Map where
