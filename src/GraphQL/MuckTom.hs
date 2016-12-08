@@ -190,3 +190,8 @@ api :: HandlerType API
 api = do
   fakeUser <- print @IO @Text "fake lookup user"
   pure (calculatorHandler fakeUser :<> ())
+
+-- Use like: `buildResolver @Calculator (calculatorHandler ()) calculatorQuery`
+calculatorQuery =
+  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) = parseOnly (document <* endOfInput) "{ add(a: 1, b: 2) }"
+  in selectionSet
