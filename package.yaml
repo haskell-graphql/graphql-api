@@ -33,6 +33,7 @@ library:
     - graphql
     - text
     - attoparsec
+    - transformers
 
 tests:
   graphql-api-tests:

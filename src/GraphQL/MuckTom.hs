@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeInType #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module GraphQL.MuckTom where
 
@@ -31,6 +32,7 @@ import qualified Data.Map as M
 import Data.GraphQL.Parser (document)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
+import qualified Control.Monad.Trans.Except as E
 
 import GraphQL.Definitions
 
@@ -40,9 +42,9 @@ import qualified Data.GraphQL.AST as AST
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
-class HasGraph a where
-  type HandlerType a
-  buildResolver :: HandlerType a -> AST.SelectionSet -> IO GValue.Value
+class MonadIO m => HasGraph m a where
+  type HandlerType m a
+  buildResolver :: HandlerType m a -> AST.SelectionSet -> m GValue.Value
 
 
 -- Parse a value of the right type from an argument
@@ -53,14 +55,14 @@ class ReadValue a where
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
-instance HasGraph Int32 where
-  type HandlerType Int32 = IO Int32
+instance forall m. MonadIO m => HasGraph m Int32 where
+  type HandlerType m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  fmap GValue.toValue handler
 
 
-instance HasGraph Double where
-  type HandlerType Double = IO Double
+instance forall m. MonadIO m => HasGraph m Double where
+  type HandlerType m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  fmap GValue.toValue handler
 
@@ -87,63 +89,64 @@ instance ReadValue Double where
 
 -- TODO plug in remaining values from: https://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html#t:Value
 
-class BuildFieldResolver a where
-  type FieldHandler a :: Type
-  buildFieldResolver :: FieldHandler a -> AST.Selection -> (Text, IO GValue.Value)
+class MonadIO m => BuildFieldResolver m a where
+  type FieldHandler m a :: Type
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> (Text, m GValue.Value)
 
 
-instance forall ks t. (KnownSymbol ks, HasGraph t) => BuildFieldResolver (Field ks t) where
-  type FieldHandler (Field ks t) = HandlerType t
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadIO m) => BuildFieldResolver m (Field ks t) where
+  type FieldHandler m (Field ks t) = HandlerType m t
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
-    let childResolver = buildResolver @t handler selectionSet
+    let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
 
 
-instance forall ks t f. (KnownSymbol ks, BuildFieldResolver f, ReadValue t) => BuildFieldResolver (Argument ks t :> f) where
-  type FieldHandler (Argument ks t :> f) = t -> FieldHandler f
+instance forall ks t f m. (KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
+  type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         partiallyAppliedHandler = handler (readValue @t argName arguments)
-    in buildFieldResolver @f partiallyAppliedHandler selection
+    in buildFieldResolver @m @f partiallyAppliedHandler selection
 
 
-class RunFields a where
-  type RunFieldsType a :: Type
+class RunFields m a where
+  type RunFieldsType m a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
   -- one (Text, Value)
-  runFields :: RunFieldsType a -> AST.Selection -> IO (Text, GValue.Value)
+  runFields :: RunFieldsType m a -> AST.Selection -> m (Text, GValue.Value)
 
 
-instance forall f fs.
-         ( BuildFieldResolver f
-         , RunFields fs
-         ) => RunFields (f:fs) where
-  type RunFieldsType (f:fs) = (FieldHandler f) :<> (RunFieldsType fs)
+instance forall f fs m.
+         ( BuildFieldResolver m f
+         , RunFields m fs
+         ) => RunFields m (f:fs) where
+  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> (RunFieldsType m fs)
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields handler@(lh :<> rh) selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
-    let (k, valueIO) = buildFieldResolver @f lh selection -- TODO query args
+    let (k, valueIO) = buildFieldResolver @m @f lh selection -- TODO query args
     in case name == k of
       True -> do
         value <- valueIO
         pure (if alias == "" then name else alias, value)
-      False -> runFields @fs rh selection
+      False -> runFields @m @fs rh selection
 
   runFields _ f = error ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
-instance RunFields '[] where
-  type RunFieldsType '[] = ()
+instance RunFields m '[] where
+  type RunFieldsType m '[] = ()
   -- TODO maybe better to return Either?
   runFields _ selection = error ("Query for undefined selection:" <> (show selection))
 
 
 -- TODO: arguments. The interpreter
-instance forall typeName interfaces fields.
-         ( RunFields fields
-         ) => HasGraph (Object typeName interfaces fields) where
-  type HandlerType (Object typeName interfaces fields) = IO (RunFieldsType fields)
+instance forall typeName interfaces fields m.
+         ( RunFields m fields
+         , MonadIO m
+         ) => HasGraph m (Object typeName interfaces fields) where
+  type HandlerType m (Object typeName interfaces fields) = m (RunFieldsType m fields)
 
   buildResolver handlerIO selectionSet = do
     -- First we run the actual handler function itself in IO.
@@ -153,16 +156,21 @@ instance forall typeName interfaces fields.
 
     -- might need https://hackage.haskell.org/package/linkedhashmap to
     -- keep insertion order. (TODO)
-    r <- forM selectionSet $ \selection -> runFields @fields handler selection
+    r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
     pure $ GValue.toValue $ M.fromList r
 
 
+-- custom error hander example:
+-- E.runExceptT $ buildResolver @TMonad @T tHandler tQuery
+
+type TMonad = E.ExceptT Text IO
 --- test code below
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
-tHandler :: HandlerType T
+
+tHandler :: HandlerType TMonad T
 tHandler = do
-  conn <- print @IO @Text "HI"
+  conn <- liftIO $ print @IO @Text "HI"
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
 
 
@@ -182,19 +190,20 @@ type API = Object "API" '[] '[Field "calc" Calculator]
 
 type FakeUser = ()
 
-calculatorHandler :: FakeUser -> HandlerType Calculator
+calculatorHandler :: FakeUser -> HandlerType IO Calculator
 calculatorHandler _fakeUser =
   pure (add' :<> log' :<> ())
   where
     add' a b = pure (a + b)
     log' a = pure (log a)
 
-api :: HandlerType API
+api :: HandlerType IO API
 api = do
   fakeUser <- print @IO @Text "fake lookup user"
   pure (calculatorHandler fakeUser :<> ())
 
--- Use like: `buildResolver @Calculator (calculatorHandler ()) calculatorQuery`
+-- Use like: `buildResolver @IO @Calculator (calculatorHandler ()) calculatorQuery`
 calculatorQuery =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) = parseOnly (document <* endOfInput) "{ add(a: 1, b: 2) }"
+  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
+        parseOnly (document <* endOfInput) "{ add(a: 1, b: 2) }"
   in selectionSet
