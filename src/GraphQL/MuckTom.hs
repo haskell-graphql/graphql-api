@@ -36,7 +36,6 @@ import qualified Control.Monad.Trans.Except as E
 
 import GraphQL.Definitions
 
--- import Data.GraphQL.AST (SelectionSet, Selection(..), Field(..), Alias, Name, Argument(..), Value(..))
 import qualified Data.GraphQL.AST as AST
 
 
@@ -58,13 +57,13 @@ class ReadValue a where
 instance forall m. MonadIO m => HasGraph m Int32 where
   type HandlerType m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  fmap GValue.toValue handler
+  buildResolver handler _ =  map GValue.toValue handler
 
 
 instance forall m. MonadIO m => HasGraph m Double where
   type HandlerType m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  fmap GValue.toValue handler
+  buildResolver handler _ =  map GValue.toValue handler
 
 
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search

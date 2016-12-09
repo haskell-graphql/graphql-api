@@ -6,8 +6,6 @@
 
 module GraphQL.Definitions where
 
-import qualified Prelude
-
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
 import Protolude hiding (Enum)
@@ -62,12 +60,13 @@ instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasField
 instance HasFieldDefinitions '[] where
   getFieldDefinitions = []
 
--- symbols
+-- Convert a type-level list of KnownSymbol into a value-level
+-- list. This is used for Enums.
 class GetSymbolList a where
-  getSymbolList :: [Prelude.String]
+  getSymbolList :: [Text]
 
 instance forall a as. (KnownSymbol a, GetSymbolList as) => GetSymbolList (a:as) where
-  getSymbolList = (symbolVal (Proxy :: Proxy a)):(getSymbolList @as)
+  getSymbolList = (toS (symbolVal (Proxy :: Proxy a))):(getSymbolList @as)
 
 instance GetSymbolList '[] where
   getSymbolList = []
@@ -113,7 +112,7 @@ instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments m
 instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
     let obj = getDefinition @(Object ks is ts)
-    in TypeNamed (DefinedType (TypeDefinitionObject obj))
+    in (TypeNamed . DefinedType . TypeDefinitionObject) obj
 
 instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
   getFieldDefinition =
