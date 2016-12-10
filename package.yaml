@@ -34,6 +34,7 @@ library:
     - text
     - attoparsec
     - transformers
+    - exceptions
 
 tests:
   graphql-api-tests:

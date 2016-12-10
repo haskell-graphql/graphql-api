@@ -33,6 +33,7 @@ library
     , text
     , attoparsec
     , transformers
+    , exceptions
   exposed-modules:
       GraphQL
       GraphQL.API

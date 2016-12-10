@@ -32,16 +32,24 @@ import qualified Data.Map as M
 import Data.GraphQL.Parser (document)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
+import qualified Data.GraphQL.AST as AST
+
 import qualified Control.Monad.Trans.Except as E
+import Control.Monad.Catch (MonadThrow, throwM, Exception)
 
 import GraphQL.Definitions
 
-import qualified Data.GraphQL.AST as AST
+
+newtype QueryError = QueryError Text deriving (Show, Eq)
+instance Exception QueryError
+
+queryError :: forall m a. MonadThrow m => Text -> m a
+queryError = throwM . QueryError
 
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
-class MonadIO m => HasGraph m a where
+class (MonadThrow m, MonadIO m) => HasGraph m a where
   type HandlerType m a
   buildResolver :: HandlerType m a -> AST.SelectionSet -> m GValue.Value
 
@@ -54,13 +62,13 @@ class ReadValue a where
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
-instance forall m. MonadIO m => HasGraph m Int32 where
+instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Int32 where
   type HandlerType m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
 
 
-instance forall m. MonadIO m => HasGraph m Double where
+instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
   type HandlerType m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
@@ -88,12 +96,12 @@ instance ReadValue Double where
 
 -- TODO plug in remaining values from: https://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html#t:Value
 
-class MonadIO m => BuildFieldResolver m a where
+class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   type FieldHandler m a :: Type
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> (Text, m GValue.Value)
 
 
-instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadIO m) => BuildFieldResolver m (Field ks t) where
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   type FieldHandler m (Field ks t) = HandlerType m t
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
@@ -101,7 +109,7 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadIO m) => BuildFieldR
     in (name, childResolver)
 
 
-instance forall ks t f m. (KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
+instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
   type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
@@ -127,22 +135,27 @@ instance forall f fs m.
     let (k, valueIO) = buildFieldResolver @m @f lh selection -- TODO query args
     in case name == k of
       True -> do
+        -- execute action to retrieve field value
         value <- valueIO
+        -- NB "alias" is encoded in-band. It cannot be set to empty in
+        -- a query so the empty value means "no alias" and we use the
+        -- name instead.
         pure (if alias == "" then name else alias, value)
       False -> runFields @m @fs rh selection
 
-  runFields _ f = error ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
-instance RunFields m '[] where
+instance forall m. MonadThrow m => RunFields m '[] where
   type RunFieldsType m '[] = ()
   -- TODO maybe better to return Either?
-  runFields _ selection = error ("Query for undefined selection:" <> (show selection))
+  runFields _ selection = queryError ("Query for undefined selection:" <> (show selection))
 
 
 -- TODO: arguments. The interpreter
 instance forall typeName interfaces fields m.
          ( RunFields m fields
+         , MonadThrow m
          , MonadIO m
          ) => HasGraph m (Object typeName interfaces fields) where
   type HandlerType m (Object typeName interfaces fields) = m (RunFieldsType m fields)
