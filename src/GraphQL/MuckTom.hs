@@ -38,7 +38,6 @@ import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 import qualified Data.GraphQL.AST as AST
 
-import qualified Control.Monad.Trans.Except as E
 import Control.Monad.Catch (MonadThrow, throwM, Exception)
 
 import GraphQL.Definitions
@@ -171,52 +170,3 @@ instance forall typeName interfaces fields m.
     -- keep insertion order. (TODO)
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
     pure $ GValue.toValue $ M.fromList r
-
-
--- custom error hander example:
--- E.runExceptT $ buildResolver @TMonad @T tHandler tQuery
-
-type TMonad = E.ExceptT Text IO
---- test code below
-type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
-
-
-tHandler :: HandlerType TMonad T
-tHandler = do
-  conn <- liftIO $ print @IO @Text "HI"
-  pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
-
-
-tQuery =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) = parseOnly (document <* endOfInput) "{ t(t: 12) }"
-  in selectionSet
-
--- hlist :: a -> (a :<> ()) TODO
--- hlist a = a :<> ()
-
-type Calculator = Object "Calculator" '[]
-  '[ Argument "a" Int32 :> Argument "b" Int32 :> Field "add" Int32
-   , Argument "a" Double :> Field "log" Double
-   ]
-
-type API = Object "API" '[] '[Field "calc" Calculator]
-
-type FakeUser = ()
-
-calculatorHandler :: FakeUser -> HandlerType IO Calculator
-calculatorHandler _fakeUser =
-  pure (add' :<> log' :<> ())
-  where
-    add' a b = pure (a + b)
-    log' a = pure (log a)
-
-api :: HandlerType IO API
-api = do
-  fakeUser <- print @IO @Text "fake lookup user"
-  pure (calculatorHandler fakeUser :<> ())
-
--- Use like: `buildResolver @IO @Calculator (calculatorHandler ()) calculatorQuery`
-calculatorQuery =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-        parseOnly (document <* endOfInput) "{ add(a: 1, b: 2) }"
-  in selectionSet

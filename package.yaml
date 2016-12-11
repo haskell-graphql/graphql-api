@@ -17,6 +17,9 @@ default-extensions:
 dependencies:
   - base >= 4.9 && < 5
   - protolude
+  - exceptions
+  - transformers
+  - attoparsec
 
 executables:
   graphql-api-example:
@@ -32,9 +35,6 @@ library:
     - containers
     - graphql
     - text
-    - attoparsec
-    - transformers
-    - exceptions
 
 tests:
   graphql-api-tests:

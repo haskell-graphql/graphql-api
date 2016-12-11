@@ -17,12 +17,12 @@ import GraphQL.Output (Response(..))
 import GraphQL.Validation (ValidationError(..), getErrors)
 import GraphQL.Value (fieldSetToMap, makeField, singleton, ToValue(..))
 import qualified TypeTests
+import qualified TypeApiTests
 
 main :: IO ()
 main = do
-  t <- tests
-  tt <- TypeTests.typeTests
-  defaultMain (testGroup "spec" [t, tt])
+  t <- sequence [tests, TypeTests.typeTests, TypeApiTests.typeApiTests]
+  defaultMain (testGroup "spec" t)
 
 
 newtype Foo = Foo Text deriving (Eq, Show)

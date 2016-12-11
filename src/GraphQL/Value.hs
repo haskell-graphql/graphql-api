@@ -9,7 +9,7 @@ module GraphQL.Value
   , ToValue(..)
   , Name
   , List
-  , Map
+  , Map(..)
   , String
     -- | Fields
   , Field(Field)
