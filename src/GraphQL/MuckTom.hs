@@ -8,7 +8,13 @@
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module GraphQL.MuckTom where
+module GraphQL.MuckTom
+  ( QueryError
+  , HasGraph(..)
+  , ReadValue(..)
+  , BuildFieldResolver(..)
+  )
+where
 
 -- TODO (probably incomplete, the spec is large)
 -- * input objects - I'm not super clear from the spec on how
@@ -17,8 +23,6 @@ module GraphQL.MuckTom where
 --   explained anywhere?
 -- * Directives (https://facebook.github.io/graphql/#sec-Type-System.Directives)
 -- * Enforce non-empty lists (might only be doable via value-level validation)
-
-import qualified Prelude
 
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
@@ -39,7 +43,8 @@ import Control.Monad.Catch (MonadThrow, throwM, Exception)
 
 import GraphQL.Definitions
 
-
+-- | MonadThrow requires an instance of Exception so we create a
+-- newtype for GraphQL errors.
 newtype QueryError = QueryError Text deriving (Show, Eq)
 instance Exception QueryError
 
@@ -53,11 +58,10 @@ class (MonadThrow m, MonadIO m) => HasGraph m a where
   type HandlerType m a
   buildResolver :: HandlerType m a -> AST.SelectionSet -> m GValue.Value
 
-
 -- Parse a value of the right type from an argument
+-- TODO
 class ReadValue a where
   readValue :: AST.Name -> [AST.Argument] -> a
-
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
@@ -132,7 +136,7 @@ instance forall f fs m.
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields handler@(lh :<> rh) selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
-    let (k, valueIO) = buildFieldResolver @m @f lh selection -- TODO query args
+    let (k, valueIO) = buildFieldResolver @m @f lh selection
     in case name == k of
       True -> do
         -- execute action to retrieve field value
@@ -145,14 +149,11 @@ instance forall f fs m.
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
-
 instance forall m. MonadThrow m => RunFields m '[] where
   type RunFieldsType m '[] = ()
-  -- TODO maybe better to return Either?
   runFields _ selection = queryError ("Query for undefined selection:" <> (show selection))
 
 
--- TODO: arguments. The interpreter
 instance forall typeName interfaces fields m.
          ( RunFields m fields
          , MonadThrow m

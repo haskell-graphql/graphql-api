@@ -6,7 +6,7 @@ import Protolude hiding (Enum)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.MuckTom
+import GraphQL.Definitions
 import GraphQL.Schema
 
 -- Examples taken from the spec
