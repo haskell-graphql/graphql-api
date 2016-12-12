@@ -17,4 +17,3 @@ test:
   override:
     - stack --no-terminal build --test
     - stack --no-terminal test
-    - ./scripts/hindent-everything && git diff --exit-code
