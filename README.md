@@ -1,5 +1,7 @@
 # graphql-api
 
+[![CircleCI](https://circleci.com/gh/jml/graphql-api.svg?style=shield)](https://circleci.com/gh/jml/graphql-api)
+
 Sketch of GraphQL stuff
 
 ## What it is
