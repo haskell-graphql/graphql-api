@@ -43,7 +43,7 @@ tWrongQuery =
 type Listed = Object "Listed" '[] '[Field "items" (List Int32)]
 
 listedHandler :: HandlerType IO Listed
-listedHandler = pure (pure [pure 10, pure 20] :<> ())
+listedHandler = pure ([pure 10, pure 20] :<> ())
 
 listedQuery :: AST.SelectionSet
 listedQuery =
