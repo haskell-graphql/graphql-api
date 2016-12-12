@@ -4,11 +4,13 @@
 {-# LANGUAGE FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
 {-# LANGUAGE OverloadedLabels, MagicHash #-}
 
+-- | Type-level definitions for a GraphQL schema.
 module GraphQL.Definitions where
+
+import Protolude hiding (Enum)
 
 import GraphQL.Schema hiding (Type)
 import qualified GraphQL.Schema (Type)
-import Protolude hiding (Enum)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
@@ -18,7 +20,7 @@ import qualified Data.GraphQL.AST as AST
 data a :> b = a :> b
 infixr 8 :>
 
-  -- | Object result operator.
+-- | Object result operator.
 data a :<> b = a :<> b
 infixr 8 :<>
 
@@ -104,7 +106,7 @@ instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasIn
 -- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
 instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments must end with a Field") =>
          HasFieldDefinition (Argument ks t) where
-  getFieldDefinition = undefined
+  getFieldDefinition = notImplemented
 
 instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
