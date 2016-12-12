@@ -71,25 +71,49 @@ instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
 
-
+-- TODO: lookup is O(N^2) in number of arguments (we linearly search
+-- each argument in the list) but considering the graphql use case
+-- where N usually < 10 this is probably OK.
+-- TODO (Maybe Int) types that can convert Nothing
 lookupValue :: AST.Name -> [AST.Argument] -> Either Text AST.Value
 lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
   Nothing -> Left ("Argument not found:" <> name)
   Just (AST.Argument _ value) -> pure value
 
--- TODO: lookup is O(N^2) in number of arguments (we linearly search
--- each argument in the list) but considering the graphql use case
--- where N usually < 10 this is probably OK.
--- TODO (Maybe Int) types that can convert Nothing
+
 instance ReadValue Int32 where
   readValue (AST.ValueInt v) = pure v
   readValue v = Left ("Not an Int:" <> (show v))
 
+-- TODO: Double parsing is broken in graphql-haskell.
+-- See https://github.com/jdnavarro/graphql-haskell/pull/16
 instance ReadValue Double where
   readValue (AST.ValueFloat v) = pure v
   readValue v = Left ("Not a Double:" <> (show v))
 
--- TODO plug in remaining values from: https://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html#t:Value
+instance ReadValue Bool where
+  readValue (AST.ValueBoolean v) = pure v
+  readValue v = Left ("Not a Bool:" <> (show v))
+
+instance ReadValue Text where
+  readValue (AST.ValueString (AST.StringValue v)) = pure v
+  readValue v = Left ("Not a String:" <> (show v))
+
+instance forall v. ReadValue v => ReadValue [v] where
+  readValue (AST.ValueList (AST.ListValue values)) = traverse (readValue @v) values
+  readValue v = Left ("Not a List:" <> (show v))
+
+-- TODO: enums. It's not super clear to me how we'd represent
+-- enums. We're using KnownSymbol to translate Symbol Kinds into Text
+-- to be used for serialization. It might be better to use sum types +
+-- generics?
+--
+-- TODO: variables should error, they should have been resolved already.
+--
+-- TODO: Objects. Maybe implement some Generic object reader? I.e. if I do
+-- data Greet = Greet { name :: Text, score :: Int } deriving Generic
+-- then "instance ReadValue Greet" would fall back on a default reader that
+-- expects Objects?
 
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   type FieldHandler m a :: Type
