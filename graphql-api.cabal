@@ -40,9 +40,9 @@ library
       GraphQL.Definitions
       GraphQL.Input
       GraphQL.Muckaround
-      GraphQL.MuckTom
       GraphQL.Output
       GraphQL.Schema
+      GraphQL.TypeApi
       GraphQL.Validation
       GraphQL.Value
   default-language: Haskell2010

@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module GraphQL.MuckTom
+module GraphQL.TypeApi
   ( QueryError
   , HasGraph(..)
   , ReadValue(..)
@@ -24,18 +24,11 @@ where
 -- * Directives (https://facebook.github.io/graphql/#sec-Type-System.Directives)
 -- * Enforce non-empty lists (might only be doable via value-level validation)
 
-import GraphQL.Schema hiding (Type)
-import qualified GraphQL.Schema (Type)
 import Protolude hiding (Enum)
-import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
-import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
+import GHC.TypeLits (KnownSymbol, symbolVal)
 
 import qualified GraphQL.Value as GValue
 import qualified Data.Map as M
-
-import Data.GraphQL.Parser (document)
-import Data.Attoparsec.Text (parseOnly, endOfInput)
-
 import qualified Data.GraphQL.AST as AST
 
 import Control.Monad.Catch (MonadThrow, throwM, Exception)
@@ -106,18 +99,21 @@ class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   type FieldHandler m (Field ks t) = HandlerType m t
-  buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
+  buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
+  buildFieldResolver _ _ = ("", queryError "buildFieldResolver got non AST.Field, query probably not normalized")
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
   type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
-  buildFieldResolver handler selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
+  buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         partiallyAppliedHandler = handler (readValue @t argName arguments)
     in buildFieldResolver @m @f partiallyAppliedHandler selection
+
+  buildFieldResolver _ _ = undefined -- TODO
 
 
 class RunFields m a where
@@ -134,7 +130,7 @@ instance forall f fs m.
   type RunFieldsType m (f:fs) = (FieldHandler m f) :<> (RunFieldsType m fs)
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
-  runFields handler@(lh :<> rh) selection@(AST.SelectionField (AST.Field alias name arguments directives selectionSet)) =
+  runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
     let (k, valueIO) = buildFieldResolver @m @f lh selection
     in case name == k of
       True -> do

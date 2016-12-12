@@ -7,7 +7,7 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Definitions
-import GraphQL.MuckTom
+import GraphQL.TypeApi
 import GraphQL.Schema hiding (ValueInt)
 import qualified Control.Monad.Trans.Except as E
 import qualified Data.GraphQL.AST as AST
