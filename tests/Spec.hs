@@ -7,7 +7,7 @@ module Main
 
 import Protolude
 
-import Test.Tasty (defaultMain, TestTree)
+import Test.Tasty (defaultMain, TestTree, testGroup)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import qualified Data.Map as Map
@@ -16,9 +16,13 @@ import GraphQL.API ((:>), runQuery, GraphQLValue, Server)
 import GraphQL.Output (Response(..))
 import GraphQL.Validation (ValidationError(..), getErrors)
 import GraphQL.Value (fieldSetToMap, makeField, singleton, ToValue(..))
+import qualified TypeTests
+import qualified TypeApiTests
 
 main :: IO ()
-main = defaultMain =<< tests
+main = do
+  t <- sequence [tests, TypeTests.typeTests, TypeApiTests.typeApiTests]
+  defaultMain (testGroup "spec" t)
 
 
 newtype Foo = Foo Text deriving (Eq, Show)

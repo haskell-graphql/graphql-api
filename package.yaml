@@ -7,7 +7,8 @@ license: Apache
 github: jml/graphql-api
 category: Web
 
-ghc-options: -Wall -Werror
+# NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
+ghc-options: -Wall -fno-warn-redundant-constraints
 default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings
@@ -16,6 +17,9 @@ default-extensions:
 dependencies:
   - base >= 4.9 && < 5
   - protolude
+  - exceptions
+  - transformers
+  - attoparsec
 
 executables:
   graphql-api-example:

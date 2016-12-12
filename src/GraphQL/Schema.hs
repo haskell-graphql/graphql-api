@@ -22,7 +22,6 @@ import Protolude hiding (Type)
 import Data.Text (Text)
 
 -- | Example
-
 hi' :: EnumTypeDefinition
 hi' = EnumTypeDefinition "Hi" [EnumValueDefinition "HELLO", EnumValueDefinition "HEY"]
 
@@ -46,7 +45,7 @@ data AnnotatedType t = TypeNamed t
                      | TypeNonNull (NonNullType t)
                      deriving (Eq,Show)
 
-data ListType t = ListType (AnnotatedType t) deriving (Eq,Show)
+data ListType t = ListType (AnnotatedType t) deriving (Eq, Show)
 
 data NonNullType t = NonNullTypeNamed t
                    | NonNullTypeList  (ListType t)
@@ -103,11 +102,14 @@ newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
 
 data InputType = DefinedInputType InputTypeDefinition | BuiltinInputType Builtin deriving (Eq, Show)
 
-data InputTypeDefinition = InputTypeDefinitionObject        ObjectTypeDefinition
-                         | InputTypeDefinitionScalar        ScalarTypeDefinition
-                         | InputTypeDefinitionEnum          EnumTypeDefinition
-                         | InputTypeDefinitionInputObject   InputObjectTypeDefinition
-                      deriving (Eq, Show)
+
+data InputTypeDefinition =
+  -- tom: Next line is wrong I think? We should use InputObjectTypeDefinition?
+  InputTypeDefinitionObject        ObjectTypeDefinition
+  | InputTypeDefinitionScalar        ScalarTypeDefinition
+  | InputTypeDefinitionEnum          EnumTypeDefinition
+  | InputTypeDefinitionInputObject   InputObjectTypeDefinition
+  deriving (Eq, Show)
 
 
 type DefaultValue = InputValue
