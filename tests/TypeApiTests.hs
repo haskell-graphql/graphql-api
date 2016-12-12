@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, DataKinds, TypeOperators #-}
+{-# LANGUAGE TypeApplications, DataKinds, TypeOperators, ScopedTypeVariables #-}
 module TypeApiTests where
 
 import Protolude hiding (Enum)
@@ -17,23 +17,26 @@ import Data.GraphQL.Parser (document)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 
--- custom error hander example:
--- E.runExceptT $ buildResolver @TMonad @T tHandler tQuery
-
+-- Test a custom error monad
 type TMonad = E.ExceptT Text IO
---- test code below
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
 
 tHandler :: HandlerType TMonad T
 tHandler = do
-  conn <- liftIO $ print @IO @Text "HI"
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
 
 
 tQuery =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) = parseOnly (document <* endOfInput) "{ t(t: 12) }"
+  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
+        parseOnly (document <* endOfInput) "{ t(t: 12) }"
   in selectionSet
+
+tWrongQuery =
+  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
+        parseOnly (document <* endOfInput) "{ not_a_field }"
+  in selectionSet
+
 
 -- hlist :: a -> (a :<> ()) TODO
 -- hlist a = a :<> ()
@@ -68,7 +71,12 @@ calculatorQuery =
 
 typeApiTests :: IO TestTree
 typeApiTests = testSpec "Type" $ do
-  describe "tTest" $
-    it "runs" $ do
+  describe "tTest" $ do
+    it "works in a simple case" $ do
       Right r <- E.runExceptT $ buildResolver @TMonad @T tHandler tQuery
       encode r `shouldBe` "{\"t\":12}"
+    it "complains on error" $ do
+      -- TODO: Apparently MonadThrow throws in the *base monad*,
+      -- i.e. usually IO. If we want to throw in the wrapper monad I
+      -- think we may need to use MonadFail??
+      (void $ E.runExceptT (buildResolver @TMonad @T tHandler tWrongQuery)) `catch` \(e :: QueryError) -> print e
