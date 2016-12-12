@@ -41,6 +41,9 @@ data Value
   | ValueString String
   | ValueEnum Name
   | ValueList List
+  -- TODO: the output must be ordered in query order, and Map is
+  -- ordered in key order. We should probably use a list of tuples for
+  -- representation.
   | ValueMap Map
   | ValueNull
   deriving (Eq, Ord, Show)

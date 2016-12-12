@@ -39,6 +39,9 @@ import GraphQL.Definitions
 newtype QueryError = QueryError Text deriving (Show, Eq)
 instance Exception QueryError
 
+-- TODO: throwM throws in the base monad, and that's often IO. If we
+-- want to support PartialSuccess we need a different error model to
+-- throwM.
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
 
@@ -95,14 +98,13 @@ class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   type FieldHandler m a :: Type
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> (Text, m GValue.Value)
 
-
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   type FieldHandler m (Field ks t) = HandlerType m t
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
-  buildFieldResolver _ _ = ("", queryError "buildFieldResolver got non AST.Field, query probably not normalized")
+  buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -111,8 +113,7 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         partiallyAppliedHandler = handler (readValue @t argName arguments)
     in buildFieldResolver @m @f partiallyAppliedHandler selection
-
-  buildFieldResolver _ _ = undefined -- TODO
+  buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 class RunFields m a where
