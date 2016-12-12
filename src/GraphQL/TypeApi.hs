@@ -82,9 +82,9 @@ instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Text where
 
 
 instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (List hg) where
-  type HandlerType m (List hg) = m [HandlerType m hg]
+  type HandlerType m (List hg) = [HandlerType m hg]
   buildResolver handler selectionSet =
-    let a = handler >>= traverse (flip (buildResolver @m @hg) selectionSet)
+    let a = traverse (flip (buildResolver @m @hg) selectionSet) handler
     in map GValue.toValue a
 
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
