@@ -56,6 +56,10 @@ class (MonadThrow m, MonadIO m) => HasGraph m a where
 -- TODO
 class ReadValue a where
   readValue :: AST.Value -> Either Text a
+  valueMissing :: AST.Name -> Either Text a
+  valueMissing name' = Left ("Value missing: " <> name')
+
+
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
@@ -70,6 +74,18 @@ instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
   type HandlerType m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
+
+instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Text where
+  type HandlerType m Text = m Text
+  -- TODO check that selectionset is empty (we expect a terminal node)
+  buildResolver handler _ =  map GValue.toValue handler
+
+
+instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (List hg) where
+  type HandlerType m (List hg) = m [HandlerType m hg]
+  buildResolver handler selectionSet =
+    let a = handler >>= traverse (flip (buildResolver @m @hg) selectionSet)
+    in map GValue.toValue a
 
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
@@ -103,6 +119,10 @@ instance forall v. ReadValue v => ReadValue [v] where
   readValue (AST.ValueList (AST.ListValue values)) = traverse (readValue @v) values
   readValue v = Left ("Not a List:" <> (show v))
 
+instance forall v. ReadValue v => ReadValue (Maybe v) where
+  valueMissing _ = pure Nothing
+  readValue v = map Just (readValue @v v)
+
 -- TODO: enums. It's not super clear to me how we'd represent
 -- enums. We're using KnownSymbol to translate Symbol Kinds into Text
 -- to be used for serialization. It might be better to use sum types +
@@ -114,6 +134,8 @@ instance forall v. ReadValue v => ReadValue [v] where
 -- data Greet = Greet { name :: Text, score :: Int } deriving Generic
 -- then "instance ReadValue Greet" would fall back on a default reader that
 -- expects Objects?
+-- Maybe we can use advanced fallbacks like these:
+-- https://wiki.haskell.org/GHC/AdvancedOverlap
 
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   type FieldHandler m a :: Type
