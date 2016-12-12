@@ -55,7 +55,7 @@ class (MonadThrow m, MonadIO m) => HasGraph m a where
 -- Parse a value of the right type from an argument
 -- TODO
 class ReadValue a where
-  readValue :: AST.Name -> [AST.Argument] -> a
+  readValue :: AST.Value -> Either Text a
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
@@ -72,25 +72,22 @@ instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
   buildResolver handler _ =  map GValue.toValue handler
 
 
+lookupValue :: AST.Name -> [AST.Argument] -> Either Text AST.Value
+lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
+  Nothing -> Left ("Argument not found:" <> name)
+  Just (AST.Argument _ value) -> pure value
+
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.
 -- TODO (Maybe Int) types that can convert Nothing
 instance ReadValue Int32 where
-  readValue name args =
-    case find (\(AST.Argument name' _) -> name' == name) args of
-      Nothing -> error ("Mandatory Int argument of name " <> name <> "not provided by query")
-      Just (AST.Argument _ value) -> case value of
-        AST.ValueInt v -> v
-        _ -> error ("Not an Int:" <> (show value))
+  readValue (AST.ValueInt v) = pure v
+  readValue v = Left ("Not an Int:" <> (show v))
 
 instance ReadValue Double where
-  readValue name args =
-    case find (\(AST.Argument name' _) -> name' == name) args of
-      Nothing -> error ("Mandatory Float argument of name " <> name <> "not provided by query")
-      Just (AST.Argument _ value) -> case value of
-        AST.ValueFloat v -> v
-        _ -> error ("Not a Float:" <> (show value))
+  readValue (AST.ValueFloat v) = pure v
+  readValue v = Left ("Not a Double:" <> (show v))
 
 -- TODO plug in remaining values from: https://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html#t:Value
 
@@ -111,8 +108,10 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
   type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
-        partiallyAppliedHandler = handler (readValue @t argName arguments)
-    in buildFieldResolver @m @f partiallyAppliedHandler selection
+        v = lookupValue argName arguments
+    in case v >>= readValue @t of
+      Left err -> ("", queryError err)
+      Right v' -> buildFieldResolver @m @f (handler v') selection
   buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
