@@ -8,7 +8,6 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Definitions
 import GraphQL.TypeApi
-import GraphQL.Schema hiding (ValueInt)
 import qualified Control.Monad.Trans.Except as E
 import qualified Data.GraphQL.AST as AST
 import Data.Aeson (encode)
@@ -18,28 +17,27 @@ import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 
 -- Test a custom error monad
+-- TODO: I didn't realize that MonadThrow throws in the base monad (IO).
 type TMonad = E.ExceptT Text IO
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
-
 tHandler :: HandlerType TMonad T
-tHandler = do
+tHandler =
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
 
 
+tQuery :: AST.SelectionSet
 tQuery =
   let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
         parseOnly (document <* endOfInput) "{ t(t: 12) }"
   in selectionSet
 
+tWrongQuery :: AST.SelectionSet
 tWrongQuery =
   let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
         parseOnly (document <* endOfInput) "{ not_a_field }"
   in selectionSet
 
-
--- hlist :: a -> (a :<> ()) TODO
--- hlist a = a :<> ()
 
 type Calculator = Object "Calculator" '[]
   '[ Argument "a" Int32 :> Argument "b" Int32 :> Field "add" Int32
@@ -63,6 +61,7 @@ api = do
   pure (calculatorHandler fakeUser :<> ())
 
 -- Use like: `buildResolver @IO @Calculator (calculatorHandler ()) calculatorQuery`
+calculatorQuery :: AST.SelectionSet
 calculatorQuery =
   let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
         parseOnly (document <* endOfInput) "{ add(a: 1, b: 2) }"
