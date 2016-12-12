@@ -8,8 +8,7 @@
 -- This module will have all the things necessary to define and implement a
 -- type-level API.
 module GraphQL.API
-  (
-    (:>)
+  ( (:>)
   , runQuery
   , Handler
   , Server

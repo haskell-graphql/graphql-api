@@ -13,8 +13,7 @@ module GraphQL.TypeApi
   , HasGraph(..)
   , ReadValue(..)
   , BuildFieldResolver(..)
-  )
-where
+  ) where
 
 -- TODO (probably incomplete, the spec is large)
 -- * input objects - I'm not super clear from the spec on how
