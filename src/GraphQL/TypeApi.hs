@@ -216,3 +216,10 @@ instance forall typeName interfaces fields m.
     -- keep insertion order. (TODO)
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
     pure $ GValue.toValue $ M.fromList r
+
+
+-- TODO: we can't actually normalize inline fragments
+-- (e.g.  `query "{ ... on Human { name } }"`)
+-- because those are tied to the execution model: We need to
+-- select the correct branch in the list of types (Human in the
+-- example) so we do need to evaluate inline fragments.
