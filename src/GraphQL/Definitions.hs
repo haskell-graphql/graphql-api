@@ -66,6 +66,7 @@ class GraphQLEnum a where
   enumValues :: [Text] -- todo maybe use GValue.Value instead of Text?
   enumFromValue :: GValue.Value -> Either Text a
   enumToValue :: a -> GValue.Value
+  -- TODO: These are trivially generically derivable
 
 -- object types from union type lists, e.g. for
 -- Union "Horse" '[Leg, Head, Tail]

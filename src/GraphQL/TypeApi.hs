@@ -101,10 +101,10 @@ instance forall m ks enum. (MonadThrow m, MonadIO m, GraphQLEnum enum) => HasGra
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.
-lookupValue :: AST.Name -> [AST.Argument] -> Either Text AST.Value
+lookupValue :: AST.Name -> [AST.Argument] -> Maybe AST.Value
 lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
-  Nothing -> Left ("Argument not found:" <> name)
-  Just (AST.Argument _ value) -> pure value
+  Nothing -> Nothing
+  Just (AST.Argument _ value) -> Just value
 
 
 instance ReadValue Int32 where
@@ -157,7 +157,7 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
-  buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+  buildFieldResolver _ f = ("x", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -165,10 +165,14 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = lookupValue argName arguments
-    in case v >>= readValue @t of
-      Left err -> ("", queryError err)
-      Right v' -> buildFieldResolver @m @f (handler v') selection
-  buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    in case v of
+       Nothing -> case valueMissing @t argName of
+                     Left err' -> ("", queryError err')
+                     Right v' -> buildFieldResolver @m @f (handler v') selection
+       Just v' -> case readValue @t v' of
+                    Left err' -> ("", queryError err')
+                    Right v'' -> buildFieldResolver @m @f (handler v'') selection
+  buildFieldResolver _ f = ("y", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 class RunFields m a where
