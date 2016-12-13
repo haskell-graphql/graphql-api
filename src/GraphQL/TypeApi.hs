@@ -133,11 +133,6 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
   valueMissing _ = pure Nothing
   readValue v = map Just (readValue @v v)
 
--- TODO: enums. It's not super clear to me how we'd represent
--- enums. We're using KnownSymbol to translate Symbol Kinds into Text
--- to be used for serialization. It might be better to use sum types +
--- generics?
---
 -- TODO: variables should error, they should have been resolved already.
 --
 -- TODO: Objects. Maybe implement some Generic object reader? I.e. if I do
