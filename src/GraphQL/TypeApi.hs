@@ -29,10 +29,10 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import qualified GraphQL.Value as GValue
 import qualified Data.Map as M
 import qualified Data.GraphQL.AST as AST
+import GraphQL.Definitions
+import GraphQL.Input (CanonicalQuery)
 
 import Control.Monad.Catch (MonadThrow, throwM, Exception)
-
-import GraphQL.Definitions
 
 -- | MonadThrow requires an instance of Exception so we create a
 -- newtype for GraphQL errors.
@@ -50,7 +50,7 @@ queryError = throwM . QueryError
 -- NormalizedSelectionSet which has query fragments etc. resolved.
 class (MonadThrow m, MonadIO m) => HasGraph m a where
   type HandlerType m a
-  buildResolver :: HandlerType m a -> AST.SelectionSet -> m GValue.Value
+  buildResolver :: HandlerType m a -> CanonicalQuery -> m GValue.Value
 
 -- Parse a value of the right type from an argument
 -- TODO
