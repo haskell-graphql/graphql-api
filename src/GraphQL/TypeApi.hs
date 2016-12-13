@@ -52,13 +52,19 @@ class (MonadThrow m, MonadIO m) => HasGraph m a where
   type HandlerType m a
   buildResolver :: HandlerType m a -> CanonicalQuery -> m GValue.Value
 
--- Parse a value of the right type from an argument
--- TODO
+-- | The ReadValue instance converts AST.Value types like ValueInt to
+-- the type expected by the handler function. It's the boundary
+-- between incoming types and your custom application Haskell types.
 class ReadValue a where
+  -- | Convert the already-parsed value into the type needed for the
+  -- function call.
   readValue :: AST.Value -> Either Text a
+
+  -- | valueMissing is a separate function so we can provide default
+  -- values for certain cases. E.g. there is an instance for `Maybe a`
+  -- that returns Nothing if the value is missing.
   valueMissing :: AST.Name -> Either Text a
   valueMissing name' = Left ("Value missing: " <> name')
-
 
 
 -- TODO not super hot on individual values having to be instances of
@@ -90,7 +96,6 @@ instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (Li
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.
--- TODO (Maybe Int) types that can convert Nothing
 lookupValue :: AST.Name -> [AST.Argument] -> Either Text AST.Value
 lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
   Nothing -> Left ("Argument not found:" <> name)
