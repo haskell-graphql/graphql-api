@@ -93,6 +93,11 @@ instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (Li
     let a = traverse (flip (buildResolver @m @hg) selectionSet) handler
     in map GValue.toValue a
 
+instance forall m ks enum. (MonadThrow m, MonadIO m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
+  type HandlerType m (Enum ks enum) = enum
+  buildResolver handler _ = pure (enumToValue handler)
+
+
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.

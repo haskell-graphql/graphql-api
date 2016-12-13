@@ -11,7 +11,7 @@ import qualified GraphQL.Schema (Type)
 import Protolude hiding (Enum)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
-
+import qualified GraphQL.Value as GValue
 
 -- | Argument operator.
 data a :> b = a :> b
@@ -23,7 +23,7 @@ infixr 8 :<>
 
 
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
-data Enum (name :: Symbol) (values :: [Symbol])
+data Enum (name :: Symbol) (values :: Type)
 data Union (name :: Symbol) (types :: [Type])
 data List (elemType :: Type)
 
@@ -60,17 +60,12 @@ instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasField
 instance HasFieldDefinitions '[] where
   getFieldDefinitions = []
 
--- Convert a type-level list of KnownSymbol into a value-level
--- list. This is used for Enums.
-class GetSymbolList a where
-  getSymbolList :: [Text]
-
-instance forall a as. (KnownSymbol a, GetSymbolList as) => GetSymbolList (a:as) where
-  getSymbolList = (toS (symbolVal (Proxy :: Proxy a))):(getSymbolList @as)
-
-instance GetSymbolList '[] where
-  getSymbolList = []
-
+-- | For each enum type we need 1) a list of all possible values 2) a
+-- way to serialise and 3) deserialise.
+class GraphQLEnum a where
+  enumValues :: [Text] -- todo maybe use GValue.Value instead of Text?
+  enumFromValue :: GValue.Value -> Either Text a
+  enumToValue :: a -> GValue.Value
 
 -- object types from union type lists, e.g. for
 -- Union "Horse" '[Leg, Head, Tail]
@@ -168,10 +163,10 @@ instance HasAnnotatedType Float where
 instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
   getAnnotatedType = TypeList (ListType (getAnnotatedType @t))
 
-instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedType (Enum ks sl) where
+instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (getSymbolList @sl))
+        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (enumValues @enum))
     in TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum et)))
 
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
@@ -214,8 +209,8 @@ instance HasAnnotatedInputType Float where
 instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) where
   getAnnotatedInputType = TypeList (ListType (getAnnotatedInputType @t))
 
-instance forall ks sl. (KnownSymbol ks, GetSymbolList sl) => HasAnnotatedInputType (Enum ks sl) where
+instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType =
     let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (getSymbolList @sl))
+        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (enumValues @enum))
     in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
