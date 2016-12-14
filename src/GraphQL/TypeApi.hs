@@ -29,10 +29,10 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import qualified GraphQL.Value as GValue
 import qualified Data.Map as M
 import qualified Data.GraphQL.AST as AST
+import GraphQL.Definitions
+import GraphQL.Input (CanonicalQuery)
 
 import Control.Monad.Catch (MonadThrow, throwM, Exception)
-
-import GraphQL.Definitions
 
 -- | MonadThrow requires an instance of Exception so we create a
 -- newtype for GraphQL errors.
@@ -50,15 +50,21 @@ queryError = throwM . QueryError
 -- NormalizedSelectionSet which has query fragments etc. resolved.
 class (MonadThrow m, MonadIO m) => HasGraph m a where
   type HandlerType m a
-  buildResolver :: HandlerType m a -> AST.SelectionSet -> m GValue.Value
+  buildResolver :: HandlerType m a -> CanonicalQuery -> m GValue.Value
 
--- Parse a value of the right type from an argument
--- TODO
+-- | The ReadValue instance converts AST.Value types like ValueInt to
+-- the type expected by the handler function. It's the boundary
+-- between incoming types and your custom application Haskell types.
 class ReadValue a where
+  -- | Convert the already-parsed value into the type needed for the
+  -- function call.
   readValue :: AST.Value -> Either Text a
+
+  -- | valueMissing is a separate function so we can provide default
+  -- values for certain cases. E.g. there is an instance for @@Maybe a@@
+  -- that returns Nothing if the value is missing.
   valueMissing :: AST.Name -> Either Text a
   valueMissing name' = Left ("Value missing: " <> name')
-
 
 
 -- TODO not super hot on individual values having to be instances of
@@ -87,14 +93,18 @@ instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (Li
     let a = traverse (flip (buildResolver @m @hg) selectionSet) handler
     in map GValue.toValue a
 
+instance forall m ks enum. (MonadThrow m, MonadIO m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
+  type HandlerType m (Enum ks enum) = enum
+  buildResolver handler _ = pure (enumToValue handler)
+
+
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.
--- TODO (Maybe Int) types that can convert Nothing
-lookupValue :: AST.Name -> [AST.Argument] -> Either Text AST.Value
+lookupValue :: AST.Name -> [AST.Argument] -> Maybe AST.Value
 lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
-  Nothing -> Left ("Argument not found:" <> name)
-  Just (AST.Argument _ value) -> pure value
+  Nothing -> Nothing
+  Just (AST.Argument _ value) -> Just value
 
 
 instance ReadValue Int32 where
@@ -123,11 +133,6 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
   valueMissing _ = pure Nothing
   readValue v = map Just (readValue @v v)
 
--- TODO: enums. It's not super clear to me how we'd represent
--- enums. We're using KnownSymbol to translate Symbol Kinds into Text
--- to be used for serialization. It might be better to use sum types +
--- generics?
---
 -- TODO: variables should error, they should have been resolved already.
 --
 -- TODO: Objects. Maybe implement some Generic object reader? I.e. if I do
@@ -147,18 +152,18 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in (name, childResolver)
-  buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+  buildFieldResolver _ f = ("x", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
   type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
-        v = lookupValue argName arguments
-    in case v >>= readValue @t of
-      Left err -> ("", queryError err)
-      Right v' -> buildFieldResolver @m @f (handler v') selection
-  buildFieldResolver _ f = ("", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+        v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
+    in case v of
+         Left err' -> ("", queryError err')
+         Right v' -> buildFieldResolver @m @f (handler v') selection
+  buildFieldResolver _ f = ("y", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 class RunFields m a where

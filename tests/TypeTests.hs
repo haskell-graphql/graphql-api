@@ -11,8 +11,15 @@ import GraphQL.Schema
 
 -- Examples taken from the spec
 
+data DogCommandEnum = Sit | Down | Heel
+
+instance GraphQLEnum DogCommandEnum where
+  enumValues = ["SIT", "DOWN", "HEEL"]
+  enumToValue _ = undefined
+  enumFromValue _ = undefined
+
 -- Alternative might be a sum type with deriving Generic and 0-arity constructors?
-type DogCommand = Enum "DogCommand" '["SIT", "DOWN", "HEEL"]
+type DogCommand = Enum "DogCommand" DogCommandEnum
 
 
 type Dog = Object "Dog" '[Pet]
@@ -31,7 +38,13 @@ type Alien = Object "Alien" '[Sentient] [Field "name" Text, Field "homePlanet" T
 
 type Human = Object "Human" '[Sentient] '[Field "name" Text]
 
-type CatCommand = Enum "CatCommand" '["JUMP"]
+data CatCommandEnum = Jump
+instance GraphQLEnum CatCommandEnum where
+  enumValues = ["JUMP"]
+  enumToValue = undefined
+  enumFromValue = undefined
+
+type CatCommand = Enum "CatCommand" CatCommandEnum
 
 type Cat = Object "Cat" '[Pet]
   '[ Field "name" Text
