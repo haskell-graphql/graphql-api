@@ -142,17 +142,23 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- Maybe we can use advanced fallbacks like these:
 -- https://wiki.haskell.org/GHC/AdvancedOverlap
 
+-- | Internal data type to capture a field's name + what to excute if
+-- the name matches the query. Note that the name is *not* in monad m,
+-- but the value is. This is necessary so we can skip execution if the
+-- name doesn't match.
+data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
+
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   type FieldHandler m a :: Type
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> (Text, m GValue.Value)
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   type FieldHandler m (Field ks t) = HandlerType m t
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
-    in (name, childResolver)
-  buildFieldResolver _ f = ("x", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    in NamedFieldExecutor name childResolver
+  buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -161,9 +167,9 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
-         Left err' -> ("", queryError err')
+         Left err' -> NamedFieldExecutor "" (queryError err')
          Right v' -> buildFieldResolver @m @f (handler v') selection
-  buildFieldResolver _ f = ("y", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+  buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 class RunFields m a where
@@ -181,11 +187,11 @@ instance forall f fs m.
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let (k, valueIO) = buildFieldResolver @m @f lh selection
+    let NamedFieldExecutor k mValue = buildFieldResolver @m @f lh selection
     in case name == k of
       True -> do
         -- execute action to retrieve field value
-        value <- valueIO
+        value <- mValue
         -- NB "alias" is encoded in-band. It cannot be set to empty in
         -- a query so the empty value means "no alias" and we use the
         -- name instead.
