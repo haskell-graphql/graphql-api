@@ -12,6 +12,7 @@ import Protolude hiding (Enum)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
+import qualified Data.GraphQL.AST as AST
 
 -- | Argument operator.
 data a :> b = a :> b
@@ -63,7 +64,7 @@ instance HasFieldDefinitions '[] where
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
 class GraphQLEnum a where
-  enumValues :: [Text] -- todo maybe use GValue.Value instead of Text?
+  enumValues :: [AST.Name]
   enumFromValue :: GValue.Value -> Either Text a
   enumToValue :: a -> GValue.Value
   -- TODO: These are trivially generically derivable

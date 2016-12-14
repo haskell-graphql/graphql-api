@@ -61,7 +61,7 @@ class ReadValue a where
   readValue :: AST.Value -> Either Text a
 
   -- | valueMissing is a separate function so we can provide default
-  -- values for certain cases. E.g. there is an instance for `Maybe a`
+  -- values for certain cases. E.g. there is an instance for @@Maybe a@@
   -- that returns Nothing if the value is missing.
   valueMissing :: AST.Name -> Either Text a
   valueMissing name' = Left ("Value missing: " <> name')
@@ -159,14 +159,10 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
   type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
-        v = lookupValue argName arguments
+        v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
-       Nothing -> case valueMissing @t argName of
-                     Left err' -> ("", queryError err')
-                     Right v' -> buildFieldResolver @m @f (handler v') selection
-       Just v' -> case readValue @t v' of
-                    Left err' -> ("", queryError err')
-                    Right v'' -> buildFieldResolver @m @f (handler v'') selection
+         Left err' -> ("", queryError err')
+         Right v' -> buildFieldResolver @m @f (handler v') selection
   buildFieldResolver _ f = ("y", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
