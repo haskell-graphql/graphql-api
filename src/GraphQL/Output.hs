@@ -1,4 +1,3 @@
-
 -- | GraphQL output.
 --
 -- How we encode GraphQL responses.

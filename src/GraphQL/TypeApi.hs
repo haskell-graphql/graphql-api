@@ -149,7 +149,7 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- Maybe we can use advanced fallbacks like these:
 -- https://wiki.haskell.org/GHC/AdvancedOverlap
 
--- | Internal data type to capture a field's name + what to excute if
+-- | Internal data type to capture a field's name + what to execute if
 -- the name matches the query. Note that the name is *not* in monad m,
 -- but the value is. This is necessary so we can skip execution if the
 -- name doesn't match.
@@ -270,11 +270,6 @@ instance forall m ks ru.
          , RunUnion m ru
          ) => HasGraph m (Union ks ru) where
   type HandlerType m (Union ks ru) = RunUnionType m ru
-  -- TODO we need to give good error feedback when people try to build
-  -- Union types with non-Object Types in the list. I suspect that's
-  -- hard because overlapping instances are restrictive.
-  -- we could maybe use closed type families for
-
   -- TODO: check sanity of query before executing it. E.g. we can't
   -- have the same field name in two different fragment branches
   -- (needs to take aliases into account).

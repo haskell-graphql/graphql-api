@@ -92,7 +92,7 @@ newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Generi
 mapFromList :: [(Name,  GraphQL.Value.Value)] -> Map
 mapFromList = Map
 
--- TODO this wouldbe nicer with a prism `_ValueMap` but don't want to
+-- TODO this would be nicer with a prism `_ValueMap` but don't want to
 -- pull in lens as dependency.
 unionMap :: [Value] -> Either Text Value
 unionMap values = map (ValueMap . fold)  (sequence (map isValueMap values))

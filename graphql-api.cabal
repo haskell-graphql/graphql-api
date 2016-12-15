@@ -81,9 +81,6 @@ test-suite graphql-api-tests
     , tasty
     , tasty-hspec
   other-modules:
-      FileSystem
-      Git
-      T
       TypeApiTests
       TypeTests
   default-language: Haskell2010
