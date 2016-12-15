@@ -40,17 +40,11 @@ import Control.Monad.Catch (MonadThrow, throwM, Exception)
 newtype QueryError = QueryError Text deriving (Show, Eq)
 instance Exception QueryError
 
-newtype ImplementationError = ImplementationError Text deriving (Show, Eq)
-instance Exception ImplementationError
-
 -- TODO: throwM throws in the base monad, and that's often IO. If we
 -- want to support PartialSuccess we need a different error model to
 -- throwM.
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
-
-implementationError :: forall m a. MonadThrow m => Text -> m a
-implementationError = throwM . ImplementationError
 
 
 -- TODO instead of SelectionSet we want something like
@@ -281,5 +275,5 @@ instance forall m ks ru.
     -- which means 1) they have fields 2) They are ValueMap
     values <- map GValue.unionMap (traverse (runUnion @m @ru handler) selection)
     case values of
-      Left _ -> implementationError "It looks like you used a non-Object type in a Union"
+      Left _ -> panic "It looks like you used a non-Object type in a Union"
       Right ok -> pure ok
