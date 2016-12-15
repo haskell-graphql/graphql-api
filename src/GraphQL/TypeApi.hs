@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
 module GraphQL.TypeApi
-  ( QueryError
+  ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , ReadValue(..)
   , BuildFieldResolver(..)

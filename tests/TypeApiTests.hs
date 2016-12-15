@@ -91,4 +91,5 @@ typeApiTests = testSpec "Type" $ do
       -- TODO: Apparently MonadThrow throws in the *base monad*,
       -- i.e. usually IO. If we want to throw in the wrapper monad I
       -- think we may need to use MonadFail??
-      (void $ E.runExceptT (buildResolver @TMonad @T tHandler tWrongQuery)) `catch` \(e :: QueryError) -> print e
+      caught <- (E.runExceptT (buildResolver @TMonad @T tHandler tWrongQuery) >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
+      caught `shouldBe` Just (QueryError "Query for undefined selection:SelectionField (Field \"\" \"not_a_field\" [] [] [])")
