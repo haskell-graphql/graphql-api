@@ -38,48 +38,6 @@ tWrongQuery =
   in selectionSet
 
 
--- Run like this: buildResolver @IO @Listed listedHandler listedQuery
-type Listed = Object "Listed" '[] '[Field "items" (List Int32)]
-
-listedHandler :: HandlerType IO Listed
-listedHandler = pure ([pure 10, pure 20] :<> ())
-
-listedQuery :: AST.SelectionSet
-listedQuery =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-        parseOnly (document <* endOfInput) "{ items }"
-  in selectionSet
-
-
-type Calculator = Object "Calculator" '[]
-  '[ Argument "a" Int32 :> Argument "b" Int32 :> Field "add" Int32
-   , Argument "a" Double :> Field "log" Double
-   ]
-
-type API = Object "API" '[] '[Field "calc" Calculator]
-
-type FakeUser = ()
-
-calculatorHandler :: FakeUser -> HandlerType IO Calculator
-calculatorHandler _fakeUser =
-  pure (add' :<> log' :<> ())
-  where
-    add' a b = pure (a + b)
-    log' a = pure (log a)
-
-api :: HandlerType IO API
-api = do
-  fakeUser <- print @IO @Text "fake lookup user"
-  pure (calculatorHandler fakeUser :<> ())
-
--- Use like: `buildResolver @IO @Calculator (calculatorHandler ()) calculatorQuery`
-calculatorQuery :: AST.SelectionSet
-calculatorQuery =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-        parseOnly (document <* endOfInput) "{ add(a: 1, b: 2) }"
-  in selectionSet
-
-
 tests :: IO TestTree
 tests = testSpec "Type" $ do
   describe "tTest" $ do
