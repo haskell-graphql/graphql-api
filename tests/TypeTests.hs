@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeApplications, DataKinds, TypeOperators #-}
-module TypeTests where
+module TypeTests (tests) where
 
 import Protolude hiding (Enum)
 
@@ -60,8 +60,8 @@ type HumanOrAlien = Union "HumanOrAlien" '[Human, Alien]
 type QueryRoot = Object "QueryRoot" '[Field "dog" Dog]
 
 
-typeTests :: IO TestTree
-typeTests = testSpec "Type" $ do
+tests :: IO TestTree
+tests = testSpec "Type" $ do
   describe "Field" $
     it "encodes correctly" $ do
     getFieldDefinition @(Field "hello" Int) `shouldBe` (FieldDefinition (Name "hello") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))

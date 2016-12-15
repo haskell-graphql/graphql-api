@@ -20,7 +20,10 @@ import Examples.UnionExample ()
 
 main :: IO ()
 main = do
-  t <- sequence [tests, TypeTests.typeTests, TypeApiTests.typeApiTests]
+  t <- sequence [ tests
+                , TypeTests.tests
+                , TypeApiTests.tests
+                ]
   defaultMain (testGroup "spec" t)
 
 tests :: IO TestTree

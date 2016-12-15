@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeApplications, DataKinds, TypeOperators, ScopedTypeVariables #-}
-module TypeApiTests where
+module TypeApiTests (tests) where
 
 import Protolude hiding (Enum)
 
@@ -81,8 +81,8 @@ calculatorQuery =
   in selectionSet
 
 
-typeApiTests :: IO TestTree
-typeApiTests = testSpec "Type" $ do
+tests :: IO TestTree
+tests = testSpec "Type" $ do
   describe "tTest" $ do
     it "works in a simple case" $ do
       Right r <- E.runExceptT $ buildResolver @TMonad @T tHandler tQuery
