@@ -1,4 +1,6 @@
-module UnionExample where
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
+module Examples.UnionExample  where
 
 import Protolude hiding (Enum)
 import GraphQL.Definitions

@@ -15,6 +15,9 @@ import GraphQL.Validation (ValidationError(..), getErrors)
 import qualified TypeTests
 import qualified TypeApiTests
 
+-- import examples to ensure they compile
+import Examples.UnionExample ()
+
 main :: IO ()
 main = do
   t <- sequence [tests, TypeTests.typeTests, TypeApiTests.typeApiTests]
