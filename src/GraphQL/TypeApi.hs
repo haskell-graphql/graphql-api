@@ -16,12 +16,12 @@ module GraphQL.TypeApi
   ) where
 
 -- TODO (probably incomplete, the spec is large)
--- * input objects - I'm not super clear from the spec on how
+-- - input objects - I'm not super clear from the spec on how
 --   they differ from normal objects.
--- * "extend type X" is used in examples in the spec but it's not
+-- - "extend type X" is used in examples in the spec but it's not
 --   explained anywhere?
--- * Directives (https://facebook.github.io/graphql/#sec-Type-System.Directives)
--- * Enforce non-empty lists (might only be doable via value-level validation)
+-- - Directives (https://facebook.github.io/graphql/#sec-Type-System.Directives)
+-- - Enforce non-empty lists (might only be doable via value-level validation)
 
 import Protolude hiding (Enum)
 import GHC.TypeLits (KnownSymbol, symbolVal)

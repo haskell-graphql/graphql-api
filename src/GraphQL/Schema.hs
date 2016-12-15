@@ -1,25 +1,38 @@
--- | Sketch of fully-realized schema type system.
---
--- Differs from
--- http://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html#g:6
--- in that there are no type references.
---
--- Intended as a first step on the path to a type-level GraphQL schema definition.
---
--- There are two paths from here:
---
--- 1. Revert back to the NamedType / type reference thing and do value-level
--- schema definition.
---
--- 2. Figure out how to take these values and translate them to types.
-
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module GraphQL.Schema where
+-- | Fully realized GraphQL schema type system at the value level.
+--
+-- Differs from "Data.GraphQL.AST" in the
+-- [graphql](http://hackage.haskell.org/package/graphql) package in that there
+-- are no type references. Instead, everything is inlined.
+--
+-- Equivalent representation of GraphQL /values/ is in "GraphQL.Value".
+module GraphQL.Schema
+  ( Type(..)
+  -- * Builtin types
+  , Builtin(..)
+  -- * Defining new types
+  , TypeDefinition(..)
+  , Name(..)
+  , ArgumentDefinition(..)
+  , EnumValueDefinition(..)
+  , EnumTypeDefinition(..)
+  , FieldDefinition(..)
+  , Interfaces
+  , InterfaceTypeDefinition(..)
+  , NonEmptyList(..)
+  , ObjectTypeDefinition(..)
+  , UnionTypeDefinition(..)
+  -- ** Input types
+  , InputType(..)
+  , InputTypeDefinition(..)
+  -- * Using existing types
+  , AnnotatedType(..)
+  , ListType(..)
+  , NonNullType(..)
+  ) where
 
 import Protolude hiding (Type)
-
-import Data.Text (Text)
 
 -- | Example
 hi' :: EnumTypeDefinition
@@ -34,10 +47,12 @@ thing' = ObjectTypeDefinition "Thing" [] (NonEmptyList [ FieldDefinition "hero" 
 thing :: Type
 thing = DefinedType (TypeDefinitionObject thing')
 
--- | Types
-
+-- | A name in GraphQL.
+--
+-- https://facebook.github.io/graphql/#sec-Names
 newtype Name = Name Text deriving (Eq, Show, IsString) -- XXX: Phantom type?
 
+-- XXX: Use the built-in NonEmptyList in Haskell
 newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show)
 
 data AnnotatedType t = TypeNamed t
@@ -82,7 +97,21 @@ data UnionTypeDefinition = UnionTypeDefinition Name (NonEmptyList ObjectTypeDefi
 data ScalarTypeDefinition = ScalarTypeDefinition Name
                             deriving (Eq, Show)
 
-data Builtin = GInt | GBool | GString | GFloat | GID deriving (Eq, Show)
+-- | Types that are built into GraphQL.
+--
+-- The GraphQL spec refers to these as
+-- \"[scalars](https://facebook.github.io/graphql/#sec-Scalars)\".
+data Builtin
+  -- | A signed 32‐bit numeric non‐fractional value
+  = GInt
+  -- | True or false
+  | GBool
+  -- | Textual data represented as UTF-8 character sequences
+  | GString
+  -- | Signed double‐precision fractional values as specified by [IEEE 754](https://en.wikipedia.org/wiki/IEEE_floating_point)
+  | GFloat
+  -- | A unique identifier, often used to refetch an object or as the key for a cache
+  | GID deriving (Eq, Show)
 
 data EnumTypeDefinition = EnumTypeDefinition Name [EnumValueDefinition]
                           deriving (Eq, Show)
