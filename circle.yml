@@ -11,9 +11,14 @@ dependencies:
     - sudo apt-get install -y stack
   override:
     - stack --no-terminal setup
-    - stack --no-terminal build --test --only-dependencies -j1
+    - stack --no-terminal build --haddock --test --only-dependencies -j1
 
 test:
   override:
     - stack --no-terminal build --test
     - stack --no-terminal test
+    - stack --no-terminal haddock
+
+general:
+  artifacts:
+    - .stack-work/dist/x86_64-linux/Cabal-1.24.0.0/doc/html/graphql-api
