@@ -8,7 +8,6 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Definitions
 import GraphQL.TypeApi
-import qualified Control.Monad.Trans.Except as E
 import qualified Data.GraphQL.AST as AST
 import Data.Aeson (encode)
 
@@ -18,7 +17,7 @@ import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 -- Test a custom error monad
 -- TODO: I didn't realize that MonadThrow throws in the base monad (IO).
-type TMonad = E.ExceptT Text IO
+type TMonad = ExceptT Text IO
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
 tHandler :: HandlerType TMonad T
@@ -85,11 +84,11 @@ tests :: IO TestTree
 tests = testSpec "Type" $ do
   describe "tTest" $ do
     it "works in a simple case" $ do
-      Right r <- E.runExceptT $ buildResolver @TMonad @T tHandler tQuery
+      Right r <- runExceptT $ buildResolver @TMonad @T tHandler tQuery
       encode r `shouldBe` "{\"t\":12}"
     it "complains on error" $ do
       -- TODO: Apparently MonadThrow throws in the *base monad*,
       -- i.e. usually IO. If we want to throw in the wrapper monad I
       -- think we may need to use MonadFail??
-      caught <- (E.runExceptT (buildResolver @TMonad @T tHandler tWrongQuery) >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
+      caught <- (runExceptT (buildResolver @TMonad @T tHandler tWrongQuery) >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
       caught `shouldBe` Just (QueryError "Query for undefined selection:SelectionField (Field \"\" \"not_a_field\" [] [] [])")
