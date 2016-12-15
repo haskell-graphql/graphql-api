@@ -35,7 +35,6 @@ library
     , graphql
     , text
   exposed-modules:
-      GraphQL
       GraphQL.Definitions
       GraphQL.Input
       GraphQL.Output
