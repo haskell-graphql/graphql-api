@@ -67,4 +67,5 @@ test-suite graphql-api-tests
       Examples.UnionExample
       TypeApiTests
       TypeTests
+      ValidationTests
   default-language: Haskell2010
