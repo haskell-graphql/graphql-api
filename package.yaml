@@ -21,13 +21,6 @@ dependencies:
   - transformers
   - attoparsec
 
-executables:
-  graphql-api-example:
-    main: Main.hs
-    source-dirs: cmd
-    dependencies:
-      - graphql-api
-
 library:
   source-dirs: src
   dependencies:
