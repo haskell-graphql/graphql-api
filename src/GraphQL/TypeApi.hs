@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
 module GraphQL.TypeApi
   ( QueryError
@@ -25,9 +26,9 @@ module GraphQL.TypeApi
 
 import Protolude hiding (Enum)
 import GHC.TypeLits (KnownSymbol, symbolVal)
+import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
-import qualified Data.Map as M
 import qualified Data.GraphQL.AST as AST
 import GraphQL.Definitions
 import GraphQL.Input (CanonicalQuery)
@@ -39,11 +40,17 @@ import Control.Monad.Catch (MonadThrow, throwM, Exception)
 newtype QueryError = QueryError Text deriving (Show, Eq)
 instance Exception QueryError
 
+newtype ImplementationError = ImplementationError Text deriving (Show, Eq)
+instance Exception ImplementationError
+
 -- TODO: throwM throws in the base monad, and that's often IO. If we
 -- want to support PartialSuccess we need a different error model to
 -- throwM.
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
+
+implementationError :: forall m a. MonadThrow m => Text -> m a
+implementationError = throwM . ImplementationError
 
 
 -- TODO instead of SelectionSet we want something like
@@ -142,17 +149,23 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- Maybe we can use advanced fallbacks like these:
 -- https://wiki.haskell.org/GHC/AdvancedOverlap
 
+-- | Internal data type to capture a field's name + what to execute if
+-- the name matches the query. Note that the name is *not* in monad m,
+-- but the value is. This is necessary so we can skip execution if the
+-- name doesn't match.
+data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
+
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   type FieldHandler m a :: Type
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> (Text, m GValue.Value)
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   type FieldHandler m (Field ks t) = HandlerType m t
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
-    in (name, childResolver)
-  buildFieldResolver _ f = ("x", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    in NamedFieldExecutor name childResolver
+  buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -161,10 +174,14 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
-         Left err' -> ("", queryError err')
+         Left err' -> NamedFieldExecutor "" (queryError err')
          Right v' -> buildFieldResolver @m @f (handler v') selection
-  buildFieldResolver _ f = ("y", queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+  buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
+
+-- TODO we can probably use closed type families for RunFieldsType and
+-- FieldHandler for better error reporting in case the user uses some
+-- unexpected type.
 
 class RunFields m a where
   type RunFieldsType m a :: Type
@@ -181,11 +198,11 @@ instance forall f fs m.
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let (k, valueIO) = buildFieldResolver @m @f lh selection
+    let NamedFieldExecutor k mValue = buildFieldResolver @m @f lh selection
     in case name == k of
       True -> do
         -- execute action to retrieve field value
-        value <- valueIO
+        value <- mValue
         -- NB "alias" is encoded in-band. It cannot be set to empty in
         -- a query so the empty value means "no alias" and we use the
         -- name instead.
@@ -206,13 +223,63 @@ instance forall typeName interfaces fields m.
          ) => HasGraph m (Object typeName interfaces fields) where
   type HandlerType m (Object typeName interfaces fields) = m (RunFieldsType m fields)
 
-  buildResolver handlerIO selectionSet = do
+  buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
-    handler <- handlerIO
+    handler <- mHandler
     -- considering that this is an object we'll need to collect (name,
     -- Value) pairs from runFields and build a map with them.
 
     -- might need https://hackage.haskell.org/package/linkedhashmap to
     -- keep insertion order. (TODO)
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
-    pure $ GValue.toValue $ M.fromList r
+    pure $ GValue.toValue (GValue.mapFromList r)
+
+
+-- | Closed type family to enforce the invariant that Union types
+-- contain only Objects.
+type family RunUnionType m (a :: [Type]) :: Type where
+  RunUnionType m ((Object typeName interfaces fields):rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
+  RunUnionType m '[] = ()
+  RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+
+
+-- Type class to execute union type queries.
+class RunUnion m a where
+  runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Value
+
+instance forall m typeName interfaces fields rest.
+         ( RunUnion m rest
+         , MonadIO m
+         , MonadThrow m
+         , RunFields m fields
+         , KnownSymbol typeName
+         ) => RunUnion m ((Object typeName interfaces fields):rest) where
+  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
+    | typeName == queryTypeName = buildResolver @m @(Object typeName interfaces fields) lh subSelection
+    | otherwise = runUnion @m @rest rh fragment
+    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+  runUnion _ _ =
+    queryError "Non-InlineFragment used for a union type query."
+
+instance forall m. MonadThrow m => RunUnion m '[] where
+  runUnion _ selection = queryError ("Union type could not be resolved:" <> (show selection))
+
+instance forall m ks ru.
+         ( MonadThrow m
+         , MonadIO m
+         , RunUnion m ru
+         ) => HasGraph m (Union ks ru) where
+  type HandlerType m (Union ks ru) = RunUnionType m ru
+  -- TODO: check sanity of query before executing it. E.g. we can't
+  -- have the same field name in two different fragment branches
+  -- (needs to take aliases into account).
+
+  -- query "{ ... on Human { name } }"
+  -- [SelectionInlineFragment (InlineFragment (NamedType "Human") [] [SelectionField (Field "" "name" [] [] [])])]
+  buildResolver handler selection = do
+    -- GraphQL invariant is that all items in a Union must be objects
+    -- which means 1) they have fields 2) They are ValueMap
+    values <- map GValue.unionMap (traverse (runUnion @m @ru handler) selection)
+    case values of
+      Left _ -> implementationError "It looks like you used a non-Object type in a Union"
+      Right ok -> pure ok

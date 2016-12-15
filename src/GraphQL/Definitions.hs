@@ -6,6 +6,7 @@
 
 -- | Type-level definitions for a GraphQL schema.
 module GraphQL.Definitions where
+-- TODO export list
 
 import Protolude hiding (Enum)
 
@@ -16,13 +17,17 @@ import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
 import qualified Data.GraphQL.AST as AST
 
--- | Argument operator.
+-- | Argument operator. Can only be used with Field.
 data a :> b = a :> b
 infixr 8 :>
 
--- | Object result operator.
+-- | Object field separation operator.
 data a :<> b = a :<> b
 infixr 8 :<>
+
+-- | Union type separation operator.
+data a :<|> b = a :<|> b
+infixr 8 :<|>
 
 
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
