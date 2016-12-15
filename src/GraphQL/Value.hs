@@ -35,6 +35,7 @@ import qualified Data.Set as Set
 import Data.GraphQL.AST (Name)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
+import qualified Data.Map as Map
 import GHC.Generics (Generic)
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
@@ -101,9 +102,9 @@ unionMap values = map (ValueMap . fold)  (sequence (map isValueMap values))
       _ -> Left "non-ValueMap member"
 
 
-
 instance ToJSON Map where
   -- Direct encoding to preserve order of keys / values
+  toJSON (Map xs) = toJSON (Map.fromList xs)
   toEncoding (Map xs) = pairs (fold (map (\(k, v) -> (toS k) .= v) xs))
 
 
