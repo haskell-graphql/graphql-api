@@ -159,7 +159,8 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
     in NamedFieldExecutor name childResolver
-  buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+  buildFieldResolver _ f =
+    NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -170,7 +171,8 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     in case v of
          Left err' -> NamedFieldExecutor "" (queryError err')
          Right v' -> buildFieldResolver @m @f (handler v') selection
-  buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+  buildFieldResolver _ f =
+    NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 -- TODO we can probably use closed type families for RunFieldsType and
@@ -220,11 +222,8 @@ instance forall typeName interfaces fields m.
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- mHandler
-    -- considering that this is an object we'll need to collect (name,
-    -- Value) pairs from runFields and build a map with them.
-
-    -- might need https://hackage.haskell.org/package/linkedhashmap to
-    -- keep insertion order. (TODO)
+    -- We're evaluating an Object so we're collecting (name, Value)
+    -- pairs from runFields and build a GValue.Map with them.
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
     pure $ GValue.toValue (GValue.mapFromList r)
 
