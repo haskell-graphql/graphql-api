@@ -179,6 +179,10 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
   buildFieldResolver _ f = NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
+-- TODO we can probably use closed type families for RunFieldsType and
+-- FieldHandler for better error reporting in case the user uses some
+-- unexpected type.
+
 class RunFields m a where
   type RunFieldsType m a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
