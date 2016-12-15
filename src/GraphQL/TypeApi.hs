@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
 module GraphQL.TypeApi
   ( QueryError
@@ -25,6 +26,7 @@ module GraphQL.TypeApi
 
 import Protolude hiding (Enum)
 import GHC.TypeLits (KnownSymbol, symbolVal)
+import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
 import qualified Data.GraphQL.AST as AST
@@ -229,9 +231,16 @@ instance forall typeName interfaces fields m.
     pure $ GValue.toValue (GValue.mapFromList r)
 
 
+-- | Closed type family to enforce the invariant that Union types
+-- contain only Objects.
+type family RunUnionType m (a :: [Type]) :: Type where
+  RunUnionType m ((Object typeName interfaces fields):rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
+  RunUnionType m '[] = ()
+  RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+
+
 -- Type class to execute union type queries.
 class RunUnion m a where
-  type RunUnionType m a :: Type -- TODO closed type family for better error reporting?
   runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Value
 
 instance forall m typeName interfaces fields rest.
@@ -241,7 +250,6 @@ instance forall m typeName interfaces fields rest.
          , RunFields m fields
          , KnownSymbol typeName
          ) => RunUnion m ((Object typeName interfaces fields):rest) where
-  type RunUnionType m ((Object typeName interfaces fields):rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = buildResolver @m @(Object typeName interfaces fields) lh subSelection
     | otherwise = runUnion @m @rest rh fragment
@@ -250,7 +258,6 @@ instance forall m typeName interfaces fields rest.
     queryError "Non-InlineFragment used for a union type query."
 
 instance forall m. MonadThrow m => RunUnion m '[] where
-  type RunUnionType m '[] = ()
   runUnion _ selection = queryError ("Union type could not be resolved:" <> (show selection))
 
 instance forall m ks ru.
