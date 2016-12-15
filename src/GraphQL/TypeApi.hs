@@ -27,7 +27,6 @@ import Protolude hiding (Enum)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 
 import qualified GraphQL.Value as GValue
-import qualified Data.Map as M
 import qualified Data.GraphQL.AST as AST
 import GraphQL.Definitions
 import GraphQL.Input (CanonicalQuery)
@@ -39,11 +38,17 @@ import Control.Monad.Catch (MonadThrow, throwM, Exception)
 newtype QueryError = QueryError Text deriving (Show, Eq)
 instance Exception QueryError
 
+newtype ImplementationError = ImplementationError Text deriving (Show, Eq)
+instance Exception ImplementationError
+
 -- TODO: throwM throws in the base monad, and that's often IO. If we
 -- want to support PartialSuccess we need a different error model to
 -- throwM.
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
+
+implementationError :: forall m a. MonadThrow m => Text -> m a
+implementationError = throwM . ImplementationError
 
 
 -- TODO instead of SelectionSet we want something like
@@ -212,20 +217,63 @@ instance forall typeName interfaces fields m.
          ) => HasGraph m (Object typeName interfaces fields) where
   type HandlerType m (Object typeName interfaces fields) = m (RunFieldsType m fields)
 
-  buildResolver handlerIO selectionSet = do
+  buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
-    handler <- handlerIO
+    handler <- mHandler
     -- considering that this is an object we'll need to collect (name,
     -- Value) pairs from runFields and build a map with them.
 
     -- might need https://hackage.haskell.org/package/linkedhashmap to
     -- keep insertion order. (TODO)
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
-    pure $ GValue.toValue $ M.fromList r
+    pure $ GValue.toValue (GValue.mapFromList r)
 
 
--- TODO: we can't actually normalize inline fragments
--- (e.g.  `query "{ ... on Human { name } }"`)
--- because those are tied to the execution model: We need to
--- select the correct branch in the list of types (Human in the
--- example) so we do need to evaluate inline fragments.
+-- Type class to execute union type queries.
+class RunUnion m a where
+  type RunUnionType m a :: Type -- TODO closed type family for better error reporting?
+  runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Value
+
+instance forall m typeName interfaces fields rest.
+         ( RunUnion m rest
+         , MonadIO m
+         , MonadThrow m
+         , RunFields m fields
+         , KnownSymbol typeName
+         ) => RunUnion m ((Object typeName interfaces fields):rest) where
+  type RunUnionType m ((Object typeName interfaces fields):rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
+  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
+    | typeName == queryTypeName = buildResolver @m @(Object typeName interfaces fields) lh subSelection
+    | otherwise = runUnion @m @rest rh fragment
+    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+  runUnion _ _ =
+    queryError "Non-InlineFragment used for a union type query."
+
+instance forall m. MonadThrow m => RunUnion m '[] where
+  type RunUnionType m '[] = ()
+  runUnion _ selection = queryError ("Union type could not be resolved:" <> (show selection))
+
+instance forall m ks ru.
+         ( MonadThrow m
+         , MonadIO m
+         , RunUnion m ru
+         ) => HasGraph m (Union ks ru) where
+  type HandlerType m (Union ks ru) = RunUnionType m ru
+  -- TODO we need to give good error feedback when people try to build
+  -- Union types with non-Object Types in the list. I suspect that's
+  -- hard because overlapping instances are restrictive.
+  -- we could maybe use closed type families for
+
+  -- TODO: check sanity of query before executing it. E.g. we can't
+  -- have the same field name in two different fragment branches
+  -- (needs to take aliases into account).
+
+  -- query "{ ... on Human { name } }"
+  -- [SelectionInlineFragment (InlineFragment (NamedType "Human") [] [SelectionField (Field "" "name" [] [] [])])]
+  buildResolver handler selection = do
+    -- GraphQL invariant is that all items in a Union must be objects
+    -- which means 1) they have fields 2) They are ValueMap
+    values <- map GValue.unionMap (traverse (runUnion @m @ru handler) selection)
+    case values of
+      Left _ -> implementationError "It looks like you used a non-Object type in a Union"
+      Right ok -> pure ok

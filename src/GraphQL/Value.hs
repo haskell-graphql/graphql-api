@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Literal GraphQL values.
 module GraphQL.Value
   (
@@ -18,7 +20,9 @@ module GraphQL.Value
   , GraphQL.Value.empty
   , singleton
   , fromList
-  , fieldSetToMap
+  , mapFromList
+  , unionMap
+--  , fieldSetToMap
   , union
   , unions
   ) where
@@ -27,10 +31,11 @@ import Protolude hiding (Map)
 
 import Data.Foldable (foldrM)
 import Data.List.NonEmpty (NonEmpty)
-import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.GraphQL.AST (Name)
-import Data.Aeson (ToJSON(..), Value(Null))
+import Data.Aeson (ToJSON(..), (.=), pairs)
+import qualified Data.Aeson as Aeson
+import GHC.Generics (Generic)
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -57,7 +62,7 @@ instance ToJSON GraphQL.Value.Value where
   toJSON (ValueEnum x) = toJSON x
   toJSON (ValueList x) = toJSON x
   toJSON (ValueMap x) = toJSON x
-  toJSON ValueNull = Null
+  toJSON ValueNull = Aeson.Null
 
 newtype String = String Text deriving (Eq, Ord, Show)
 
@@ -69,6 +74,7 @@ newtype List = List [GraphQL.Value.Value] deriving (Eq, Ord, Show)
 makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
 makeList = List . toList . map toValue
 
+
 instance ToJSON List where
   toJSON (List x) = toJSON x
 
@@ -79,10 +85,26 @@ instance ToJSON List where
 --
 -- TODO: the "map" needs to keep track of insertion order so we can
 -- return fields in query order as mandated by the spec.
-newtype Map = Map (Map.Map Name GraphQL.Value.Value) deriving (Eq, Ord, Show)
+newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Generic, Monoid)
+
+
+mapFromList :: [(Name,  GraphQL.Value.Value)] -> Map
+mapFromList = Map
+
+-- TODO this wouldbe nicer with a prism `_ValueMap` but don't want to
+-- pull in lens as dependency.
+unionMap :: [Value] -> Either Text Value
+unionMap values = map (ValueMap . fold)  (sequence (map isValueMap values))
+  where
+    isValueMap = \case
+      (ValueMap m) -> Right m
+      _ -> Left "non-ValueMap member"
+
+
 
 instance ToJSON Map where
-  toJSON (Map x) = toJSON x
+  -- Direct encoding to preserve order of keys / values
+  toEncoding (Map xs) = pairs (fold (map (\(k, v) -> (toS k) .= v) xs))
 
 
 data Field = Field Name GraphQL.Value.Value deriving (Eq, Show, Ord)
@@ -90,13 +112,16 @@ data Field = Field Name GraphQL.Value.Value deriving (Eq, Show, Ord)
 makeField :: (StringConv name Name, ToValue value) => name -> value -> Field
 makeField name value = Field (toS name) (toValue value)
 
+-- TODO I'm unclear about what we're going to use FieldSet for. Do we
+-- need it?
 data FieldSet = FieldSet (Set Field) deriving (Eq, Show)
 
-instance ToValue FieldSet where
-  toValue = toValue . fieldSetToMap
+--instance ToValue FieldSet where
+--  toValue = toValue . fieldSetToMap
 
-fieldSetToMap :: FieldSet -> Map
-fieldSetToMap (FieldSet fields) = Map (Map.fromList [ (name, value) | Field name value <- toList fields ])
+
+-- fieldSetToMap :: FieldSet -> Map
+-- fieldSetToMap (FieldSet fields) = Map (Map.fromList [ (name, value) | Field name value <- toList fields ])
 
 empty :: FieldSet
 empty = FieldSet Set.empty
@@ -149,9 +174,6 @@ instance ToValue String where
 -- XXX: Make more generic: any string-like thing rather than just Text.
 instance ToValue Text where
   toValue = toValue . String
-
-instance (ToValue v) => ToValue (Map.Map Text v) where
-  toValue = toValue . Map . map toValue
 
 instance ToValue List where
   toValue = ValueList
