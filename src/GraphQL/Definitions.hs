@@ -5,8 +5,25 @@
 {-# LANGUAGE OverloadedLabels, MagicHash #-}
 
 -- | Type-level definitions for a GraphQL schema.
-module GraphQL.Definitions where
--- TODO export list
+module GraphQL.Definitions
+  ( Object
+  , Field
+  , Argument
+  , DefaultArgument
+  , Union
+  , List
+  , Enum
+  , GraphQLEnum(..)
+  , Interface
+  , (:>)(..)
+  , (:<|>)(..)
+  -- | Exported for testing. Perhaps should be a different module.
+  , getFieldDefinition
+  , getDefinition
+  , getInterfaceDefinition
+  , getAnnotatedType
+  , getAnnotatedInputType
+  ) where
 
 import Protolude hiding (Enum)
 
@@ -17,13 +34,32 @@ import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
 import qualified Data.GraphQL.AST as AST
 
--- | Argument operator. Can only be used with Field.
+-- $setup
+-- >>> :set -XDataKinds -XTypeOperators
+
+-- | Argument operator. Can only be used with 'Field'.
+--
+-- Say we have a @Company@ object that has a field that shows whether
+-- someone is an employee, e.g.
+--
+-- @
+--   type Company {
+--     hasEmployee(employeeName: String!): String!
+--   }
+-- @
+--
+-- Then we might represent that as:
+--
+-- >>> type Company = Object "Company" '[] '[Argument "employeeName" Text :> Field "hasEmployee" Bool]
+--
+-- For multiple arguments, simply chain them together with ':>', ending
+-- finally with 'Field'. e.g.
+--
+-- @
+--   Argument "foo" String :> Argument "bar" Int :> Field "qux" Int
+-- @
 data a :> b = a :> b
 infixr 8 :>
-
--- | Object field separation operator.
-data a :<> b = a :<> b
-infixr 8 :<>
 
 -- | Union type separation operator.
 data a :<|> b = a :<|> b

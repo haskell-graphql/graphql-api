@@ -3,12 +3,14 @@
 module Examples.UnionExample  where
 
 import Protolude hiding (Enum)
+
+import qualified Data.GraphQL.AST as AST
+import Data.Attoparsec.Text (parseOnly, endOfInput)
+import Data.GraphQL.Parser (document)
+
 import GraphQL.Definitions
 import GraphQL.TypeApi
-import qualified Data.GraphQL.AST as AST
-import Data.GraphQL.Parser (document)
 import GraphQL.Value (Value)
-import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 type O1 = Object "O1" '[] '[Field "o1" Text]
 type O2 = Object "O2" '[] '[Field "o2" Text]

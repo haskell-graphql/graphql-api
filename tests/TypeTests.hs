@@ -7,7 +7,38 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Definitions
+  ( GraphQLEnum(..)
+  , Enum
+  , Object
+  , Field
+  , Argument
+  , Interface
+  , Union
+  , List
+  , (:>)
+  , getAnnotatedType
+  , getAnnotatedInputType
+  , getDefinition
+  , getFieldDefinition
+  , getInterfaceDefinition
+  )
 import GraphQL.Schema
+  ( EnumTypeDefinition(..)
+  , EnumValueDefinition(..)
+  , FieldDefinition(..)
+  , ObjectTypeDefinition(..)
+  , NonEmptyList(..)
+  , InterfaceTypeDefinition(..)
+  , AnnotatedType(..)
+  , ListType(..)
+  , UnionTypeDefinition(..)
+  , Type(..)
+  , TypeDefinition(..)
+  , NonNullType(..)
+  , Name(..)
+  , Builtin(..)
+  , InputType(..)
+  )
 
 -- Examples taken from the spec
 
@@ -64,40 +95,38 @@ tests :: IO TestTree
 tests = testSpec "Type" $ do
   describe "Field" $
     it "encodes correctly" $ do
-    getFieldDefinition @(Field "hello" Int) `shouldBe` (FieldDefinition (Name "hello") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))
+    getFieldDefinition @(Field "hello" Int) `shouldBe` FieldDefinition (Name "hello") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt)))
   describe "Interface" $
     it "encodes correctly" $ do
-    getInterfaceDefinition @Sentient `shouldBe` (
+    getInterfaceDefinition @Sentient `shouldBe`
       InterfaceTypeDefinition
         (Name "Sentient")
         (NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
-      )
   describe "full example" $
     it "encodes correctly" $ do
-    getDefinition @Human `shouldBe` (
+    getDefinition @Human `shouldBe`
       ObjectTypeDefinition (Name "Human")
         [ InterfaceTypeDefinition (Name "Sentient") (
             NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
         ]
         (NonEmptyList [FieldDefinition (Name "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
-      )
   describe "output Enum" $
     it "encodes correctly" $ do
-    getAnnotatedType @DogCommand `shouldBe` (
+    getAnnotatedType @DogCommand `shouldBe`
        TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum (EnumTypeDefinition (Name "DogCommand")
          [ EnumValueDefinition (Name "SIT")
          , EnumValueDefinition (Name "DOWN")
          , EnumValueDefinition (Name "HEEL")
-         ])))))
+         ]))))
   describe "Union type" $
     it "encodes correctly" $ do
-    getAnnotatedType @CatOrDog `shouldBe` (
+    getAnnotatedType @CatOrDog `shouldBe`
       TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition (Name "CatOrDog")
         (NonEmptyList [ getDefinition @Cat
                       , getDefinition @Dog
                       ]
-        )))))
+        ))))
   describe "List" $
     it "encodes correctly" $ do
-    getAnnotatedType @(List Int) `shouldBe` (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinType GInt)))))
-    getAnnotatedInputType @(List Int) `shouldBe` (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt)))))
+    getAnnotatedType @(List Int) `shouldBe` TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))
+    getAnnotatedInputType @(List Int) `shouldBe` TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt))))
