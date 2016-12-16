@@ -66,6 +66,8 @@ instance ToJSON List where
 -- \"Maps\", but everywhere else in the spec refers to them as objects.
 newtype Object = Object [ObjectField] deriving (Eq, Ord, Show, Monoid)
 
+-- TODO: Property test for object that shows that Names are unique.
+
 data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
 objectFromList :: [(Name, Value)] -> Object
