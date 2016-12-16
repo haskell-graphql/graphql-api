@@ -64,10 +64,12 @@ instance ToJSON List where
 -- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
 -- jml hasn't read 100% clearly. Let's find something and stick to it, and
 -- make sure that there isn't a real distinction between to the two.
-newtype Map = Map [(Name, Value)] deriving (Eq, Ord, Show, Monoid)
+newtype Map = Map [MapField] deriving (Eq, Ord, Show, Monoid)
+
+data MapField = MapField Name Value deriving (Eq, Ord, Show)
 
 mapFromList :: [(Name, Value)] -> Map
-mapFromList = Map
+mapFromList = Map . map (uncurry MapField)
 
 -- TODO this would be nicer with a prism `_ValueMap` but don't want to
 -- pull in lens as dependency.
@@ -81,8 +83,8 @@ unionMap values = map (ValueMap . fold) (traverse isValueMap values)
 
 instance ToJSON Map where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Map xs) = toJSON (Map.fromList xs)
-  toEncoding (Map xs) = pairs (fold (map (\(k, v) -> toS k .= v) xs))
+  toJSON (Map xs) = toJSON (Map.fromList [(k, v) | MapField k v <- xs])
+  toEncoding (Map xs) = pairs (foldMap (\(MapField k v) -> toS k .= v) xs)
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
