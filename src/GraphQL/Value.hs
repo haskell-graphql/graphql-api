@@ -11,7 +11,7 @@ module GraphQL.Value
   , ToValue(..)
   , Name
   , List
-  , Map(..)
+  , Map
   , String
   , mapFromList
   , unionMap
