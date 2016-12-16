@@ -6,7 +6,7 @@ import Protolude hiding (Enum)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.Definitions
+import GraphQL.TypedSchema
   ( GraphQLEnum(..)
   , Enum
   , Object

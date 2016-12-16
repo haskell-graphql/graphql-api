@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedLabels, MagicHash #-}
 
 -- | Type-level definitions for a GraphQL schema.
-module GraphQL.Definitions
+module GraphQL.TypedSchema
   ( Object
   , Field
   , Argument
