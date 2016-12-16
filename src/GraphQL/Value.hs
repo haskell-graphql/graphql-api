@@ -13,25 +13,13 @@ module GraphQL.Value
   , List
   , Map(..)
   , String
-    -- | Fields
-  , Field(Field)
-  , makeField
-  , FieldSet
-  , GraphQL.Value.empty
-  , singleton
-  , fromList
   , mapFromList
   , unionMap
---  , fieldSetToMap
-  , union
-  , unions
   ) where
 
 import Protolude hiding (Map)
 
-import Data.Foldable (foldrM)
 import Data.List.NonEmpty (NonEmpty)
-import qualified Data.Set as Set
 import Data.GraphQL.AST (Name)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
@@ -106,42 +94,6 @@ instance ToJSON Map where
   -- Direct encoding to preserve order of keys / values
   toJSON (Map xs) = toJSON (Map.fromList xs)
   toEncoding (Map xs) = pairs (fold (map (\(k, v) -> (toS k) .= v) xs))
-
-
-data Field = Field Name GraphQL.Value.Value deriving (Eq, Show, Ord)
-
-makeField :: (StringConv name Name, ToValue value) => name -> value -> Field
-makeField name value = Field (toS name) (toValue value)
-
--- TODO I'm unclear about what we're going to use FieldSet for. Do we
--- need it?
-data FieldSet = FieldSet (Set Field) deriving (Eq, Show)
-
---instance ToValue FieldSet where
---  toValue = toValue . fieldSetToMap
-
-
--- fieldSetToMap :: FieldSet -> Map
--- fieldSetToMap (FieldSet fields) = Map (Map.fromList [ (name, value) | Field name value <- toList fields ])
-
-empty :: FieldSet
-empty = FieldSet Set.empty
-
-singleton :: Field -> FieldSet
-singleton = FieldSet . Set.singleton
-
--- TODO: Fail on duplicate keys.
-union :: Alternative m => FieldSet -> FieldSet -> m FieldSet
-union (FieldSet x) (FieldSet y) = pure (FieldSet (Set.union x y))
-
--- TODO: Fail on duplicate keys.
-unions :: (Monad m, Alternative m) => [FieldSet] -> m FieldSet
-unions = foldrM union GraphQL.Value.empty
-
--- TODO: Fail on duplicate keys.
-fromList :: Alternative m => [Field] -> m FieldSet
-fromList = pure . FieldSet . Set.fromList
-
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
