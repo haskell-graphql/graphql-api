@@ -39,7 +39,7 @@ import qualified Data.GraphQL.AST as AST
 
 -- | Argument operator. Can only be used with 'Field'.
 --
--- Say we have a @@Company@@ object that has a field that shows whether
+-- Say we have a @Company@ object that has a field that shows whether
 -- someone is an employee, e.g.
 --
 -- @
@@ -50,10 +50,10 @@ import qualified Data.GraphQL.AST as AST
 --
 -- Then we might represent that as:
 --
--- >>> type Company = Object "Company" '[] '[Argument "employeeName" GValue.String :> Field "hasEmployee" Bool]
+-- >>> type Company = Object "Company" '[] '[Argument "employeeName" Text :> Field "hasEmployee" Bool]
 --
--- For multiple arguments, simply chain them together with @@:>@@, ending finally with 'Field'.
--- e.g.
+-- For multiple arguments, simply chain them together with ':>', ending
+-- finally with 'Field'. e.g.
 --
 -- @
 --   Argument "foo" String :> Argument "bar" Int :> Field "qux" Int

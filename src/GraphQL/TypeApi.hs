@@ -51,7 +51,8 @@ queryError = throwM . QueryError
 --
 -- Use this to provide handlers for fields of an object.
 --
--- Say you had an object with \"foo\" and \"bar\" fields, e.g.
+-- Say you had the following GraphQL type with \"foo\" and \"bar\" fields,
+-- e.g.
 --
 -- @
 --   type MyObject {
@@ -60,12 +61,12 @@ queryError = throwM . QueryError
 --   }
 -- @
 --
+-- You could provide handlers for it like this:
+--
 -- >>> :m +System.Environment
 -- >>> let fooHandler = pure 42
 -- >>> let barHandler = System.Environment.getProgName
 -- >>> let myObjectHandler = pure $ fooHandler :<> barHandler :<> ()
---
--- :}
 data a :<> b = a :<> b
 infixr 8 :<>
 
