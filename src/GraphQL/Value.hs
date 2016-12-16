@@ -35,9 +35,6 @@ data Value
   | ValueString String
   | ValueEnum Name
   | ValueList List
-  -- TODO: the output must be ordered in query order, and Map is
-  -- ordered in key order. We should probably use a list of tuples for
-  -- representation.
   | ValueMap Map
   | ValueNull
   deriving (Eq, Ord, Show)
@@ -71,9 +68,6 @@ instance ToJSON List where
 -- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
 -- jml hasn't read 100% clearly. Let's find something and stick to it, and
 -- make sure that there isn't a real distinction between to the two.
---
--- TODO: the "map" needs to keep track of insertion order so we can
--- return fields in query order as mandated by the spec.
 newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Generic, Monoid)
 
 
@@ -133,5 +127,3 @@ instance ToValue List where
 
 instance ToValue Map where
   toValue = ValueMap
-
--- XXX: No "enum" instance because not sure what that would be in Haskell.
