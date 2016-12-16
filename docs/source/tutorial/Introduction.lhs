@@ -21,7 +21,9 @@ The main GraphQL entities we care about are Objects and Fields. Each
 Field can have arguments.
 
 ``` haskell
-type HelloWorld = Object "HelloWorld" '[] '[Argument "greeting" Text :> Field "me" Text]
+type HelloWorld = Object "HelloWorld" '[]
+  '[ Argument "greeting" Text :> Field "me" Text
+   ]
 ```
 
 The example above is equivalent to the following GraphQL type:
@@ -32,7 +34,7 @@ type HelloWorld {
 }
 ```
 
-And if we imagine implementation (more later) we could query it like this:
+And if we had a code to handle that type (more later) we could query it like this:
 
 ```
 { me(greeting: "hello") }
