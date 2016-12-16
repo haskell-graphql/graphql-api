@@ -210,7 +210,7 @@ class RunFields m a where
   type RunFieldsType m a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
   -- one (Text, Value)
-  runFields :: RunFieldsType m a -> AST.Selection -> m (Text, GValue.Value)
+  runFields :: RunFieldsType m a -> AST.Selection -> m GValue.ObjectField
 
 
 instance forall f fs m.
@@ -223,14 +223,15 @@ instance forall f fs m.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
     let NamedFieldExecutor k mValue = buildFieldResolver @m @f lh selection
     in case name == k of
+      False -> runFields @m @fs rh selection
       True -> do
         -- execute action to retrieve field value
         value <- mValue
         -- NB "alias" is encoded in-band. It cannot be set to empty in
         -- a query so the empty value means "no alias" and we use the
         -- name instead.
-        pure (if alias == "" then name else alias, value)
-      False -> runFields @m @fs rh selection
+        let name' = GValue.Name $ if alias == "" then name else alias
+        pure (GValue.ObjectField name' value)
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
@@ -252,7 +253,7 @@ instance forall typeName interfaces fields m.
     -- We're evaluating an Object so we're collecting (name, Value)
     -- pairs from runFields and build a GValue.Map with them.
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
-    pure $ GValue.toValue (GValue.objectFromList r)
+    pure $ GValue.toValue (GValue.Object r)
 
 
 -- | Closed type family to enforce the invariant that Union types

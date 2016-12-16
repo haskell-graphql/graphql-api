@@ -6,10 +6,11 @@ module GraphQL.Value
   (
     Value(..)
   , ToValue(..)
-  , Name
+  , Name(Name)
   , List
   , String
-  , Object
+  , Object(..)
+  , ObjectField(..)
   , objectFromList
   , unionObject
   ) where
@@ -17,10 +18,20 @@ module GraphQL.Value
 import Protolude
 
 import Data.List.NonEmpty (NonEmpty)
-import Data.GraphQL.AST (Name)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
+
+-- | A name in GraphQL.
+--
+-- https://facebook.github.io/graphql/#sec-Names
+newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show, IsString)
+
+instance ToJSON Name where
+  toJSON = toJSON . getName
+
+-- TODO: Add a smart constructor for Name, and have a custom instance of
+-- IsString that panics if it's invalid.
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -87,8 +98,8 @@ unionObject values = map (ValueObject . fold) (traverse isValueMap values)
 
 instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Object xs) = toJSON (Map.fromList [(k, v) | ObjectField k v <- xs])
-  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS k .= v) xs)
+  toJSON (Object xs) = toJSON (Map.fromList [(getName k, v) | ObjectField k v <- xs])
+  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getName k) .= v) xs)
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
