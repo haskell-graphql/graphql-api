@@ -46,7 +46,7 @@ the monad to run in (`IO` in this case) and the actual API definition
 
 ```haskell
 handler :: HandlerType IO HelloWorld
-handler = pure $ (\greeting -> pure ("Hello " <> greeting)) :<> ()
+handler = pure $ (\greeting -> pure (greeting <> " to me")) :<> ()
 ```
 
 The implementation looks slightly weird, but it's weird for good
