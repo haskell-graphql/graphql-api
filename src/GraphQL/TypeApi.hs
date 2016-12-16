@@ -12,6 +12,7 @@
 module GraphQL.TypeApi
   ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
+  , (:<>)(..)
   , ReadValue(..)
   , BuildFieldResolver(..)
   ) where
@@ -46,6 +47,27 @@ instance Exception QueryError
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
 
+-- | Object field separation operator.
+--
+-- Use this to provide handlers for fields of an object.
+--
+-- Say you had an object with \"foo\" and \"bar\" fields, e.g.
+--
+-- @
+--   type MyObject {
+--     foo: Int!
+--     bar: String!
+--   }
+-- @
+--
+-- >>> :m +System.Environment
+-- >>> let fooHandler = pure 42
+-- >>> let barHandler = System.Environment.getProgName
+-- >>> let myObjectHandler = pure $ fooHandler :<> barHandler :<> ()
+--
+-- :}
+data a :<> b = a :<> b
+infixr 8 :<>
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.

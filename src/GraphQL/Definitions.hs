@@ -16,7 +16,6 @@ module GraphQL.Definitions
   , GraphQLEnum(..)
   , Interface
   , (:>)(..)
-  , (:<>)(..)
   , (:<|>)(..)
   -- | Exported for testing. Perhaps should be a different module.
   , getFieldDefinition
@@ -61,10 +60,6 @@ import qualified Data.GraphQL.AST as AST
 -- @
 data a :> b = a :> b
 infixr 8 :>
-
--- | Object field separation operator.
-data a :<> b = a :<> b
-infixr 8 :<>
 
 -- | Union type separation operator.
 data a :<|> b = a :<|> b

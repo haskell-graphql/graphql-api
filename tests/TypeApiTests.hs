@@ -11,12 +11,12 @@ import GraphQL.Definitions
   , Field
   , Argument
   , (:>)
-  , (:<>)(..)
   )
 import GraphQL.TypeApi
   ( HandlerType
   , QueryError(..)
   , buildResolver
+  , (:<>)(..)
   )
 import qualified Data.GraphQL.AST as AST
 import Data.Aeson (encode)
