@@ -74,17 +74,17 @@ mapFromList = Map
 -- TODO this would be nicer with a prism `_ValueMap` but don't want to
 -- pull in lens as dependency.
 unionMap :: [Value] -> Either Text Value
-unionMap values = map (ValueMap . fold)  (sequence (map isValueMap values))
+unionMap values = map (ValueMap . fold) (traverse isValueMap values)
   where
     isValueMap = \case
-      (ValueMap m) -> Right m
+      ValueMap m -> Right m
       _ -> Left "non-ValueMap member"
 
 
 instance ToJSON Map where
   -- Direct encoding to preserve order of keys / values
   toJSON (Map xs) = toJSON (Map.fromList xs)
-  toEncoding (Map xs) = pairs (fold (map (\(k, v) -> (toS k) .= v) xs))
+  toEncoding (Map xs) = pairs (fold (map (\(k, v) -> toS k .= v) xs))
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where

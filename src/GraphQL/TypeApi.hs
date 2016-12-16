@@ -155,7 +155,7 @@ instance forall v. ReadValue v => ReadValue [v] where
 
 instance forall v. ReadValue v => ReadValue (Maybe v) where
   valueMissing _ = pure Nothing
-  readValue v = map Just (readValue @v v)
+  readValue v = map Just (readValue v)
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -213,7 +213,7 @@ instance forall f fs m.
          ( BuildFieldResolver m f
          , RunFields m fs
          ) => RunFields m (f:fs) where
-  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> (RunFieldsType m fs)
+  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> RunFieldsType m fs
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
@@ -232,7 +232,7 @@ instance forall f fs m.
 
 instance forall m. MonadThrow m => RunFields m '[] where
   type RunFieldsType m '[] = ()
-  runFields _ selection = queryError ("Query for undefined selection:" <> (show selection))
+  runFields _ selection = queryError ("Query for undefined selection:" <> show selection)
 
 
 instance forall typeName interfaces fields m.
@@ -254,7 +254,7 @@ instance forall typeName interfaces fields m.
 -- | Closed type family to enforce the invariant that Union types
 -- contain only Objects.
 type family RunUnionType m (a :: [Type]) :: Type where
-  RunUnionType m ((Object typeName interfaces fields):rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
+  RunUnionType m (Object typeName interfaces fields:rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
   RunUnionType m '[] = ()
   RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
@@ -269,7 +269,7 @@ instance forall m typeName interfaces fields rest.
          , MonadThrow m
          , RunFields m fields
          , KnownSymbol typeName
-         ) => RunUnion m ((Object typeName interfaces fields):rest) where
+         ) => RunUnion m (Object typeName interfaces fields:rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = buildResolver @m @(Object typeName interfaces fields) lh subSelection
     | otherwise = runUnion @m @rest rh fragment
@@ -278,7 +278,7 @@ instance forall m typeName interfaces fields rest.
     queryError "Non-InlineFragment used for a union type query."
 
 instance forall m. MonadThrow m => RunUnion m '[] where
-  runUnion _ selection = queryError ("Union type could not be resolved:" <> (show selection))
+  runUnion _ selection = queryError ("Union type could not be resolved:" <> show selection)
 
 instance forall m ks ru.
          ( MonadThrow m
