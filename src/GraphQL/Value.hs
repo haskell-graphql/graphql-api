@@ -1,8 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 -- | Literal GraphQL values.
 module GraphQL.Value
   (
@@ -24,7 +22,6 @@ import Data.GraphQL.AST (Name)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
-import GHC.Generics (Generic)
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -68,7 +65,7 @@ instance ToJSON List where
 -- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
 -- jml hasn't read 100% clearly. Let's find something and stick to it, and
 -- make sure that there isn't a real distinction between to the two.
-newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Generic, Monoid)
+newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Monoid)
 
 
 mapFromList :: [(Name,  GraphQL.Value.Value)] -> Map
