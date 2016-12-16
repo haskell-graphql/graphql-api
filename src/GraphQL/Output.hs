@@ -9,7 +9,7 @@ module GraphQL.Output
 
 import Protolude hiding (Location, Map)
 import Data.List.NonEmpty (NonEmpty)
-import GraphQL.Value (Map, mapFromList, ToValue(..), Value(ValueNull))
+import GraphQL.Value (Object, objectFromList, ToValue(..), Value(ValueNull))
 
 -- | GraphQL response.
 --
@@ -39,36 +39,36 @@ import GraphQL.Value (Map, mapFromList, ToValue(..), Value(ValueNull))
 --     with list of locations
 --   * locations are maps with 1-indexed "line" and "column" keys.
 data Response
-  = Success Map
+  = Success Object
   | PreExecutionFailure Errors
   | ExecutionFailure Errors
-  | PartialSuccess Map Errors
+  | PartialSuccess Object Errors
   deriving (Eq, Ord, Show)
 
 instance ToValue Response where
-  toValue (Success x) = toValue (mapFromList [("data", toValue x)])
-  toValue (PreExecutionFailure e) = toValue (mapFromList [("errors", toValue e)])
-  toValue (ExecutionFailure e) = toValue (mapFromList [("data", ValueNull)
-                                                      ,("errors", toValue e)
-                                                      ])
-  toValue (PartialSuccess x e) = toValue (mapFromList [("data", toValue x)
-                                                      ,("errors", toValue e)
-                                                      ])
+  toValue (Success x) = toValue (objectFromList [("data", toValue x)])
+  toValue (PreExecutionFailure e) = toValue (objectFromList [("errors", toValue e)])
+  toValue (ExecutionFailure e) = toValue (objectFromList [("data", ValueNull)
+                                                         ,("errors", toValue e)
+                                                         ])
+  toValue (PartialSuccess x e) = toValue (objectFromList [("data", toValue x)
+                                                         ,("errors", toValue e)
+                                                         ])
 
 type Errors = NonEmpty Error
 
 data Error = Error Text [Location] deriving (Eq, Ord, Show)
 
 instance ToValue Error where
-  toValue (Error message []) = toValue (mapFromList [("message", toValue message)])
-  toValue (Error message locations) = toValue (mapFromList [("message", toValue message)
-                                                           ,("locations", toValue locations)
-                                                           ])
+  toValue (Error message []) = toValue (objectFromList [("message", toValue message)])
+  toValue (Error message locations) = toValue (objectFromList [("message", toValue message)
+                                                              ,("locations", toValue locations)
+                                                              ])
 
 data Location = Location Line Column deriving (Eq, Ord, Show)
 type Line = Int32  -- XXX: 1-indexed natural number
 type Column = Int32  -- XXX: 1-indexed natural number
 
 instance ToValue Location where
-  toValue (Location line column) = toValue (mapFromList [("line" , toValue line)
-                                                        ,("column", toValue column)])
+  toValue (Location line column) = toValue (objectFromList [("line" , toValue line)
+                                                           ,("column", toValue column)])

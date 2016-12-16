@@ -8,13 +8,13 @@ module GraphQL.Value
   , ToValue(..)
   , Name
   , List
-  , Map
-  , mapFromList
   , String
-  , unionMap
+  , Object
+  , objectFromList
+  , unionObject
   ) where
 
-import Protolude hiding (Map)
+import Protolude
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.GraphQL.AST (Name)
@@ -31,7 +31,7 @@ data Value
   | ValueString String
   | ValueEnum Name
   | ValueList List
-  | ValueMap Map
+  | ValueObject Object
   | ValueNull
   deriving (Eq, Ord, Show)
 
@@ -43,7 +43,7 @@ instance ToJSON GraphQL.Value.Value where
   toJSON (ValueString x) = toJSON x
   toJSON (ValueEnum x) = toJSON x
   toJSON (ValueList x) = toJSON x
-  toJSON (ValueMap x) = toJSON x
+  toJSON (ValueObject x) = toJSON x
   toJSON ValueNull = Aeson.Null
 
 newtype String = String Text deriving (Eq, Ord, Show)
@@ -60,31 +60,31 @@ makeList = List . toList . map toValue
 instance ToJSON List where
   toJSON (List x) = toJSON x
 
--- XXX: This is ObjectValue [ObjectField]; ObjectField Name Value upstream.
--- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
--- jml hasn't read 100% clearly. Let's find something and stick to it, and
--- make sure that there isn't a real distinction between to the two.
-newtype Map = Map [MapField] deriving (Eq, Ord, Show, Monoid)
+-- | A literal GraphQL object.
+--
+-- Note that https://facebook.github.io/graphql/#sec-Response calls these
+-- \"Maps\", but everywhere else in the spec refers to them as objects.
+newtype Object = Object [ObjectField] deriving (Eq, Ord, Show, Monoid)
 
-data MapField = MapField Name Value deriving (Eq, Ord, Show)
+data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
-mapFromList :: [(Name, Value)] -> Map
-mapFromList = Map . map (uncurry MapField)
+objectFromList :: [(Name, Value)] -> Object
+objectFromList = Object . map (uncurry ObjectField)
 
 -- TODO this would be nicer with a prism `_ValueMap` but don't want to
 -- pull in lens as dependency.
-unionMap :: [Value] -> Either Text Value
-unionMap values = map (ValueMap . fold) (traverse isValueMap values)
+unionObject :: [Value] -> Either Text Value
+unionObject values = map (ValueObject . fold) (traverse isValueMap values)
   where
     isValueMap = \case
-      ValueMap m -> Right m
-      _ -> Left "non-ValueMap member"
+      ValueObject m -> Right m
+      _ -> Left "non-ValueObject member"
 
 
-instance ToJSON Map where
+instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Map xs) = toJSON (Map.fromList [(k, v) | MapField k v <- xs])
-  toEncoding (Map xs) = pairs (foldMap (\(MapField k v) -> toS k .= v) xs)
+  toJSON (Object xs) = toJSON (Map.fromList [(k, v) | ObjectField k v <- xs])
+  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS k .= v) xs)
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
@@ -122,5 +122,5 @@ instance ToValue Text where
 instance ToValue List where
   toValue = ValueList
 
-instance ToValue Map where
-  toValue = ValueMap
+instance ToValue Object where
+  toValue = ValueObject

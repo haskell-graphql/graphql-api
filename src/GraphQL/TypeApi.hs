@@ -252,7 +252,7 @@ instance forall typeName interfaces fields m.
     -- We're evaluating an Object so we're collecting (name, Value)
     -- pairs from runFields and build a GValue.Map with them.
     r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
-    pure $ GValue.toValue (GValue.mapFromList r)
+    pure $ GValue.toValue (GValue.objectFromList r)
 
 
 -- | Closed type family to enforce the invariant that Union types
@@ -299,7 +299,7 @@ instance forall m ks ru.
   buildResolver handler selection = do
     -- GraphQL invariant is that all items in a Union must be objects
     -- which means 1) they have fields 2) They are ValueMap
-    values <- map GValue.unionMap (traverse (runUnion @m @ru handler) selection)
+    values <- map GValue.unionObject (traverse (runUnion @m @ru handler) selection)
     case values of
       Left _ -> panic "It looks like you used a non-Object type in a Union"
       Right ok -> pure ok
