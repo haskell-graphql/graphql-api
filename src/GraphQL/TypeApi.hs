@@ -250,10 +250,12 @@ instance forall typeName interfaces fields m.
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- mHandler
-    -- We're evaluating an Object so we're collecting (name, Value)
-    -- pairs from runFields and build a GValue.Map with them.
-    r <- forM selectionSet $ \selection -> runFields @m @fields handler selection
-    pure $ GValue.toValue (GValue.Object r)
+    -- We're evaluating an Object so we're collecting ObjectFields from
+    -- runFields and build a GValue.Map with them.
+    r <- forM selectionSet $ runFields @m @fields handler
+    case GValue.makeObject r of
+      Nothing -> queryError $ "Duplicate fields in set: " <> show r
+      Just object -> pure $ GValue.ValueObject object
 
 
 -- | Closed type family to enforce the invariant that Union types
@@ -266,7 +268,7 @@ type family RunUnionType m (a :: [Type]) :: Type where
 
 -- Type class to execute union type queries.
 class RunUnion m a where
-  runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Value
+  runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Object
 
 instance forall m typeName interfaces fields rest.
          ( RunUnion m rest
@@ -276,7 +278,12 @@ instance forall m typeName interfaces fields rest.
          , KnownSymbol typeName
          ) => RunUnion m (Object typeName interfaces fields:rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
-    | typeName == queryTypeName = buildResolver @m @(Object typeName interfaces fields) lh subSelection
+    | typeName == queryTypeName = do
+        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
+        -- TODO: See if we can prevent this from happening at compile time.
+        case GValue.toObject result of
+          Nothing -> queryError $ "Expected object as result of union query: " <> show result
+          Just object -> pure object
     | otherwise = runUnion @m @rest rh fragment
     where typeName = toS (symbolVal (Proxy :: Proxy typeName))
   runUnion _ _ =
@@ -300,7 +307,5 @@ instance forall m ks ru.
   buildResolver handler selection = do
     -- GraphQL invariant is that all items in a Union must be objects
     -- which means 1) they have fields 2) They are ValueMap
-    values <- map GValue.unionObject (traverse (runUnion @m @ru handler) selection)
-    case values of
-      Left _ -> panic "It looks like you used a non-Object type in a Union"
-      Right ok -> pure ok
+    values <- map GValue.unionObjects (traverse (runUnion @m @ru handler) selection)
+    maybe (panic $ "Duplicate fields in values: " <> show values) (pure . GValue.ValueObject) values

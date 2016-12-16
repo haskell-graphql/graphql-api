@@ -1,18 +1,24 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Literal GraphQL values.
 module GraphQL.Value
-  (
-    Value(..)
+  ( Value(..)
+  , toObject
   , ToValue(..)
   , Name(Name)
   , List
   , String
-  , Object(..)
-  , ObjectField(..)
+    -- * Objects
+  , Object
+  , ObjectField(ObjectField)
+    -- ** Constructing
+  , objectFields
+  , makeObject
   , objectFromList
-  , unionObject
+    -- ** Combining
+  , unionObjects
   ) where
 
 import Protolude
@@ -30,8 +36,7 @@ newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show, IsString)
 instance ToJSON Name where
   toJSON = toJSON . getName
 
--- TODO: Add a smart constructor for Name, and have a custom instance of
--- IsString that panics if it's invalid.
+-- TODO: Add a smart constructor for Name.
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -45,6 +50,10 @@ data Value
   | ValueObject Object
   | ValueNull
   deriving (Eq, Ord, Show)
+
+toObject :: Value -> Maybe Object
+toObject (ValueObject o) = pure o
+toObject _ = empty
 
 instance ToJSON GraphQL.Value.Value where
 
@@ -65,7 +74,7 @@ instance ToJSON String where
 newtype List = List [Value] deriving (Eq, Ord, Show)
 
 makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
-makeList = List . toList . map toValue
+makeList = List . Protolude.toList . map toValue
 
 
 instance ToJSON List where
@@ -75,26 +84,22 @@ instance ToJSON List where
 --
 -- Note that https://facebook.github.io/graphql/#sec-Response calls these
 -- \"Maps\", but everywhere else in the spec refers to them as objects.
-newtype Object = Object [ObjectField] deriving (Eq, Ord, Show, Monoid)
-
--- TODO: Property test for object that shows that Names are unique.
+newtype Object = Object { objectFields :: [ObjectField] } deriving (Eq, Ord, Show)
 
 data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
-objectFromList :: [(Name, Value)] -> Object
-objectFromList = Object . map (uncurry ObjectField)
-
--- TODO this would be nicer with a prism `_ValueMap` but don't want to
--- pull in lens as dependency.
--- TODO: actually figure out what the hell this is supposed to do.
--- TODO: Since there's only one failure, should probably be Maybe.
-unionObject :: [Value] -> Either Text Value
-unionObject values = map (ValueObject . fold) (traverse isValueMap values)
+makeObject :: [ObjectField] -> Maybe Object
+makeObject fields
+  | fieldNames == ordNub fieldNames = pure (Object fields)
+  | otherwise = empty
   where
-    isValueMap = \case
-      ValueObject m -> Right m
-      _ -> Left "non-ValueObject member"
+    fieldNames = [name | ObjectField name _ <- fields]
 
+objectFromList :: [(Name, Value)] -> Maybe Object
+objectFromList = makeObject . map (uncurry ObjectField)
+
+unionObjects :: [Object] -> Maybe Object
+unionObjects = makeObject . (=<<) objectFields
 
 instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
