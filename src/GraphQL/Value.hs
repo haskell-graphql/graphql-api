@@ -14,11 +14,12 @@ module GraphQL.Value
   , Object
   , ObjectField(ObjectField)
     -- ** Constructing
-  , objectFields
   , makeObject
   , objectFromList
     -- ** Combining
   , unionObjects
+    -- ** Querying
+  , objectFields
   ) where
 
 import Protolude
@@ -36,7 +37,8 @@ newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show, IsString)
 instance ToJSON Name where
   toJSON = toJSON . getName
 
--- TODO: Add a smart constructor for Name.
+-- TODO: Add a smart constructor for Name, and have a custom instance of
+-- IsString that panics if it's invalid.
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
