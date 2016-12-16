@@ -40,3 +40,10 @@ tests:
       - graphql-api
       - tasty
       - tasty-hspec
+
+  graphql-api-doctests:
+    main: Doctests.hs
+    ghc-options: -threaded
+    source-dirs: tests
+    dependencies:
+      - doctest
