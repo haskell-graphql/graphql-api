@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -130,28 +131,31 @@ lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) arg
   Nothing -> Nothing
   Just (AST.Argument _ value) -> Just value
 
+-- | Throw an error saying that @value@ does not have the @expected@ type.
+wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
+wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
 
 instance ReadValue Int32 where
   readValue (AST.ValueInt v) = pure v
-  readValue v = Left ("Not an Int:" <> (show v))
+  readValue v = wrongType "Int" v
 
 -- TODO: Double parsing is broken in graphql-haskell.
 -- See https://github.com/jdnavarro/graphql-haskell/pull/16
 instance ReadValue Double where
   readValue (AST.ValueFloat v) = pure v
-  readValue v = Left ("Not a Double:" <> (show v))
+  readValue v = wrongType "Double" v
 
 instance ReadValue Bool where
   readValue (AST.ValueBoolean v) = pure v
-  readValue v = Left ("Not a Bool:" <> (show v))
+  readValue v = wrongType "Bool" v
 
 instance ReadValue Text where
   readValue (AST.ValueString (AST.StringValue v)) = pure v
-  readValue v = Left ("Not a String:" <> (show v))
+  readValue v = wrongType "String" v
 
 instance forall v. ReadValue v => ReadValue [v] where
   readValue (AST.ValueList (AST.ListValue values)) = traverse (readValue @v) values
-  readValue v = Left ("Not a List:" <> (show v))
+  readValue v = wrongType "List" v
 
 instance forall v. ReadValue v => ReadValue (Maybe v) where
   valueMissing _ = pure Nothing
