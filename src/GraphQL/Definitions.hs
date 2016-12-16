@@ -35,7 +35,30 @@ import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
 import qualified Data.GraphQL.AST as AST
 
--- | Argument operator. Can only be used with Field.
+-- $setup
+-- >>> :set -XDataKinds -XTypeOperators
+
+-- | Argument operator. Can only be used with 'Field'.
+--
+-- Say we have a @@Company@@ object that has a field that shows whether
+-- someone is an employee, e.g.
+--
+-- @
+--   type Company {
+--     hasEmployee(employeeName: String!): String!
+--   }
+-- @
+--
+-- Then we might represent that as:
+--
+-- >>> type Company = Object "Company" '[] '[Argument "employeeName" GValue.String :> Field "hasEmployee" Bool]
+--
+-- For multiple arguments, simply chain them together with @@:>@@, ending finally with 'Field'.
+-- e.g.
+--
+-- @
+--   Argument "foo" String :> Argument "bar" Int :> Field "qux" Int
+-- @
 data a :> b = a :> b
 infixr 8 :>
 
