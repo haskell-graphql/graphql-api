@@ -4,14 +4,13 @@
 -- | Literal GraphQL values.
 module GraphQL.Value
   (
-    -- | GraphQL values
-    GraphQL.Value.Value(..)
+    Value(..)
   , ToValue(..)
   , Name
   , List
   , Map
-  , String
   , mapFromList
+  , String
   , unionMap
   ) where
 
@@ -52,7 +51,7 @@ newtype String = String Text deriving (Eq, Ord, Show)
 instance ToJSON String where
   toJSON (String x) = toJSON x
 
-newtype List = List [GraphQL.Value.Value] deriving (Eq, Ord, Show)
+newtype List = List [Value] deriving (Eq, Ord, Show)
 
 makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
 makeList = List . toList . map toValue
@@ -65,10 +64,9 @@ instance ToJSON List where
 -- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
 -- jml hasn't read 100% clearly. Let's find something and stick to it, and
 -- make sure that there isn't a real distinction between to the two.
-newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Monoid)
+newtype Map = Map [(Name, Value)] deriving (Eq, Ord, Show, Monoid)
 
-
-mapFromList :: [(Name,  GraphQL.Value.Value)] -> Map
+mapFromList :: [(Name, Value)] -> Map
 mapFromList = Map
 
 -- TODO this would be nicer with a prism `_ValueMap` but don't want to
@@ -88,9 +86,9 @@ instance ToJSON Map where
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
-  toValue :: a -> GraphQL.Value.Value
+  toValue :: a -> Value
 
-instance ToValue GraphQL.Value.Value where
+instance ToValue Value where
   toValue = identity
 
 -- XXX: Should this just be for Foldable?
