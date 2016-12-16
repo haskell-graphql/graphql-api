@@ -64,6 +64,7 @@ test-suite graphql-api-doctests
       TypeApiTests
       TypeTests
       ValidationTests
+      ValueTests
   default-language: Haskell2010
 
 test-suite graphql-api-tests
@@ -91,4 +92,5 @@ test-suite graphql-api-tests
       TypeApiTests
       TypeTests
       ValidationTests
+      ValueTests
   default-language: Haskell2010

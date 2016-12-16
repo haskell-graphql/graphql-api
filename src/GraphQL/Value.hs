@@ -73,6 +73,8 @@ objectFromList = Object . map (uncurry ObjectField)
 
 -- TODO this would be nicer with a prism `_ValueMap` but don't want to
 -- pull in lens as dependency.
+-- TODO: actually figure out what the hell this is supposed to do.
+-- TODO: Since there's only one failure, should probably be Maybe.
 unionObject :: [Value] -> Either Text Value
 unionObject values = map (ValueObject . fold) (traverse isValueMap values)
   where
