@@ -14,6 +14,7 @@ module GraphQL.TypedApi
   ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
+  , (:<|>)(..)
   , ReadValue(..)
   , BuildFieldResolver(..)
   ) where
@@ -70,6 +71,11 @@ queryError = throwM . QueryError
 -- >>> let myObjectHandler = pure $ fooHandler :<> barHandler :<> ()
 data a :<> b = a :<> b
 infixr 8 :<>
+
+-- | Union type separation operator.
+data a :<|> b = a :<|> b
+infixr 8 :<|>
+
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.

@@ -16,7 +16,6 @@ module GraphQL.TypedSchema
   , GraphQLEnum(..)
   , Interface
   , (:>)(..)
-  , (:<|>)(..)
   -- | Exported for testing. Perhaps should be a different module.
   , getFieldDefinition
   , getDefinition
@@ -59,10 +58,6 @@ import qualified GraphQL.Value as GValue
 -- @
 data a :> b = a :> b
 infixr 8 :>
-
--- | Union type separation operator.
-data a :<|> b = a :<|> b
-infixr 8 :<|>
 
 
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
