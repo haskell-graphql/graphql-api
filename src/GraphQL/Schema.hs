@@ -34,19 +34,6 @@ module GraphQL.Schema
 
 import Protolude hiding (Type)
 
--- | Example
-hi' :: EnumTypeDefinition
-hi' = EnumTypeDefinition "Hi" [EnumValueDefinition "HELLO", EnumValueDefinition "HEY"]
-
-hi :: Type
-hi = DefinedType (TypeDefinitionEnum hi')
-
-thing' :: ObjectTypeDefinition
-thing' = ObjectTypeDefinition "Thing" [] (NonEmptyList [ FieldDefinition "hero" [] (TypeNamed hi) ])
-
-thing :: Type
-thing = DefinedType (TypeDefinitionObject thing')
-
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
