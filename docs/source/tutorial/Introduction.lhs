@@ -10,8 +10,8 @@ module Introduction where
 
 import Protolude
 
-import GraphQL.TypedSchema (Object, Field, Argument, (:>), (:<>)(..))
-import GraphQL.TypedApi (HandlerType)
+import GraphQL.TypedSchema (Object, Field, Argument, (:>))
+import GraphQL.TypedApi (HandlerType, (:<>)(..))
 ```
 
 The core idea for this library is that we define a composite type that

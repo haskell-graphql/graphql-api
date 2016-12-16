@@ -12,7 +12,7 @@ import GraphQL.TypedSchema
   , Argument
   , (:>)
   )
-import GraphQL.TypeApi
+import GraphQL.TypedApi
   ( HandlerType
   , QueryError(..)
   , buildResolver
