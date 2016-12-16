@@ -5,8 +5,26 @@
 {-# LANGUAGE OverloadedLabels, MagicHash #-}
 
 -- | Type-level definitions for a GraphQL schema.
-module GraphQL.Definitions where
--- TODO export list
+module GraphQL.Definitions
+  ( Object
+  , Field
+  , Argument
+  , DefaultArgument
+  , Union
+  , List
+  , Enum
+  , GraphQLEnum(..)
+  , Interface
+  , (:>)(..)
+  , (:<>)(..)
+  , (:<|>)(..)
+  -- | Exported for testing. Perhaps should be a different module.
+  , getFieldDefinition
+  , getDefinition
+  , getInterfaceDefinition
+  , getAnnotatedType
+  , getAnnotatedInputType
+  ) where
 
 import Protolude hiding (Enum)
 
