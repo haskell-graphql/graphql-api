@@ -7,7 +7,17 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Definitions
+  ( Object
+  , Field
+  , Argument
+  , (:>)
+  , (:<>)(..)
+  )
 import GraphQL.TypeApi
+  ( HandlerType
+  , QueryError(..)
+  , buildResolver
+  )
 import qualified Data.GraphQL.AST as AST
 import Data.Aeson (encode)
 
