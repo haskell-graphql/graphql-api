@@ -17,7 +17,7 @@ import Examples.UnionExample ()
 main :: IO ()
 main = do
   t <- sequence tests
-  defaultMain . testGroup "spec" $ t
+  defaultMain . testGroup "GraphQL API" $ t
   where
     tests =
       [ TypeApiTests.tests

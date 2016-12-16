@@ -10,8 +10,8 @@ import qualified Data.GraphQL.AST as AST
 import GraphQL.Validation (ValidationError(..), getErrors)
 
 tests :: IO TestTree
-tests = testSpec "GraphQL API" $ do
-  describe "Validation" $ do
+tests = testSpec "Validation" $ do
+  describe "getErrors" $ do
     it "Treats simple queries as valid" $ do
       let doc = AST.Document
                 [ AST.DefinitionOperation
