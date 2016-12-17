@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -27,11 +28,13 @@ module GraphQL.Value
 import Protolude
 
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.String
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import Data.Attoparsec.Text (parseOnly)
 import qualified Data.Map as Map
 import qualified Data.GraphQL.Parser as Parser
+import Test.QuickCheck (Arbitrary(..), elements, oneof, listOf)
 
 -- | A name in GraphQL.
 --
@@ -40,6 +43,15 @@ newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show)
 
 instance ToJSON Name where
   toJSON = toJSON . getName
+
+instance Arbitrary Name where
+  arbitrary = do
+    initial <- elements alpha
+    rest <- listOf (elements (alpha <> numeric))
+    pure (unsafeMakeName (toS (initial:rest)))
+    where
+      alpha = ['A'..'Z'] <> ['a'..'z'] <> ['_']
+      numeric = ['0'..'9']
 
 -- | Create a 'Name'.
 --
@@ -90,12 +102,32 @@ instance ToJSON GraphQL.Value.Value where
   toJSON (ValueObject x) = toJSON x
   toJSON ValueNull = Aeson.Null
 
+instance Arbitrary Value where
+  arbitrary = oneof [ ValueInt <$> arbitrary
+                    , ValueFloat <$> arbitrary
+                    , ValueBoolean <$> arbitrary
+                    , ValueString <$> arbitrary
+                    , ValueEnum <$> arbitrary
+                    , ValueList <$> arbitrary
+                    , ValueObject <$> arbitrary
+                    , pure ValueNull
+                    ]
+
 newtype String = String Text deriving (Eq, Ord, Show)
+
+instance Arbitrary String where
+  arbitrary = String . toS <$> arbitrary @Data.String.String
 
 instance ToJSON String where
   toJSON (String x) = toJSON x
 
 newtype List = List [Value] deriving (Eq, Ord, Show)
+
+instance Arbitrary List where
+  -- TODO: GraphQL does not allow heterogeneous lists:
+  -- https://facebook.github.io/graphql/#sec-Lists, so this will generate
+  -- invalid lists.
+  arbitrary = List <$> listOf arbitrary
 
 makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
 makeList = List . Protolude.toList . map toValue
@@ -110,7 +142,18 @@ instance ToJSON List where
 -- \"Maps\", but everywhere else in the spec refers to them as objects.
 newtype Object = Object { objectFields :: [ObjectField] } deriving (Eq, Ord, Show)
 
+instance Arbitrary Object where
+  arbitrary = Object <$> fields
+    where
+      fields = zipWith ObjectField <$> names <*> values
+      names = ordNub <$> listOf arbitrary
+      values = listOf arbitrary
+
+
 data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
+
+instance Arbitrary ObjectField where
+  arbitrary = ObjectField <$> arbitrary <*> arbitrary
 
 makeObject :: [ObjectField] -> Maybe Object
 makeObject fields
