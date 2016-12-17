@@ -13,7 +13,7 @@ module GraphQL.Schema
   , Builtin(..)
   -- * Defining new types
   , TypeDefinition(..)
-  , Name(..)
+  , Name
   , ArgumentDefinition(..)
   , EnumValueDefinition(..)
   , EnumTypeDefinition(..)
@@ -34,7 +34,7 @@ module GraphQL.Schema
 
 import Protolude hiding (Type)
 
-import GraphQL.Value (Name(..), Value)
+import GraphQL.Value (Name, Value)
 
 -- XXX: Use the built-in NonEmptyList in Haskell
 newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show)

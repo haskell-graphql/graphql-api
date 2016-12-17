@@ -32,7 +32,6 @@ import qualified GraphQL.Schema (Type)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
-import qualified Data.GraphQL.AST as AST
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -107,7 +106,7 @@ instance HasFieldDefinitions '[] where
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
 class GraphQLEnum a where
-  enumValues :: [AST.Name]
+  enumValues :: [Name]
   enumFromValue :: GValue.Value -> Either Text a
   enumToValue :: a -> GValue.Value
   -- TODO: These are trivially generically derivable
@@ -125,12 +124,18 @@ instance UnionTypeObjectTypeDefinitionList '[] where
   getUnionTypeObjectTypeDefinitions = []
 
 
+-- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
+--
+-- Panics if the name is not valid GraphQL.
+unsafeNameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Name
+unsafeNameFromSymbol = GValue.unsafeMakeName . toS . symbolVal
+
 -- Interfaces
 class HasInterfaceDefinitions a where
   getInterfaceDefinitions :: Interfaces
 
 instance forall a as. (HasInterfaceDefinition a, HasInterfaceDefinitions as) => HasInterfaceDefinitions (a:as) where
-  getInterfaceDefinitions = (getInterfaceDefinition @a):(getInterfaceDefinitions @as)
+  getInterfaceDefinitions = getInterfaceDefinition @a:getInterfaceDefinitions @as
 
 instance HasInterfaceDefinitions '[] where
   getInterfaceDefinitions = []
@@ -140,7 +145,7 @@ class HasInterfaceDefinition a where
 
 instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasInterfaceDefinition (Interface ks fields) where
   getInterfaceDefinition =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
         in InterfaceTypeDefinition name (NonEmptyList (getFieldDefinitions @fields))
 
 -- Give users some help if they don't terminate Arguments with a Field:
@@ -156,23 +161,23 @@ instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldD
 
 instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
   getFieldDefinition =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
     in FieldDefinition name [] (getAnnotatedType @t)
 
 
-instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition ((Argument ks t) :> b) where
+instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition (Argument ks t :> b) where
   getFieldDefinition =
     let (FieldDefinition name argDefs at) = getFieldDefinition @b
-        argName = Name (toS (symbolVal (Proxy :: Proxy ks)))
+        argName = unsafeNameFromSymbol (Proxy :: Proxy ks)
         arg = ArgumentDefinition argName (getAnnotatedInputType @t) Nothing
-    in (FieldDefinition name (arg:argDefs) at)
+    in FieldDefinition name (arg:argDefs) at
 
 
 instance forall ks is fields.
   (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) =>
   HasObjectDefinition (Object ks is fields) where
   getDefinition =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
     in ObjectTypeDefinition name (getInterfaceDefinitions @is) (NonEmptyList (getFieldDefinitions @fields))
 
 -- Builtin output types (annotated types)
@@ -210,13 +215,13 @@ instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (enumValues @enum))
+    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
+        et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
     in TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum et)))
 
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
   getAnnotatedType =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
+    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
         types = NonEmptyList (getUnionTypeObjectTypeDefinitions @as)
     in TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition name types)))
 
@@ -256,6 +261,6 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType =
-    let name = Name (toS (symbolVal (Proxy :: Proxy ks)))
-        et = EnumTypeDefinition name (map (EnumValueDefinition . Name . toS) (enumValues @enum))
+    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
+        et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
     in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
