@@ -99,7 +99,7 @@ objectFromList :: [(Name, Value)] -> Maybe Object
 objectFromList = makeObject . map (uncurry ObjectField)
 
 unionObjects :: [Object] -> Maybe Object
-unionObjects = makeObject . (=<<) objectFields
+unionObjects objects = makeObject (objects >>= objectFields)
 
 instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values

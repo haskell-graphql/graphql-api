@@ -159,7 +159,7 @@ instance forall v. ReadValue v => ReadValue [v] where
 
 instance forall v. ReadValue v => ReadValue (Maybe v) where
   valueMissing _ = pure Nothing
-  readValue v = map Just (readValue v)
+  readValue v = map Just (readValue @v v)
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -282,7 +282,7 @@ instance forall m typeName interfaces fields rest.
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
         -- TODO: See if we can prevent this from happening at compile time.
         case GValue.toObject result of
-          Nothing -> queryError $ "Expected object as result of union query: " <> show result
+          Nothing -> panic $ "Expected object as result of union query: " <> show result
           Just object -> pure object
     | otherwise = runUnion @m @rest rh fragment
     where typeName = toS (symbolVal (Proxy :: Proxy typeName))
