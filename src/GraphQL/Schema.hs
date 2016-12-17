@@ -34,12 +34,7 @@ module GraphQL.Schema
 
 import Protolude hiding (Type)
 
-import GraphQL.Value (Value)
-
--- | A name in GraphQL.
---
--- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name Text deriving (Eq, Show, IsString) -- XXX: Phantom type?
+import GraphQL.Value (Name(..), Value)
 
 -- XXX: Use the built-in NonEmptyList in Haskell
 newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show)
@@ -49,7 +44,7 @@ data AnnotatedType t = TypeNamed t
                      | TypeNonNull (NonNullType t)
                      deriving (Eq,Show)
 
-data ListType t = ListType (AnnotatedType t) deriving (Eq, Show)
+newtype ListType t = ListType (AnnotatedType t) deriving (Eq, Show)
 
 data NonNullType t = NonNullTypeNamed t
                    | NonNullTypeList  (ListType t)
@@ -83,8 +78,8 @@ data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmptyList FieldD
 data UnionTypeDefinition = UnionTypeDefinition Name (NonEmptyList ObjectTypeDefinition)
                            deriving (Eq, Show)
 
-data ScalarTypeDefinition = ScalarTypeDefinition Name
-                            deriving (Eq, Show)
+newtype ScalarTypeDefinition = ScalarTypeDefinition Name
+                             deriving (Eq, Show)
 
 -- | Types that are built into GraphQL.
 --

@@ -1,27 +1,42 @@
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Literal GraphQL values.
 module GraphQL.Value
-  (
-    -- | GraphQL values
-    GraphQL.Value.Value(..)
+  ( Value(..)
+  , toObject
   , ToValue(..)
-  , Name
+  , Name(Name)
   , List
-  , Map
   , String
-  , mapFromList
-  , unionMap
+    -- * Objects
+  , Object
+  , ObjectField(ObjectField)
+    -- ** Constructing
+  , objectFields
+  , makeObject
+  , objectFromList
+    -- ** Combining
+  , unionObjects
   ) where
 
-import Protolude hiding (Map)
+import Protolude
 
 import Data.List.NonEmpty (NonEmpty)
-import Data.GraphQL.AST (Name)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
+
+-- | A name in GraphQL.
+--
+-- https://facebook.github.io/graphql/#sec-Names
+newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show, IsString)
+
+instance ToJSON Name where
+  toJSON = toJSON . getName
+
+-- TODO: Add a smart constructor for Name.
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -32,9 +47,13 @@ data Value
   | ValueString String
   | ValueEnum Name
   | ValueList List
-  | ValueMap Map
+  | ValueObject Object
   | ValueNull
   deriving (Eq, Ord, Show)
+
+toObject :: Value -> Maybe Object
+toObject (ValueObject o) = pure o
+toObject _ = empty
 
 instance ToJSON GraphQL.Value.Value where
 
@@ -44,7 +63,7 @@ instance ToJSON GraphQL.Value.Value where
   toJSON (ValueString x) = toJSON x
   toJSON (ValueEnum x) = toJSON x
   toJSON (ValueList x) = toJSON x
-  toJSON (ValueMap x) = toJSON x
+  toJSON (ValueObject x) = toJSON x
   toJSON ValueNull = Aeson.Null
 
 newtype String = String Text deriving (Eq, Ord, Show)
@@ -52,45 +71,46 @@ newtype String = String Text deriving (Eq, Ord, Show)
 instance ToJSON String where
   toJSON (String x) = toJSON x
 
-newtype List = List [GraphQL.Value.Value] deriving (Eq, Ord, Show)
+newtype List = List [Value] deriving (Eq, Ord, Show)
 
 makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
-makeList = List . toList . map toValue
+makeList = List . Protolude.toList . map toValue
 
 
 instance ToJSON List where
   toJSON (List x) = toJSON x
 
--- XXX: This is ObjectValue [ObjectField]; ObjectField Name Value upstream.
--- XXX: GraphQL spec itself sometimes says 'map' and other times 'object', but
--- jml hasn't read 100% clearly. Let's find something and stick to it, and
--- make sure that there isn't a real distinction between to the two.
-newtype Map = Map [(Name,  GraphQL.Value.Value)] deriving (Eq, Ord, Show, Monoid)
+-- | A literal GraphQL object.
+--
+-- Note that https://facebook.github.io/graphql/#sec-Response calls these
+-- \"Maps\", but everywhere else in the spec refers to them as objects.
+newtype Object = Object { objectFields :: [ObjectField] } deriving (Eq, Ord, Show)
 
+data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
-mapFromList :: [(Name,  GraphQL.Value.Value)] -> Map
-mapFromList = Map
-
--- TODO this would be nicer with a prism `_ValueMap` but don't want to
--- pull in lens as dependency.
-unionMap :: [Value] -> Either Text Value
-unionMap values = map (ValueMap . fold)  (sequence (map isValueMap values))
+makeObject :: [ObjectField] -> Maybe Object
+makeObject fields
+  | fieldNames == ordNub fieldNames = pure (Object fields)
+  | otherwise = empty
   where
-    isValueMap = \case
-      (ValueMap m) -> Right m
-      _ -> Left "non-ValueMap member"
+    fieldNames = [name | ObjectField name _ <- fields]
 
+objectFromList :: [(Name, Value)] -> Maybe Object
+objectFromList = makeObject . map (uncurry ObjectField)
 
-instance ToJSON Map where
+unionObjects :: [Object] -> Maybe Object
+unionObjects objects = makeObject (objects >>= objectFields)
+
+instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Map xs) = toJSON (Map.fromList xs)
-  toEncoding (Map xs) = pairs (fold (map (\(k, v) -> (toS k) .= v) xs))
+  toJSON (Object xs) = toJSON (Map.fromList [(getName k, v) | ObjectField k v <- xs])
+  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getName k) .= v) xs)
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
-  toValue :: a -> GraphQL.Value.Value
+  toValue :: a -> Value
 
-instance ToValue GraphQL.Value.Value where
+instance ToValue Value where
   toValue = identity
 
 -- XXX: Should this just be for Foldable?
@@ -122,5 +142,5 @@ instance ToValue Text where
 instance ToValue List where
   toValue = ValueList
 
-instance ToValue Map where
-  toValue = ValueMap
+instance ToValue Object where
+  toValue = ValueObject
