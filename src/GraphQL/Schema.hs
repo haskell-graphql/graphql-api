@@ -128,4 +128,12 @@ data InputTypeDefinition
   deriving (Eq, Show)
 
 
+-- | A literal value specified as a default as part of a type definition.
+--
+-- Use this type alias when you want to be clear that a definition may include
+-- some sort of default value.
+--
+-- Arguments (see 'ArgumentDefinition') and fields within input objects (see
+-- 'InputObjectFieldDefinition') can have default values. These are allowed to
+-- be any kind of literal.
 type DefaultValue = Value
