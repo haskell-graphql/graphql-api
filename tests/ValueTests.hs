@@ -9,6 +9,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 import GraphQL.Value
   ( Object(..)
   , ObjectField(..)
+  , unsafeMakeName
   , unionObjects
   , objectFromList
   , toValue
@@ -20,16 +21,19 @@ tests = testSpec "Value" $ do
     it "returns empty on empty list" $ do
       unionObjects [] `shouldBe` objectFromList []
     it "merges objects" $ do
-      let (Just foo) = objectFromList [("foo", toValue @Int32 1),("bar",toValue @Int32 2)]
-      let (Just bar) = objectFromList [("bar", toValue @Text "cow"),("baz",toValue @Int32 3)]
+      let (Just foo) = objectFromList [ (unsafeMakeName "foo", toValue @Int32 1)
+                                      , (unsafeMakeName "bar",toValue @Int32 2)]
+      let (Just bar) = objectFromList [ (unsafeMakeName "bar", toValue @Text "cow")
+                                      , (unsafeMakeName "baz",toValue @Int32 3)]
       let observed = unionObjects [foo, bar]
       observed `shouldBe` Nothing
     it "merges objects with unique keys" $ do
-      let (Just foo) = objectFromList [("foo", toValue @Int32 1)]
-      let (Just bar) = objectFromList [("bar", toValue @Text "cow"),("baz",toValue @Int32 3)]
-      let (Just expected) = objectFromList [ ("foo", toValue @Int32 1)
-                                           , ("bar", toValue @Text "cow")
-                                           , ("baz", toValue @Int32 3)
+      let (Just foo) = objectFromList [(unsafeMakeName "foo", toValue @Int32 1)]
+      let (Just bar) = objectFromList [ (unsafeMakeName "bar", toValue @Text "cow")
+                                      , (unsafeMakeName "baz",toValue @Int32 3)]
+      let (Just expected) = objectFromList [ (unsafeMakeName "foo", toValue @Int32 1)
+                                           , (unsafeMakeName "bar", toValue @Text "cow")
+                                           , (unsafeMakeName "baz", toValue @Int32 3)
                                            ]
       let (Just observed) = unionObjects [foo, bar]
       observed `shouldBe` expected

@@ -36,7 +36,7 @@ import qualified Data.GraphQL.Parser as Parser
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show, IsString)
+newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show)
 
 instance ToJSON Name where
   toJSON = toJSON . getName

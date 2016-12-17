@@ -45,7 +45,7 @@ import GraphQL.Value (unsafeMakeName)
 data DogCommandEnum = Sit | Down | Heel
 
 instance GraphQLEnum DogCommandEnum where
-  enumValues = ["SIT", "DOWN", "HEEL"]
+  enumValues = map unsafeMakeName ["SIT", "DOWN", "HEEL"]
   enumToValue _ = undefined
   enumFromValue _ = undefined
 
@@ -71,7 +71,7 @@ type Human = Object "Human" '[Sentient] '[Field "name" Text]
 
 data CatCommandEnum = Jump
 instance GraphQLEnum CatCommandEnum where
-  enumValues = ["JUMP"]
+  enumValues = [unsafeMakeName "JUMP"]
   enumToValue = undefined
   enumFromValue = undefined
 
