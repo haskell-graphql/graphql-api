@@ -34,6 +34,8 @@ module GraphQL.Schema
 
 import Protolude hiding (Type)
 
+import GraphQL.Value (Value)
+
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
@@ -119,26 +121,19 @@ newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
 data InputType = DefinedInputType InputTypeDefinition | BuiltinInputType Builtin deriving (Eq, Show)
 
 
-data InputTypeDefinition =
-  -- tom: Next line is wrong I think? We should use InputObjectTypeDefinition?
-  InputTypeDefinitionObject        ObjectTypeDefinition
+data InputTypeDefinition
+  = InputTypeDefinitionObject        InputObjectTypeDefinition
   | InputTypeDefinitionScalar        ScalarTypeDefinition
   | InputTypeDefinitionEnum          EnumTypeDefinition
-  | InputTypeDefinitionInputObject   InputObjectTypeDefinition
   deriving (Eq, Show)
 
 
-type DefaultValue = InputValue
-
-data InputValue
-  = ValueInt Int
-  | ValueFloat Double
-  | ValueBoolean Bool
-  | ValueString Text
-  | ValueEnum Name
-  | ValueList ListValue
-  | ValueObject [ObjectField] deriving (Eq, Show)
-
-data ListValue = ListValue [InputValue] deriving (Eq, Show)
-data ObjectValue = ObjectValue [ObjectField] deriving (Eq, Show)
-data ObjectField = ObjectField Name InputValue deriving (Eq, Show)
+-- | A literal value specified as a default as part of a type definition.
+--
+-- Use this type alias when you want to be clear that a definition may include
+-- some sort of default value.
+--
+-- Arguments (see 'ArgumentDefinition') and fields within input objects (see
+-- 'InputObjectFieldDefinition') can have default values. These are allowed to
+-- be any kind of literal.
+type DefaultValue = Value
