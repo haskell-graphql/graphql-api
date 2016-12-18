@@ -208,13 +208,12 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
--- TODO we can probably use closed type families for RunFieldsType and
--- FieldHandler for better error reporting in case the user uses some
--- unexpected type.
-
+-- TODO: We can do better than using `a` by matching Field and
+-- Argument :> Field combos and throwing errors when people use
+-- non-field types.
 type family RunFieldsType m (a :: [Type]) :: Type where
   RunFieldsType m '[a] = a
-  RunFieldsType m (a:rest) = a :<> RunFieldsType m rest
+  RunFieldsType m (a ': rest) = a :<> RunFieldsType m rest
 
 type family RunFieldsHandler m (a :: Type) :: Type where
   RunFieldsHandler m (f :<> fs) =
@@ -268,7 +267,6 @@ instance forall ks t m.
         value <- mValue
         let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
         pure (GValue.ObjectField name' value)
-
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
