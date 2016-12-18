@@ -57,10 +57,8 @@ makeName = map Name . hush . parseOnly Parser.name
 --
 -- Prefer 'makeName' to this in all cases.
 --
--- >>> makeName "foo"
--- Just (Name {getName = "foo"})
--- >>> makeName "9-bar"
--- Nothing
+-- >>> unsafeMakeName "foo"
+-- Name {getName = "foo"}
 unsafeMakeName :: Text -> Name
 unsafeMakeName name = fromMaybe (panic $ "Not a valid GraphQL name: " <> show name) (makeName name)
 
