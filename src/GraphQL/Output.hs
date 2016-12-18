@@ -9,7 +9,13 @@ module GraphQL.Output
 
 import Protolude hiding (Location, Map)
 import Data.List.NonEmpty (NonEmpty)
-import GraphQL.Value (Object, Name, objectFromList, ToValue(..), Value(ValueObject, ValueNull))
+import GraphQL.Value
+  ( Object
+  , objectFromList
+  , unsafeMakeName
+  , ToValue(..)
+  , Value(ValueObject, ValueNull)
+  )
 
 -- | GraphQL response.
 --
@@ -48,9 +54,9 @@ data Response
 -- | Construct an object from a list of names and values.
 --
 -- Panic if there are duplicate names.
-unsafeMakeObject :: [(Name, Value)] -> Value
+unsafeMakeObject :: [(Text, Value)] -> Value
 unsafeMakeObject fields =
-  case objectFromList fields of
+  case objectFromList (map (first unsafeMakeName) fields) of
     Nothing -> panic $ "Object has duplicate keys: " <> show fields
     Just object -> ValueObject object
 

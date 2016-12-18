@@ -7,18 +7,21 @@ module GraphQL.Value
   ( Value(..)
   , toObject
   , ToValue(..)
-  , Name(Name)
+  , Name
+  , makeName
+  , unsafeMakeName
   , List
   , String
     -- * Objects
   , Object
   , ObjectField(ObjectField)
     -- ** Constructing
-  , objectFields
   , makeObject
   , objectFromList
     -- ** Combining
   , unionObjects
+    -- ** Querying
+  , objectFields
   ) where
 
 import Protolude
@@ -26,17 +29,38 @@ import Protolude
 import Data.List.NonEmpty (NonEmpty)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
+import Data.Attoparsec.Text (parseOnly)
 import qualified Data.Map as Map
+import qualified Data.GraphQL.Parser as Parser
 
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show, IsString)
+newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show)
 
 instance ToJSON Name where
   toJSON = toJSON . getName
 
--- TODO: Add a smart constructor for Name.
+-- | Create a 'Name'.
+--
+-- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
+-- not match, return Nothing.
+--
+-- >>> makeName "foo"
+-- Just (Name {getName = "foo"})
+-- >>> makeName "9-bar"
+-- Nothing
+makeName :: Text -> Maybe Name
+makeName = map Name . hush . parseOnly Parser.name
+
+-- | Create a 'Name', panicking if the given text is invalid.
+--
+-- Prefer 'makeName' to this in all cases.
+--
+-- >>> unsafeMakeName "foo"
+-- Name {getName = "foo"}
+unsafeMakeName :: Text -> Name
+unsafeMakeName name = fromMaybe (panic $ "Not a valid GraphQL name: " <> show name) (makeName name)
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.

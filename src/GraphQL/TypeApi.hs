@@ -230,7 +230,14 @@ instance forall f fs m.
         -- NB "alias" is encoded in-band. It cannot be set to empty in
         -- a query so the empty value means "no alias" and we use the
         -- name instead.
-        let name' = GValue.Name $ if alias == "" then name else alias
+
+        -- TODO: We need to use 'unsafeMakeName' here (which might panic)
+        -- because our API is currently written in terms of the Data.GraphQL
+        -- parser, which provides no type-level guarantees of name safety. We
+        -- should instead have our APIs in terms of 'Canonicalquery' (and the
+        -- rest of 'Data.GraphQL.Input', not yet written), and have that be
+        -- responsible for rejecting queries with invalid names.
+        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
         pure (GValue.ObjectField name' value)
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
