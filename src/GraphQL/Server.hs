@@ -212,18 +212,28 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
 -- FieldHandler for better error reporting in case the user uses some
 -- unexpected type.
 
+type family RunFieldsType m (a :: [Type]) :: Type where
+  RunFieldsType m '[Field ks t] = Field ks t
+  RunFieldsType m (Field ks t:rest) = (Field ks t) :<> RunFieldsType m rest
+  RunFieldsType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+
+type family RunFieldsHandler m (a :: Type) :: Type where
+  RunFieldsHandler m (f :<> fs) =
+    FieldHandler m f :<> RunFieldsHandler m fs
+  RunFieldsHandler m (Field ks t) =
+    FieldHandler m (Field ks t)
+
 class RunFields m a where
-  type RunFieldsType m a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
   -- one (Text, Value)
-  runFields :: RunFieldsType m a -> AST.Selection -> m GValue.ObjectField
+  runFields :: RunFieldsHandler m a -> AST.Selection -> m GValue.ObjectField
 
 
 instance forall f fs m.
          ( BuildFieldResolver m f
          , RunFields m fs
-         ) => RunFields m (f:fs) where
-  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> RunFieldsType m fs
+         ) => RunFields m (f :<> fs) where
+--  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> RunFieldsType m fs
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
@@ -248,24 +258,34 @@ instance forall f fs m.
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
-instance forall m. MonadThrow m => RunFields m '[] where
-  type RunFieldsType m '[] = ()
-  runFields _ selection = queryError ("Query for undefined selection:" <> show selection)
+instance forall ks t m.
+         ( BuildFieldResolver m (Field ks t)
+         ) => RunFields m (Field ks t) where
+  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
+    let NamedFieldExecutor k mValue = buildFieldResolver @m @(Field ks t) lh selection
+    in case name == k of
+      False -> queryError ("Unexpected Selection value. Is the query normalized?: " <> show name)
+      True -> do
+        value <- mValue
+        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+        pure (GValue.ObjectField name' value)
+
+  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
 instance forall typeName interfaces fields m.
-         ( RunFields m fields
+         ( RunFields m (RunFieldsType m fields)
          , MonadThrow m
          , MonadIO m
          ) => HasGraph m (Object typeName interfaces fields) where
-  type Handler m (Object typeName interfaces fields) = m (RunFieldsType m fields)
+  type Handler m (Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- mHandler
     -- We're evaluating an Object so we're collecting ObjectFields from
     -- runFields and build a GValue.Map with them.
-    r <- forM selectionSet $ runFields @m @fields handler
+    r <- forM selectionSet $ runFields @m @(RunFieldsType m fields) handler
     case GValue.makeObject r of
       Nothing -> queryError $ "Duplicate fields in set: " <> show r
       Just object -> pure $ GValue.ValueObject object
@@ -279,12 +299,10 @@ type family RunUnionType m (a :: [Type]) :: Type where
   RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
 type family RunUnionHandlerType m (a :: Type) :: Type where
-  RunUnionHandlerType m (Object typeName interfaces fields) =
-    Handler m (Object typeName interfaces fields)
-  RunUnionHandlerType m ((Object typeName interfaces fields) :<|> rest) =
-    Handler m (Object typeName interfaces fields) :<|> RunUnionHandlerType m rest
-  RunUnionHandlerType m a =
-    TypeLits.TypeError ('TypeLits.Text "Implementation error. ")
+  RunUnionHandlerType m (o :<|> rest) =
+    Handler m o :<|> RunUnionHandlerType m rest
+  RunUnionHandlerType m o =
+    Handler m o
 
 -- Type class to execute union type queries.
 class RunUnion m a where
@@ -294,7 +312,7 @@ instance forall m typeName interfaces fields rest.
          ( RunUnion m rest
          , MonadIO m
          , MonadThrow m
-         , RunFields m fields
+         , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
          ) => RunUnion m ((Object typeName interfaces fields) :<|> rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
@@ -312,7 +330,7 @@ instance forall m typeName interfaces fields rest.
 instance forall m typeName interfaces fields.
          ( MonadIO m
          , MonadThrow m
-         , RunFields m fields
+         , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
          ) => RunUnion m ((Object typeName interfaces fields)) where
   runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))

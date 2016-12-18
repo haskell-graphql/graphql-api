@@ -12,15 +12,15 @@ import GraphQL.Server
 import GraphQL.Value (Value)
 
 type O1 = Object "O1" '[] '[Field "o1" Text]
-type O2 = Object "O2" '[] '[Field "o2" Text]
+type O2 = Object "O2" '[] '[Field "o2" Text, Field "o2-1" Text]
 
 type T = Union "U" '[O1, O2]
 
 o1 :: Handler IO O1
-o1 = pure ((pure "hello from O1") :<> ())
+o1 = pure (pure "hello from O1")
 
 o2 :: Handler IO O2
-o2 = pure ((pure "hello from O2") :<> ())
+o2 = pure (pure "hello from O2" :<> pure "hello o2-1")
 
 tHandler :: Handler IO T
 tHandler = o1 :<|> o2
