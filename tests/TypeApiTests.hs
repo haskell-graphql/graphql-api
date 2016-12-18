@@ -13,7 +13,7 @@ import GraphQL.TypedSchema
   , (:>)
   )
 import GraphQL.TypedApi
-  ( HandlerType
+  ( Handler
   , QueryError(..)
   , buildResolver
   , (:<>)(..)
@@ -30,7 +30,7 @@ import Data.Attoparsec.Text (parseOnly, endOfInput)
 type TMonad = ExceptT Text IO
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
-tHandler :: HandlerType TMonad T
+tHandler :: Handler TMonad T
 tHandler =
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
 

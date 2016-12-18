@@ -11,7 +11,7 @@ module Introduction where
 import Protolude
 
 import GraphQL.TypedSchema (Object, Field, Argument, (:>))
-import GraphQL.TypedApi (HandlerType, (:<>)(..))
+import GraphQL.TypedApi (Handler, (:<>)(..))
 ```
 
 The core idea for this library is that we define a composite type that
@@ -42,12 +42,12 @@ And if we had a code to handle that type (more later) we could query it like thi
 
 ## The handler
 
-We defined a corresponding handler via the `HandlerType m a` which takes
+We defined a corresponding handler via the `Handler m a` which takes
 the monad to run in (`IO` in this case) and the actual API definition
 (`HelloWorld`).
 
 ```haskell
-handler :: HandlerType IO HelloWorld
+handler :: Handler IO HelloWorld
 handler = pure $ (\greeting -> pure (greeting <> " to me")) :<> ()
 ```
 
