@@ -33,6 +33,7 @@ library
     , aeson
     , containers
     , graphql
+    , QuickCheck
     , text
   exposed-modules:
       GraphQL.Definitions
@@ -84,6 +85,7 @@ test-suite graphql-api-tests
     , containers
     , graphql
     , graphql-api
+    , hspec
     , tasty
     , tasty-hspec
   other-modules:

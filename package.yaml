@@ -27,6 +27,7 @@ library:
     - aeson
     - containers
     - graphql
+    - QuickCheck
     - text
 
 tests:
@@ -38,6 +39,7 @@ tests:
       - containers
       - graphql
       - graphql-api
+      - hspec
       - tasty
       - tasty-hspec
 

@@ -5,6 +5,7 @@ import Protolude
 
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
+import Test.Hspec.QuickCheck (prop)
 
 import GraphQL.Value
   ( Object(..)
@@ -38,6 +39,9 @@ tests = testSpec "Value" $ do
       let (Just observed) = unionObjects [foo, bar]
       observed `shouldBe` expected
       expected `shouldSatisfy` prop_fieldsUnique
+  describe "Objects" $ do
+    prop "have unique fields" $ do
+      prop_fieldsUnique
 
 
 -- | All of the fields in an object should have unique names.
