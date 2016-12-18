@@ -274,14 +274,21 @@ instance forall typeName interfaces fields m.
 -- | Closed type family to enforce the invariant that Union types
 -- contain only Objects.
 type family RunUnionType m (a :: [Type]) :: Type where
-  RunUnionType m (Object typeName interfaces fields:rest) = Handler m (Object typeName interfaces fields) :<|> RunUnionType m rest
-  RunUnionType m '[] = ()
+  RunUnionType m '[Object typeName interfaces fields] = Object typeName interfaces fields
+  RunUnionType m (Object typeName interfaces fields:rest) = Object typeName interfaces fields :<|> RunUnionType m rest
   RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
+type family RunUnionHandlerType m (a :: Type) :: Type where
+  RunUnionHandlerType m (Object typeName interfaces fields) =
+    Handler m (Object typeName interfaces fields)
+  RunUnionHandlerType m ((Object typeName interfaces fields) :<|> rest) =
+    Handler m (Object typeName interfaces fields) :<|> RunUnionHandlerType m rest
+  RunUnionHandlerType m a =
+    TypeLits.TypeError ('TypeLits.Text "Implementation error. ")
 
 -- Type class to execute union type queries.
 class RunUnion m a where
-  runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Object
+  runUnion :: RunUnionHandlerType m a -> AST.Selection -> m GValue.Object
 
 instance forall m typeName interfaces fields rest.
          ( RunUnion m rest
@@ -289,7 +296,7 @@ instance forall m typeName interfaces fields rest.
          , MonadThrow m
          , RunFields m fields
          , KnownSymbol typeName
-         ) => RunUnion m (Object typeName interfaces fields:rest) where
+         ) => RunUnion m ((Object typeName interfaces fields) :<|> rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
@@ -302,15 +309,31 @@ instance forall m typeName interfaces fields rest.
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
-instance forall m. MonadThrow m => RunUnion m '[] where
-  runUnion _ selection = queryError ("Union type could not be resolved:" <> show selection)
+instance forall m typeName interfaces fields.
+         ( MonadIO m
+         , MonadThrow m
+         , RunFields m fields
+         , KnownSymbol typeName
+         ) => RunUnion m ((Object typeName interfaces fields)) where
+  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
+    | typeName == queryTypeName = do
+        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
+        -- TODO: See if we can prevent this from happening at compile time.
+        case GValue.toObject result of
+          Nothing -> panic $ "Expected object as result of union query: " <> show result
+          Just object -> pure object
+    | otherwise = queryError ("Union type could not be resolved:" <> show fragment)
+    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+  runUnion _ _ =
+    queryError "Non-InlineFragment used for a union type query."
+
 
 instance forall m ks ru.
          ( MonadThrow m
          , MonadIO m
-         , RunUnion m ru
+         , RunUnion m (RunUnionType m ru)
          ) => HasGraph m (Union ks ru) where
-  type Handler m (Union ks ru) = RunUnionType m ru
+  type Handler m (Union ks ru) = RunUnionHandlerType m (RunUnionType m ru)
   -- TODO: check sanity of query before executing it. E.g. we can't
   -- have the same field name in two different fragment branches
   -- (needs to take aliases into account).
@@ -320,5 +343,5 @@ instance forall m ks ru.
   buildResolver handler selection = do
     -- GraphQL invariant is that all items in a Union must be objects
     -- which means 1) they have fields 2) They are ValueMap
-    values <- map GValue.unionObjects (traverse (runUnion @m @ru handler) selection)
+    values <- map GValue.unionObjects (traverse (runUnion @m @(RunUnionType m ru) handler) selection)
     maybe (panic $ "Duplicate fields in values: " <> show values) (pure . GValue.ValueObject) values

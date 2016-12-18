@@ -23,7 +23,7 @@ o2 :: Handler IO O2
 o2 = pure ((pure "hello from O2") :<> ())
 
 tHandler :: Handler IO T
-tHandler = o1 :<|> o2 :<|> ()
+tHandler = o1 :<|> o2
 
 exampleQuery :: IO Value
 exampleQuery = buildResolver @IO @T tHandler (query "{ ... on O1 { o1 } ... on O2 { o2 } }")
