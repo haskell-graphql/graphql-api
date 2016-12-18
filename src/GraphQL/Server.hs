@@ -213,9 +213,8 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
 -- unexpected type.
 
 type family RunFieldsType m (a :: [Type]) :: Type where
-  RunFieldsType m '[Field ks t] = Field ks t
-  RunFieldsType m (Field ks t:rest) = (Field ks t) :<> RunFieldsType m rest
-  RunFieldsType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+  RunFieldsType m '[a] = a
+  RunFieldsType m (a:rest) = a :<> RunFieldsType m rest
 
 type family RunFieldsHandler m (a :: Type) :: Type where
   RunFieldsHandler m (f :<> fs) =
