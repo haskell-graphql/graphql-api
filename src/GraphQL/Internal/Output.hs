@@ -1,7 +1,7 @@
 -- | GraphQL output.
 --
 -- How we encode GraphQL responses.
-module GraphQL.Output
+module GraphQL.Internal.Output
   ( Response(..)
   , Errors
   , Error(..)  -- XXX: Maybe export helper functions rather than constructors.

@@ -6,14 +6,14 @@ import Protolude hiding (Enum)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.Definitions
+import GraphQL.API
   ( Object
   , Field
   , Argument
   , (:>)
   )
-import GraphQL.TypeApi
-  ( HandlerType
+import GraphQL.Server
+  ( Handler
   , QueryError(..)
   , buildResolver
   , (:<>)(..)
@@ -30,7 +30,7 @@ import Data.Attoparsec.Text (parseOnly, endOfInput)
 type TMonad = ExceptT Text IO
 type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32]
 
-tHandler :: HandlerType TMonad T
+tHandler :: Handler TMonad T
 tHandler =
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
 

@@ -7,7 +7,7 @@
 -- are no type references. Instead, everything is inlined.
 --
 -- Equivalent representation of GraphQL /values/ is in "GraphQL.Value".
-module GraphQL.Schema
+module GraphQL.Internal.Schema
   ( Type(..)
   -- * Builtin types
   , Builtin(..)

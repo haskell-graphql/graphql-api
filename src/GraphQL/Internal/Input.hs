@@ -1,7 +1,7 @@
 -- | GraphQL inputs.
 --
 -- Responsible for turning AST into a normal, fully-realized form.
-module GraphQL.Input
+module GraphQL.Internal.Input
   ( CanonicalQuery
   ) where
 

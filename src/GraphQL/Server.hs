@@ -10,10 +10,11 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
-module GraphQL.TypeApi
+module GraphQL.Server
   ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
+  , (:<|>)(..)
   , ReadValue(..)
   , BuildFieldResolver(..)
   ) where
@@ -32,8 +33,8 @@ import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
 import qualified Data.GraphQL.AST as AST
-import GraphQL.Definitions
-import GraphQL.Input (CanonicalQuery)
+import GraphQL.API
+import GraphQL.Internal.Input (CanonicalQuery)
 
 import Control.Monad.Catch (MonadThrow, throwM, Exception)
 
@@ -71,11 +72,16 @@ queryError = throwM . QueryError
 data a :<> b = a :<> b
 infixr 8 :<>
 
+-- | Union type separation operator.
+data a :<|> b = a :<|> b
+infixr 8 :<|>
+
+
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
 class (MonadThrow m, MonadIO m) => HasGraph m a where
-  type HandlerType m a
-  buildResolver :: HandlerType m a -> CanonicalQuery -> m GValue.Value
+  type Handler m a
+  buildResolver :: Handler m a -> CanonicalQuery -> m GValue.Value
 
 -- | The ReadValue instance converts AST.Value types like ValueInt to
 -- the type expected by the handler function. It's the boundary
@@ -96,30 +102,30 @@ class ReadValue a where
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
 instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Int32 where
-  type HandlerType m Int32 = m Int32
+  type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
 
 
 instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
-  type HandlerType m Double = m Double
+  type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
 
 instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Text where
-  type HandlerType m Text = m Text
+  type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
 
 
 instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (List hg) where
-  type HandlerType m (List hg) = [HandlerType m hg]
+  type Handler m (List hg) = [Handler m hg]
   buildResolver handler selectionSet =
     let a = traverse (flip (buildResolver @m @hg) selectionSet) handler
     in map GValue.toValue a
 
 instance forall m ks enum. (MonadThrow m, MonadIO m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
-  type HandlerType m (Enum ks enum) = enum
+  type Handler m (Enum ks enum) = enum
   buildResolver handler _ = pure (enumToValue handler)
 
 
@@ -181,7 +187,7 @@ class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
-  type FieldHandler m (Field ks t) = HandlerType m t
+  type FieldHandler m (Field ks t) = Handler m t
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
@@ -252,7 +258,7 @@ instance forall typeName interfaces fields m.
          , MonadThrow m
          , MonadIO m
          ) => HasGraph m (Object typeName interfaces fields) where
-  type HandlerType m (Object typeName interfaces fields) = m (RunFieldsType m fields)
+  type Handler m (Object typeName interfaces fields) = m (RunFieldsType m fields)
 
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
@@ -268,7 +274,7 @@ instance forall typeName interfaces fields m.
 -- | Closed type family to enforce the invariant that Union types
 -- contain only Objects.
 type family RunUnionType m (a :: [Type]) :: Type where
-  RunUnionType m (Object typeName interfaces fields:rest) = HandlerType m (Object typeName interfaces fields) :<|> RunUnionType m rest
+  RunUnionType m (Object typeName interfaces fields:rest) = Handler m (Object typeName interfaces fields) :<|> RunUnionType m rest
   RunUnionType m '[] = ()
   RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
@@ -304,7 +310,7 @@ instance forall m ks ru.
          , MonadIO m
          , RunUnion m ru
          ) => HasGraph m (Union ks ru) where
-  type HandlerType m (Union ks ru) = RunUnionType m ru
+  type Handler m (Union ks ru) = RunUnionType m ru
   -- TODO: check sanity of query before executing it. E.g. we can't
   -- have the same field name in two different fragment branches
   -- (needs to take aliases into account).

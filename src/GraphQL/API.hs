@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedLabels, MagicHash #-}
 
 -- | Type-level definitions for a GraphQL schema.
-module GraphQL.Definitions
+module GraphQL.API
   ( Object
   , Field
   , Argument
@@ -16,7 +16,6 @@ module GraphQL.Definitions
   , GraphQLEnum(..)
   , Interface
   , (:>)(..)
-  , (:<|>)(..)
   -- | Exported for testing. Perhaps should be a different module.
   , getFieldDefinition
   , getDefinition
@@ -27,8 +26,8 @@ module GraphQL.Definitions
 
 import Protolude hiding (Enum)
 
-import GraphQL.Schema hiding (Type)
-import qualified GraphQL.Schema (Type)
+import GraphQL.Internal.Schema hiding (Type)
+import qualified GraphQL.Internal.Schema (Type)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
@@ -59,10 +58,6 @@ import qualified GraphQL.Value as GValue
 -- @
 data a :> b = a :> b
 infixr 8 :>
-
--- | Union type separation operator.
-data a :<|> b = a :<|> b
-infixr 8 :<|>
 
 
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
@@ -187,7 +182,7 @@ class HasAnnotatedType a where
   -- forget this. Maybe we can flip the internal encoding to be
   -- non-null by default and needing explicit null-encoding (via
   -- Maybe).
-  getAnnotatedType :: AnnotatedType GraphQL.Schema.Type
+  getAnnotatedType :: AnnotatedType GraphQL.Internal.Schema.Type
 
 instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
   -- see TODO in HasAnnotatedType class
