@@ -3,6 +3,8 @@ module GraphQL.Internal.Validation
   , ValidDocument
   , validate
   , getErrors
+  -- * Exported for testing
+  , findDuplicates
   ) where
 
 import Protolude
@@ -67,8 +69,6 @@ data ValidationError
 
 -- XXX: Would Data.Validation make this better / simpler?
 
--- XXX: Lenses for the AST might be nice. If I knew lenses.
-
 -- XXX: Beginning to think that we might as well have Arbitrary instances for
 -- the AST and determine properties.
 
@@ -92,7 +92,10 @@ getNodeName :: AST.Node -> AST.Name
 getNodeName (AST.Node name _ _ _) = name
 
 
--- XXX: Untested, really should have tests.
+-- | Return a list of all the elements with duplicates. The list of duplicates
+-- itself will not contain duplicates.
+--
+-- prop> \xs -> findDuplicates @Int xs == ordNub (findDuplicates @Int xs)
 findDuplicates :: Ord a => [a] -> [a]
 findDuplicates xs = findDups (sort xs)
   where
