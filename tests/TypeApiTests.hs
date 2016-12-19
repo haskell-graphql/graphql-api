@@ -24,7 +24,6 @@ import Data.Aeson (encode)
 import Data.GraphQL.Parser (document)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
-
 -- Test a custom error monad
 -- TODO: I didn't realize that MonadThrow throws in the base monad (IO).
 type TMonad = ExceptT Text IO

@@ -182,6 +182,8 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- name doesn't match.
 data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
 
+-- | Derive the handler type from the Field/Argument type in a closed
+-- type family: We don't want anyone else to extend this ever.
 type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Field ks t) = Handler m t
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
@@ -221,8 +223,8 @@ type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
 
 class RunFields m a where
   type RunFieldsHandler m a :: Type
-  -- Runfield is run on a single QueryTerm so it can only ever return
-  -- one (Text, Value)
+  -- runFields is run on a single QueryTerm so it can only ever return
+  -- one ObjectField.
   runFields :: RunFieldsHandler m a -> AST.Selection -> m GValue.ObjectField
 
 
@@ -233,7 +235,6 @@ instance forall f fs m.
          , MonadIO m
          ) => RunFields m (f :<> fs) where
   type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
---  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> RunFieldsType m fs
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
