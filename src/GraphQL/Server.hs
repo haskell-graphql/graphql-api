@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeInType #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
 module GraphQL.Server
@@ -182,12 +182,14 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- name doesn't match.
 data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
 
+type family FieldHandler m (a :: Type) :: Type where
+  FieldHandler m (Field ks t) = Handler m t
+  FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
+
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
-  type FieldHandler m a :: Type
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
-  type FieldHandler m (Field ks t) = Handler m t
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
@@ -197,7 +199,6 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
-  type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
@@ -211,17 +212,16 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
 -- TODO: We can do better than using `a` by matching Field and
 -- Argument :> Field combos and throwing errors when people use
 -- non-field types.
-type family RunFieldsType m (a :: [Type]) :: Type where
+type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
   RunFieldsType m '[a] = a
   RunFieldsType m (a ': rest) = a :<> RunFieldsType m rest
 
-type family RunFieldsHandler m (a :: Type) :: Type where
-  RunFieldsHandler m (f :<> fs) =
-    FieldHandler m f :<> RunFieldsHandler m fs
-  RunFieldsHandler m (Field ks t) =
-    FieldHandler m (Field ks t)
+--type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
+--  RunFieldsHandler m (a :<> fs) = FieldHandler m a :<> RunFieldsHandler m fs
+--  RunFieldsHandler m f = FieldHandler m f
 
 class RunFields m a where
+  type RunFieldsHandler m a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
   -- one (Text, Value)
   runFields :: RunFieldsHandler m a -> AST.Selection -> m GValue.ObjectField
@@ -230,7 +230,10 @@ class RunFields m a where
 instance forall f fs m.
          ( BuildFieldResolver m f
          , RunFields m fs
+         , MonadThrow m
+         , MonadIO m
          ) => RunFields m (f :<> fs) where
+  type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
 --  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> RunFieldsType m fs
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
@@ -258,11 +261,30 @@ instance forall f fs m.
 
 instance forall ks t m.
          ( BuildFieldResolver m (Field ks t)
+         , MonadThrow m
+         , MonadIO m
          ) => RunFields m (Field ks t) where
+  type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
   runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
     let NamedFieldExecutor k mValue = buildFieldResolver @m @(Field ks t) lh selection
     in case name == k of
-      False -> queryError ("Unexpected Selection value. Is the query normalized?: " <> show name)
+      False -> undefined
+      True -> do
+        value <- mValue
+        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+        pure (GValue.ObjectField name' value)
+  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+
+instance forall m a b.
+         ( BuildFieldResolver m (a :> b)
+         , MonadThrow m
+         , MonadIO m
+         ) => RunFields m (a :> b) where
+  type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
+  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
+    let NamedFieldExecutor k mValue = buildFieldResolver @m @(a :> b) lh selection
+    in case name == k of
+      False -> undefined
       True -> do
         value <- mValue
         let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
