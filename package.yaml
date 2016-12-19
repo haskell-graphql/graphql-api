@@ -51,3 +51,11 @@ tests:
     source-dirs: tests
     dependencies:
       - doctest
+
+benchmarks:
+  criterion:
+    main: Main.hs
+    source-dirs: benchmarks
+    dependencies:
+      - criterion
+      - graphql-api
