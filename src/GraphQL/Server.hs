@@ -273,7 +273,7 @@ instance forall ks t m.
   runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
     let NamedFieldExecutor k mValue = buildFieldResolver @m @(Field ks t) lh selection
     in case name == k of
-      False -> undefined
+      False -> queryError ("Query for undefined selection:" <> show selection)
       True -> do
         value <- mValue
         let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
@@ -289,7 +289,7 @@ instance forall m a b.
   runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
     let NamedFieldExecutor k mValue = buildFieldResolver @m @(a :> b) lh selection
     in case name == k of
-      False -> undefined
+      False -> queryError ("Query for undefined selection:" <> show selection)
       True -> do
         value <- mValue
         let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
