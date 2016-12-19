@@ -1,4 +1,4 @@
-module GraphQL.Validation
+module GraphQL.Internal.Validation
   ( ValidationError(..)
   , ValidDocument
   , validate

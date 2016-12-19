@@ -7,8 +7,8 @@ import qualified Data.GraphQL.AST as AST
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import Data.GraphQL.Parser (document)
 
-import GraphQL.TypedSchema
-import GraphQL.TypedApi
+import GraphQL.API
+import GraphQL.Server
 import GraphQL.Value (Value)
 
 type O1 = Object "O1" '[] '[Field "o1" Text]

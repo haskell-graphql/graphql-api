@@ -7,7 +7,7 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import qualified Data.GraphQL.AST as AST
-import GraphQL.Validation (ValidationError(..), getErrors)
+import GraphQL.Internal.Validation (ValidationError(..), getErrors)
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do

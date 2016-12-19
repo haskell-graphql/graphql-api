@@ -10,7 +10,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
-module GraphQL.TypedApi
+module GraphQL.Server
   ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
@@ -33,8 +33,8 @@ import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
 import qualified Data.GraphQL.AST as AST
-import GraphQL.TypedSchema
-import GraphQL.Input (CanonicalQuery)
+import GraphQL.API
+import GraphQL.Internal.Input (CanonicalQuery)
 
 import Control.Monad.Catch (MonadThrow, throwM, Exception)
 
