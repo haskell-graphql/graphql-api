@@ -10,8 +10,8 @@ module Introduction where
 
 import Protolude
 
-import GraphQL.TypedSchema (Object, Field, Argument, (:>))
-import GraphQL.TypedApi (Handler, (:<>)(..))
+import GraphQL.API (Object, Field, Argument, (:>))
+import GraphQL.Server (Handler, (:<>)(..))
 ```
 
 The core idea for this library is that we define a composite type that
@@ -48,7 +48,7 @@ the monad to run in (`IO` in this case) and the actual API definition
 
 ```haskell
 handler :: Handler IO HelloWorld
-handler = pure $ (\greeting -> pure (greeting <> " to me")) :<> ()
+handler = pure (\greeting -> pure (greeting <> " to me"))
 ```
 
 The implementation looks slightly weird, but it's weird for good
@@ -61,6 +61,3 @@ like a database connection.
 actions** when the field hasn't been requested: Each handler is a
 separate monadic action so we only perform the side effects for fields
 present in the query.
-* Finally, we have to terminate each handler with `:<> ()`. This is an
-implementation artifact which we'd prefer to avoid but can not at the
-moment.

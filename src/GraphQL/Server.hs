@@ -181,12 +181,16 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- name doesn't match.
 data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
 
+-- | Derive the handler type from the Field/Argument type in a closed
+-- type family: We don't want anyone else to extend this ever.
+type family FieldHandler m (a :: Type) :: Type where
+  FieldHandler m (Field ks t) = Handler m t
+  FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
+
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
-  type FieldHandler m a :: Type
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
-  type FieldHandler m (Field ks t) = Handler m t
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
@@ -196,7 +200,6 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
-  type FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
@@ -207,22 +210,30 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
--- TODO we can probably use closed type families for RunFieldsType and
--- FieldHandler for better error reporting in case the user uses some
--- unexpected type.
+-- We only allow Field and Argument :> Field combinations:
+type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
+  RunFieldsType m '[Field ks t] = Field ks t
+  RunFieldsType m '[a :> b] = a :> b
+  RunFieldsType m ((Field ks t) ': rest) = Field ks t :<> RunFieldsType m rest
+  RunFieldsType m ((a :> b) ': rest) = (a :> b) :<> RunFieldsType m rest
+  RunFieldsType m a = TypeLits.TypeError (
+    'TypeLits.Text "All field entries in an Object must be Field or Argument :> Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+
 
 class RunFields m a where
-  type RunFieldsType m a :: Type
-  -- Runfield is run on a single QueryTerm so it can only ever return
-  -- one (Text, Value)
-  runFields :: RunFieldsType m a -> AST.Selection -> m GValue.ObjectField
+  type RunFieldsHandler m a :: Type
+  -- runFields is run on a single QueryTerm so it can only ever return
+  -- one ObjectField.
+  runFields :: RunFieldsHandler m a -> AST.Selection -> m GValue.ObjectField
 
 
 instance forall f fs m.
          ( BuildFieldResolver m f
          , RunFields m fs
-         ) => RunFields m (f:fs) where
-  type RunFieldsType m (f:fs) = (FieldHandler m f) :<> RunFieldsType m fs
+         , MonadThrow m
+         , MonadIO m
+         ) => RunFields m (f :<> fs) where
+  type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
@@ -247,24 +258,52 @@ instance forall f fs m.
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
-instance forall m. MonadThrow m => RunFields m '[] where
-  type RunFieldsType m '[] = ()
-  runFields _ selection = queryError ("Query for undefined selection:" <> show selection)
+instance forall ks t m.
+         ( BuildFieldResolver m (Field ks t)
+         , MonadThrow m
+         , MonadIO m
+         ) => RunFields m (Field ks t) where
+  type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
+  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
+    let NamedFieldExecutor k mValue = buildFieldResolver @m @(Field ks t) lh selection
+    in case name == k of
+      False -> queryError ("Query for undefined selection:" <> show selection)
+      True -> do
+        value <- mValue
+        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+        pure (GValue.ObjectField name' value)
+  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+
+instance forall m a b.
+         ( BuildFieldResolver m (a :> b)
+         , MonadThrow m
+         , MonadIO m
+         ) => RunFields m (a :> b) where
+  type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
+  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
+    let NamedFieldExecutor k mValue = buildFieldResolver @m @(a :> b) lh selection
+    in case name == k of
+      False -> queryError ("Query for undefined selection:" <> show selection)
+      True -> do
+        value <- mValue
+        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+        pure (GValue.ObjectField name' value)
+  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
 instance forall typeName interfaces fields m.
-         ( RunFields m fields
+         ( RunFields m (RunFieldsType m fields)
          , MonadThrow m
          , MonadIO m
          ) => HasGraph m (Object typeName interfaces fields) where
-  type Handler m (Object typeName interfaces fields) = m (RunFieldsType m fields)
+  type Handler m (Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- mHandler
     -- We're evaluating an Object so we're collecting ObjectFields from
     -- runFields and build a GValue.Map with them.
-    r <- forM selectionSet $ runFields @m @fields handler
+    r <- forM selectionSet $ runFields @m @(RunFieldsType m fields) handler
     case GValue.makeObject r of
       Nothing -> queryError $ "Duplicate fields in set: " <> show r
       Just object -> pure $ GValue.ValueObject object
@@ -273,22 +312,27 @@ instance forall typeName interfaces fields m.
 -- | Closed type family to enforce the invariant that Union types
 -- contain only Objects.
 type family RunUnionType m (a :: [Type]) :: Type where
-  RunUnionType m (Object typeName interfaces fields:rest) = Handler m (Object typeName interfaces fields) :<|> RunUnionType m rest
-  RunUnionType m '[] = ()
+  RunUnionType m '[Object typeName interfaces fields] = Object typeName interfaces fields
+  RunUnionType m (Object typeName interfaces fields:rest) = Object typeName interfaces fields :<|> RunUnionType m rest
   RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
+type family RunUnionHandlerType m (a :: Type) :: Type where
+  RunUnionHandlerType m (o :<|> rest) =
+    Handler m o :<|> RunUnionHandlerType m rest
+  RunUnionHandlerType m o =
+    Handler m o
 
 -- Type class to execute union type queries.
 class RunUnion m a where
-  runUnion :: RunUnionType m a -> AST.Selection -> m GValue.Object
+  runUnion :: RunUnionHandlerType m a -> AST.Selection -> m GValue.Object
 
 instance forall m typeName interfaces fields rest.
          ( RunUnion m rest
          , MonadIO m
          , MonadThrow m
-         , RunFields m fields
+         , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
-         ) => RunUnion m (Object typeName interfaces fields:rest) where
+         ) => RunUnion m ((Object typeName interfaces fields) :<|> rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
@@ -301,15 +345,31 @@ instance forall m typeName interfaces fields rest.
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
-instance forall m. MonadThrow m => RunUnion m '[] where
-  runUnion _ selection = queryError ("Union type could not be resolved:" <> show selection)
+instance forall m typeName interfaces fields.
+         ( MonadIO m
+         , MonadThrow m
+         , RunFields m (RunFieldsType m fields)
+         , KnownSymbol typeName
+         ) => RunUnion m ((Object typeName interfaces fields)) where
+  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
+    | typeName == queryTypeName = do
+        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
+        -- TODO: See if we can prevent this from happening at compile time.
+        case GValue.toObject result of
+          Nothing -> panic $ "Expected object as result of union query: " <> show result
+          Just object -> pure object
+    | otherwise = queryError ("Union type could not be resolved:" <> show fragment)
+    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+  runUnion _ _ =
+    queryError "Non-InlineFragment used for a union type query."
+
 
 instance forall m ks ru.
          ( MonadThrow m
          , MonadIO m
-         , RunUnion m ru
+         , RunUnion m (RunUnionType m ru)
          ) => HasGraph m (Union ks ru) where
-  type Handler m (Union ks ru) = RunUnionType m ru
+  type Handler m (Union ks ru) = RunUnionHandlerType m (RunUnionType m ru)
   -- TODO: check sanity of query before executing it. E.g. we can't
   -- have the same field name in two different fragment branches
   -- (needs to take aliases into account).
@@ -319,5 +379,5 @@ instance forall m ks ru.
   buildResolver handler selection = do
     -- GraphQL invariant is that all items in a Union must be objects
     -- which means 1) they have fields 2) They are ValueMap
-    values <- map GValue.unionObjects (traverse (runUnion @m @ru handler) selection)
+    values <- map GValue.unionObjects (traverse (runUnion @m @(RunUnionType m ru) handler) selection)
     maybe (panic $ "Duplicate fields in values: " <> show values) (pure . GValue.ValueObject) values

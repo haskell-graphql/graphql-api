@@ -24,7 +24,6 @@ import Data.Aeson (encode)
 import Data.GraphQL.Parser (document)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
-
 -- Test a custom error monad
 -- TODO: I didn't realize that MonadThrow throws in the base monad (IO).
 type TMonad = ExceptT Text IO
@@ -32,7 +31,7 @@ type T = Object "T" '[] '[Field "z" Int32, Argument "t" Int32 :> Field "t" Int32
 
 tHandler :: Handler TMonad T
 tHandler =
-  pure $ (pure 10) :<> (\tArg -> pure tArg) :<> ()
+  pure $ (pure 10) :<> (\tArg -> pure tArg)
 
 
 tQuery :: AST.SelectionSet
