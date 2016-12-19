@@ -221,10 +221,6 @@ type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
     'TypeLits.Text "All field entries in an Object must be Field or Argument :> Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
 
---type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
---  RunFieldsHandler m (a :<> fs) = FieldHandler m a :<> RunFieldsHandler m fs
---  RunFieldsHandler m f = FieldHandler m f
-
 class RunFields m a where
   type RunFieldsHandler m a :: Type
   -- Runfield is run on a single QueryTerm so it can only ever return
