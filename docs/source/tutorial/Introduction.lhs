@@ -55,11 +55,12 @@ The implementation looks slightly weird, but it's weird for good
 reasons. In order:
 
 * The first `pure` allows us to run actions in the base monad (`IO`
-here) before returning anything. This is useful to allocate a resource like a database connection.
+here) before returning anything. This is useful to allocate a resource
+like a database connection.
 * The `pure` in the function call allows us to **avoid running
-actions** when the field hasn't been requested. We only run the action
-if the query specifies the field. Note that lazy evaluation would not
-work because of the monadic nature of handlers.
+actions** when the field hasn't been requested: Each handler is a
+separate monadic action so we only perform the side effects for fields
+present in the query.
 * Finally, we have to terminate each handler with `:<> ()`. This is an
 implementation artifact which we'd prefer to avoid but can not at the
 moment.
