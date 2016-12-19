@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeInType #-}
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilyDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
 module GraphQL.Server
