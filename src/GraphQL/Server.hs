@@ -209,9 +209,7 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
--- TODO: We can do better than using `a` by matching Field and
--- Argument :> Field combos and throwing errors when people use
--- non-field types.
+-- We only allow Field and Argument :> Field combinations:
 type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
   RunFieldsType m '[Field ks t] = Field ks t
   RunFieldsType m '[a :> b] = a :> b
