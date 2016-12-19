@@ -67,29 +67,12 @@ data ValidationError
   = DuplicateOperation AST.Name
   deriving (Eq, Show)
 
--- XXX: Would Data.Validation make this better / simpler?
-
--- XXX: Beginning to think that we might as well have Arbitrary instances for
--- the AST and determine properties.
 
 getErrors :: AST.Document -> [ValidationError]
 getErrors doc = duplicateOperations
   where
     duplicateOperations = DuplicateOperation <$> findDuplicates nodeNames
-    nodeNames = [ getNodeName . getNode $ op | AST.DefinitionOperation op <- getDefinitions doc ]
-
-
-getDefinitions :: AST.Document -> [AST.Definition]
-getDefinitions (AST.Document defns) = defns
-
-getNode :: AST.OperationDefinition -> AST.Node
-getNode (AST.Query n) = n
-getNode (AST.Mutation n) = n
-
--- XXX: Lots of things have names. Maybe we should define a typeclass for
--- getting the name?
-getNodeName :: AST.Node -> AST.Name
-getNodeName (AST.Node name _ _ _) = name
+    nodeNames = [ AST.getNodeName . AST.getNode $ op | AST.DefinitionOperation op <- AST.getDefinitions doc ]
 
 
 -- | Return a list of all the elements with duplicates. The list of duplicates

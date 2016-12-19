@@ -107,7 +107,7 @@ benchmark criterion
   main-is: Main.hs
   hs-source-dirs:
       benchmarks
-  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
   ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5

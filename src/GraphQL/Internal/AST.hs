@@ -4,6 +4,7 @@ module GraphQL.Internal.AST
   , Definition(..)
   , OperationDefinition(..)
   , Node(..)
+  , getNodeName
   , VariableDefinition(..)
   , Variable(..)
   , SelectionSet
@@ -52,19 +53,24 @@ type Name = Text
 
 -- * Document
 
-newtype Document = Document [Definition] deriving (Eq,Show)
+newtype Document = Document { getDefinitions :: [Definition] } deriving (Eq,Show)
 
 data Definition = DefinitionOperation OperationDefinition
                 | DefinitionFragment  FragmentDefinition
                 | DefinitionType      TypeDefinition
                   deriving (Eq,Show)
 
-data OperationDefinition = Query    Node
-                         | Mutation Node
+data OperationDefinition = Query    { getNode :: Node }
+                         | Mutation { getNode :: Node }
                            deriving (Eq,Show)
 
 data Node = Node Name [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
+
+-- XXX: Lots of things have names. Maybe we should define a typeclass for
+-- getting the name?
+getNodeName :: Node -> Name
+getNodeName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
