@@ -24,6 +24,6 @@ filing issues & submitting PRs.
 
 ## References
 
-* [GraphQL Specification](http://facebook.github.io/graphql/)
+* [GraphQL Specification](http://facebook.github.io/graphql/) ([source](https://github.com/facebook/graphql))
 * [GraphQL tutorial](http://graphql.org/learn/)
 * [GraphQL AST in Haskell](http://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html)
