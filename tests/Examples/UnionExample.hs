@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 module Examples.UnionExample  where
 

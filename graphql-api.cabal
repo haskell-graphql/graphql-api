@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.14.1.
+-- This file has been generated from package.yaml by hpack version 0.15.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -22,7 +22,7 @@ source-repository head
 library
   hs-source-dirs:
       src
-  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
   ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
@@ -50,7 +50,7 @@ test-suite graphql-api-doctests
   main-is: Doctests.hs
   hs-source-dirs:
       tests
-  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
   ghc-options: -Wall -fno-warn-redundant-constraints -threaded
   build-depends:
       base >= 4.9 && < 5
@@ -73,7 +73,7 @@ test-suite graphql-api-tests
   main-is: Spec.hs
   hs-source-dirs:
       tests
-  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
   ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5

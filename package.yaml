@@ -13,6 +13,7 @@ default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings
   - RecordWildCards
+  - TypeApplications
 
 dependencies:
   - base >= 4.9 && < 5

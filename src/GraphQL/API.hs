@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeFamilyDependencies #-}
 {-# LANGUAGE GADTs, AllowAmbiguousTypes, UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, RankNTypes #-}
-{-# LANGUAGE FlexibleInstances, TypeOperators, TypeApplications, TypeInType #-}
+{-# LANGUAGE FlexibleInstances, TypeOperators, TypeInType #-}
 {-# LANGUAGE OverloadedLabels, MagicHash #-}
 
 -- | Type-level definitions for a GraphQL schema.

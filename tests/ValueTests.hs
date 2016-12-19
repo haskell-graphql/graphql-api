@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 module ValueTests (tests) where
 
 import Protolude
