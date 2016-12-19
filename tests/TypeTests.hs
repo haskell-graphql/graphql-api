@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, DataKinds, TypeOperators #-}
+{-# LANGUAGE DataKinds, TypeOperators #-}
 module TypeTests (tests) where
 
 import Protolude hiding (Enum)

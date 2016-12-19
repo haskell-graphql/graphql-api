@@ -12,6 +12,7 @@ main = doctest $ ["-isrc"] <> options <> files
     extensions = [ "NoImplicitPrelude"
                  , "OverloadedStrings"
                  , "RecordWildCards"
+                 , "TypeApplications"
                  ]
     -- All of our source files.
     files = [ "src/" ]
