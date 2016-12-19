@@ -20,7 +20,7 @@ o1 :: Handler IO O1
 o1 = pure (pure "hello from O1")
 
 o2 :: Handler IO O2
-  o2 = pure (pure "hello from O2")
+o2 = pure (pure "hello from O2")
 
 tHandler :: Handler IO T
 tHandler = o1 :<|> o2

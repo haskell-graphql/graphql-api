@@ -213,8 +213,13 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
 -- Argument :> Field combos and throwing errors when people use
 -- non-field types.
 type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
-  RunFieldsType m '[a] = a
-  RunFieldsType m (a ': rest) = a :<> RunFieldsType m rest
+  RunFieldsType m '[Field ks t] = Field ks t
+  RunFieldsType m '[a :> b] = a :> b
+  RunFieldsType m ((Field ks t) ': rest) = Field ks t :<> RunFieldsType m rest
+  RunFieldsType m ((a :> b) ': rest) = (a :> b) :<> RunFieldsType m rest
+  RunFieldsType m a = TypeLits.TypeError (
+    'TypeLits.Text "All field entries in an Object must be Field or Argument :> Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+
 
 --type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
 --  RunFieldsHandler m (a :<> fs) = FieldHandler m a :<> RunFieldsHandler m fs
