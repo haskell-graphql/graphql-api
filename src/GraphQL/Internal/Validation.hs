@@ -7,7 +7,7 @@ module GraphQL.Internal.Validation
 
 import Protolude
 
-import qualified Data.GraphQL.AST as AST
+import qualified GraphQL.Internal.AST as AST
 
 {-
 enum DogCommand { SIT, DOWN, HEEL }

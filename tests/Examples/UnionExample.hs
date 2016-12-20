@@ -2,9 +2,9 @@
 module Examples.UnionExample  where
 
 import Protolude hiding (Enum)
-import qualified Data.GraphQL.AST as AST
+import qualified GraphQL.Internal.AST as AST
 import Data.Attoparsec.Text (parseOnly, endOfInput)
-import Data.GraphQL.Parser (document)
+import GraphQL.Internal.Parser (document)
 
 import GraphQL.API
 import GraphQL.Server

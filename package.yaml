@@ -4,6 +4,7 @@ synopsis: Sketch of GraphQL stuff
 description: Please see README.md
 maintainer: Jonathan M. Lange <jml@mumak.net>
 license: Apache
+license-file: LICENSE.Apache-2.0
 github: jml/graphql-api
 category: Web
 
@@ -27,7 +28,7 @@ library:
   dependencies:
     - aeson
     - containers
-    - graphql
+    - scientific
     - QuickCheck
     - text
 
@@ -38,7 +39,6 @@ tests:
     dependencies:
       - aeson
       - containers
-      - graphql
       - graphql-api
       - hspec
       - tasty

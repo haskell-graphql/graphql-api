@@ -31,7 +31,7 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
-import qualified Data.GraphQL.AST as AST
+import qualified GraphQL.Internal.AST as AST
 import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
 

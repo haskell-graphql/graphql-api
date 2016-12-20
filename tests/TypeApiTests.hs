@@ -18,10 +18,10 @@ import GraphQL.Server
   , buildResolver
   , (:<>)(..)
   )
-import qualified Data.GraphQL.AST as AST
+import qualified GraphQL.Internal.AST as AST
 import Data.Aeson (encode)
 
-import Data.GraphQL.Parser (document)
+import GraphQL.Internal.Parser (document)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 -- Test a custom error monad
