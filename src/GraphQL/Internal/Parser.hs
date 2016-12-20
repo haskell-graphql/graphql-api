@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
 module GraphQL.Internal.Parser
   ( document
   , name
@@ -7,10 +5,6 @@ module GraphQL.Internal.Parser
 
 import Protolude hiding (Type, takeWhile)
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative ((<$>), (<*>), (*>), (<*), (<$), pure)
-import Data.Monoid (Monoid, mempty)
-#endif
 import Control.Applicative ((<|>), empty, many, optional)
 import Control.Monad (when)
 import Data.Char (isDigit, isSpace)

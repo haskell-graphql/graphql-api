@@ -1,15 +1,8 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
 module GraphQL.Internal.Encoder
   ( document
   ) where
 
 import Protolude hiding (Type, intercalate)
-
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative ((<$>))
-import Data.Monoid (Monoid, mconcat, mempty)
-#endif
 
 import Data.Text (Text, cons, intercalate, pack, snoc)
 
