@@ -1,5 +1,6 @@
 module GraphQL.Internal.Encoder
   ( document
+  , value
   ) where
 
 import Protolude hiding (Type, intercalate)

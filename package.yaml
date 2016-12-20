@@ -28,6 +28,7 @@ library:
   dependencies:
     - aeson
     - containers
+    - scientific
     - QuickCheck
     - text
 

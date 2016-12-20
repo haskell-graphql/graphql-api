@@ -1,6 +1,7 @@
 module GraphQL.Internal.Parser
   ( document
   , name
+  , value
   ) where
 
 import Protolude hiding (Type, takeWhile)
@@ -9,22 +10,22 @@ import Control.Applicative ((<|>), empty, many, optional)
 import Control.Monad (when)
 import Data.Char (isDigit, isSpace)
 import Data.Foldable (traverse_)
+import Data.Scientific (floatingOrInteger)
 
-import Data.Text (Text, append)
+import Data.Text (Text, append, find)
 import Data.Attoparsec.Text
   ( Parser
   , (<?>)
   , anyChar
-  , decimal
-  , double
   , endOfLine
   , inClass
+  , match
   , many1
   , manyTill
   , option
   , peekChar
+  , scientific
   , sepBy1
-  , signed
   , takeWhile
   , takeWhile1
   )
@@ -150,9 +151,7 @@ typeCondition = namedType
 -- explicit types use the `typedValue` parser.
 value :: Parser AST.Value
 value = AST.ValueVariable <$> variable
-  -- TODO: Handle maxBound, Int32 in spec.
-  <|> AST.ValueInt      <$> tok (signed decimal)
-  <|> AST.ValueFloat    <$> tok (signed double)
+  <|> number
   <|> AST.ValueBoolean  <$> booleanValue
   <|> AST.ValueString   <$> stringValue
   -- `true` and `false` have been tried before
@@ -160,6 +159,15 @@ value = AST.ValueVariable <$> variable
   <|> AST.ValueList     <$> listValue
   <|> AST.ValueObject   <$> objectValue
   <?> "value error!"
+  where
+    number =  do
+      (numText, num) <- match (tok scientific)
+      case ((Data.Text.find (== '.') numText), floatingOrInteger num) of
+        (Just _, Left r) -> pure (AST.ValueFloat r)
+        (Just _, Right i) -> pure (AST.ValueFloat (fromIntegral i))
+        -- TODO: Handle maxBound, Int32 in spec.
+        (Nothing, Left r) -> pure (AST.ValueInt (floor r))
+        (Nothing, Right i) -> pure (AST.ValueInt i)
 
 booleanValue :: Parser Bool
 booleanValue = True  <$ tok "true"
