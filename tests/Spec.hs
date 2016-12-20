@@ -6,6 +6,7 @@ import Protolude
 
 import Test.Tasty (defaultMain, testGroup)
 
+import qualified ASTTests
 import qualified TypeApiTests
 import qualified TypeTests
 import qualified ValidationTests
@@ -20,7 +21,8 @@ main = do
   defaultMain . testGroup "GraphQL API" $ t
   where
     tests =
-      [ TypeApiTests.tests
+      [ ASTTests.tests
+      , TypeApiTests.tests
       , TypeTests.tests
       , ValidationTests.tests
       , ValueTests.tests

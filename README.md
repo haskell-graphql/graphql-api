@@ -27,3 +27,13 @@ filing issues & submitting PRs.
 * [GraphQL Specification](http://facebook.github.io/graphql/) ([source](https://github.com/facebook/graphql))
 * [GraphQL tutorial](http://graphql.org/learn/)
 * [GraphQL AST in Haskell](http://hackage.haskell.org/package/graphql-0.3/docs/Data-GraphQL-AST.html)
+
+## Copyright
+
+All files Copyright (c) 2016 Thomas E. Hunger & Jonathan M. Lange, except:
+
+* src/GraphQL/Internal/AST.hs
+* src/GraphQL/Internal/Encoder.hs
+* src/GraphQL/Internal/Parser.hs
+
+for which see LICENSE.BSD3 in this repository.
