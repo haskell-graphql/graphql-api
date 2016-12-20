@@ -93,12 +93,12 @@ data FragmentSpread = FragmentSpread Name [Directive]
                       deriving (Eq,Show)
 
 data InlineFragment =
-    InlineFragment TypeCondition [Directive] SelectionSet
-    deriving (Eq,Show)
+  InlineFragment TypeCondition [Directive] SelectionSet
+  deriving (Eq,Show)
 
 data FragmentDefinition =
-    FragmentDefinition Name TypeCondition [Directive] SelectionSet
-    deriving (Eq,Show)
+  FragmentDefinition Name TypeCondition [Directive] SelectionSet
+  deriving (Eq,Show)
 
 type TypeCondition = NamedType
 
