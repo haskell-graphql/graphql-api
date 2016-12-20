@@ -28,7 +28,6 @@ library:
   dependencies:
     - aeson
     - containers
-    - graphql
     - QuickCheck
     - text
 
@@ -39,7 +38,6 @@ tests:
     dependencies:
       - aeson
       - containers
-      - graphql
       - graphql-api
       - hspec
       - tasty

@@ -32,7 +32,7 @@ import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import Data.Attoparsec.Text (parseOnly)
 import qualified Data.Map as Map
-import qualified Data.GraphQL.Parser as Parser
+import qualified GraphQL.Internal.Parser as Parser
 import Test.QuickCheck (Arbitrary(..), elements, oneof, listOf)
 
 -- | A name in GraphQL.

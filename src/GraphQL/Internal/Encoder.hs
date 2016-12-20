@@ -12,7 +12,7 @@ import Data.Monoid ((<>))
 
 import Data.Text (Text, cons, intercalate, pack, snoc)
 
-import Data.GraphQL.AST
+import GraphQL.Internal.AST
 
 -- * Document
 

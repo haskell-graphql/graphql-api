@@ -32,7 +32,7 @@ import Data.Attoparsec.Text
   , takeWhile1
   )
 
-import Data.GraphQL.AST
+import GraphQL.Internal.AST
 
 -- * Name
 

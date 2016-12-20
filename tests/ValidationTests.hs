@@ -6,7 +6,7 @@ import Protolude
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import qualified Data.GraphQL.AST as AST
+import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Validation (ValidationError(..), getErrors)
 
 tests :: IO TestTree

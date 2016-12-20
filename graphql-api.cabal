@@ -32,7 +32,6 @@ library
     , attoparsec
     , aeson
     , containers
-    , graphql
     , QuickCheck
     , text
   exposed-modules:
@@ -87,7 +86,6 @@ test-suite graphql-api-tests
     , attoparsec
     , aeson
     , containers
-    , graphql
     , graphql-api
     , hspec
     , tasty
