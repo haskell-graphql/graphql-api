@@ -1,6 +1,6 @@
 module GraphQL.Internal.AST where
 
-import Prelude
+import Protolude hiding (Type)
 
 import Data.Int (Int32)
 import Data.Text (Text)

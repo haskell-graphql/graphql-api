@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module GraphQL.Internal.Parser where
 
-import Prelude hiding (takeWhile)
+import Protolude hiding (Type, takeWhile)
 
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>), (<*>), (*>), (<*), (<$), pure)
