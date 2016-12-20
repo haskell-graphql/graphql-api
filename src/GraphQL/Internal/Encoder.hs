@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
-module GraphQL.Internal.Encoder where
+module GraphQL.Internal.Encoder
+  ( document
+  ) where
 
 import Protolude hiding (Type, intercalate)
 
@@ -11,204 +13,204 @@ import Data.Monoid (Monoid, mconcat, mempty)
 
 import Data.Text (Text, cons, intercalate, pack, snoc)
 
-import GraphQL.Internal.AST
+import qualified GraphQL.Internal.AST as AST
 
 -- * Document
 
 -- TODO: Use query shorthand
-document :: Document -> Text
-document (Document defs) = (`snoc` '\n') . mconcat $ definition <$> defs
+document :: AST.Document -> Text
+document (AST.Document defs) = (`snoc` '\n') . mconcat $ definition <$> defs
 
-definition :: Definition -> Text
-definition (DefinitionOperation x) = operationDefinition x
-definition (DefinitionFragment  x) = fragmentDefinition x
-definition (DefinitionType      x) = typeDefinition x
+definition :: AST.Definition -> Text
+definition (AST.DefinitionOperation x) = operationDefinition x
+definition (AST.DefinitionFragment  x) = fragmentDefinition x
+definition (AST.DefinitionType      x) = typeDefinition x
 
-operationDefinition :: OperationDefinition -> Text
-operationDefinition (Query    n) = "query "    <> node n
-operationDefinition (Mutation n) = "mutation " <> node n
+operationDefinition :: AST.OperationDefinition -> Text
+operationDefinition (AST.Query    n) = "query "    <> node n
+operationDefinition (AST.Mutation n) = "mutation " <> node n
 
-node :: Node -> Text
-node (Node name vds ds ss) =
+node :: AST.Node -> Text
+node (AST.Node name vds ds ss) =
        name
     <> optempty variableDefinitions vds
     <> optempty directives ds
     <> selectionSet ss
 
-variableDefinitions :: [VariableDefinition] -> Text
+variableDefinitions :: [AST.VariableDefinition] -> Text
 variableDefinitions = parensCommas variableDefinition
 
-variableDefinition :: VariableDefinition -> Text
-variableDefinition (VariableDefinition var ty dv) =
+variableDefinition :: AST.VariableDefinition -> Text
+variableDefinition (AST.VariableDefinition var ty dv) =
     variable var <> ":" <> type_ ty <> maybe mempty defaultValue dv
 
-defaultValue :: DefaultValue -> Text
+defaultValue :: AST.DefaultValue -> Text
 defaultValue val = "=" <> value val
 
-variable :: Variable -> Text
-variable (Variable name) = "$" <> name
+variable :: AST.Variable -> Text
+variable (AST.Variable name) = "$" <> name
 
-selectionSet :: SelectionSet -> Text
+selectionSet :: AST.SelectionSet -> Text
 selectionSet = bracesCommas selection
 
-selection :: Selection -> Text
-selection (SelectionField          x) = field x
-selection (SelectionInlineFragment x) = inlineFragment x
-selection (SelectionFragmentSpread x) = fragmentSpread x
+selection :: AST.Selection -> Text
+selection (AST.SelectionField          x) = field x
+selection (AST.SelectionInlineFragment x) = inlineFragment x
+selection (AST.SelectionFragmentSpread x) = fragmentSpread x
 
-field :: Field -> Text
-field (Field alias name args ds ss) =
+field :: AST.Field -> Text
+field (AST.Field alias name args ds ss) =
        optempty (`snoc` ':') alias
     <> name
     <> optempty arguments args
     <> optempty directives ds
     <> optempty selectionSet ss
 
-arguments :: [Argument] -> Text
+arguments :: [AST.Argument] -> Text
 arguments = parensCommas argument
 
-argument :: Argument -> Text
-argument (Argument name v) = name <> ":" <> value v
+argument :: AST.Argument -> Text
+argument (AST.Argument name v) = name <> ":" <> value v
 
 -- * Fragments
 
-fragmentSpread :: FragmentSpread -> Text
-fragmentSpread (FragmentSpread name ds) =
+fragmentSpread :: AST.FragmentSpread -> Text
+fragmentSpread (AST.FragmentSpread name ds) =
     "..." <> name <> optempty directives ds
 
-inlineFragment :: InlineFragment -> Text
-inlineFragment (InlineFragment (NamedType tc) ds ss) =
+inlineFragment :: AST.InlineFragment -> Text
+inlineFragment (AST.InlineFragment (AST.NamedType tc) ds ss) =
     "... on " <> tc
               <> optempty directives ds
               <> optempty selectionSet ss
 
-fragmentDefinition :: FragmentDefinition -> Text
-fragmentDefinition (FragmentDefinition name (NamedType tc) ds ss) =
+fragmentDefinition :: AST.FragmentDefinition -> Text
+fragmentDefinition (AST.FragmentDefinition name (AST.NamedType tc) ds ss) =
     "fragment " <> name <> " on " <> tc
                 <> optempty directives ds
                 <> selectionSet ss
 
 -- * Values
 
-value :: Value -> Text
-value (ValueVariable x) = variable x
+value :: AST.Value -> Text
+value (AST.ValueVariable x) = variable x
 -- TODO: This will be replaced with `decimal` Buidler
-value (ValueInt      x) = pack $ show x
+value (AST.ValueInt      x) = pack $ show x
 -- TODO: This will be replaced with `decimal` Buidler
-value (ValueFloat    x) = pack $ show x
-value (ValueBoolean  x) = booleanValue x
-value (ValueString   x) = stringValue x
-value (ValueEnum     x) = x
-value (ValueList     x) = listValue x
-value (ValueObject   x) = objectValue x
+value (AST.ValueFloat    x) = pack $ show x
+value (AST.ValueBoolean  x) = booleanValue x
+value (AST.ValueString   x) = stringValue x
+value (AST.ValueEnum     x) = x
+value (AST.ValueList     x) = listValue x
+value (AST.ValueObject   x) = objectValue x
 
 booleanValue :: Bool -> Text
 booleanValue True  = "true"
 booleanValue False = "false"
 
 -- TODO: Escape characters
-stringValue :: StringValue -> Text
-stringValue (StringValue v) = quotes v
+stringValue :: AST.StringValue -> Text
+stringValue (AST.StringValue v) = quotes v
 
-listValue :: ListValue -> Text
-listValue (ListValue vs) = bracketsCommas value vs
+listValue :: AST.ListValue -> Text
+listValue (AST.ListValue vs) = bracketsCommas value vs
 
-objectValue :: ObjectValue -> Text
-objectValue (ObjectValue ofs) = bracesCommas objectField ofs
+objectValue :: AST.ObjectValue -> Text
+objectValue (AST.ObjectValue ofs) = bracesCommas objectField ofs
 
-objectField :: ObjectField -> Text
-objectField (ObjectField name v) = name <> ":" <> value v
+objectField :: AST.ObjectField -> Text
+objectField (AST.ObjectField name v) = name <> ":" <> value v
 
 -- * Directives
 
-directives :: [Directive] -> Text
+directives :: [AST.Directive] -> Text
 directives = spaces directive
 
-directive :: Directive -> Text
-directive (Directive name args) = "@" <> name <> optempty arguments args
+directive :: AST.Directive -> Text
+directive (AST.Directive name args) = "@" <> name <> optempty arguments args
 
 -- * Type Reference
 
-type_ :: Type -> Text
-type_ (TypeNamed (NamedType x)) = x
-type_ (TypeList x) = listType x
-type_ (TypeNonNull x) = nonNullType x
+type_ :: AST.Type -> Text
+type_ (AST.TypeNamed (AST.NamedType x)) = x
+type_ (AST.TypeList x) = listType x
+type_ (AST.TypeNonNull x) = nonNullType x
 
-namedType :: NamedType -> Text
-namedType (NamedType name) = name
+namedType :: AST.NamedType -> Text
+namedType (AST.NamedType name) = name
 
-listType :: ListType -> Text
-listType (ListType ty) = brackets (type_ ty)
+listType :: AST.ListType -> Text
+listType (AST.ListType ty) = brackets (type_ ty)
 
-nonNullType :: NonNullType -> Text
-nonNullType (NonNullTypeNamed (NamedType x)) = x <> "!"
-nonNullType (NonNullTypeList  x) = listType x <> "!"
+nonNullType :: AST.NonNullType -> Text
+nonNullType (AST.NonNullTypeNamed (AST.NamedType x)) = x <> "!"
+nonNullType (AST.NonNullTypeList  x) = listType x <> "!"
 
-typeDefinition :: TypeDefinition -> Text
-typeDefinition (TypeDefinitionObject        x) = objectTypeDefinition x
-typeDefinition (TypeDefinitionInterface     x) = interfaceTypeDefinition x
-typeDefinition (TypeDefinitionUnion         x) = unionTypeDefinition x
-typeDefinition (TypeDefinitionScalar        x) = scalarTypeDefinition x
-typeDefinition (TypeDefinitionEnum          x) = enumTypeDefinition x
-typeDefinition (TypeDefinitionInputObject   x) = inputObjectTypeDefinition x
-typeDefinition (TypeDefinitionTypeExtension x) = typeExtensionDefinition x
+typeDefinition :: AST.TypeDefinition -> Text
+typeDefinition (AST.TypeDefinitionObject        x) = objectTypeDefinition x
+typeDefinition (AST.TypeDefinitionInterface     x) = interfaceTypeDefinition x
+typeDefinition (AST.TypeDefinitionUnion         x) = unionTypeDefinition x
+typeDefinition (AST.TypeDefinitionScalar        x) = scalarTypeDefinition x
+typeDefinition (AST.TypeDefinitionEnum          x) = enumTypeDefinition x
+typeDefinition (AST.TypeDefinitionInputObject   x) = inputObjectTypeDefinition x
+typeDefinition (AST.TypeDefinitionTypeExtension x) = typeExtensionDefinition x
 
-objectTypeDefinition :: ObjectTypeDefinition -> Text
-objectTypeDefinition (ObjectTypeDefinition name ifaces fds) =
+objectTypeDefinition :: AST.ObjectTypeDefinition -> Text
+objectTypeDefinition (AST.ObjectTypeDefinition name ifaces fds) =
     "type " <> name
             <> optempty (spaced . interfaces) ifaces
             <> optempty fieldDefinitions fds
 
-interfaces :: Interfaces -> Text
+interfaces :: AST.Interfaces -> Text
 interfaces = ("implements " <>) . spaces namedType
 
-fieldDefinitions :: [FieldDefinition] -> Text
+fieldDefinitions :: [AST.FieldDefinition] -> Text
 fieldDefinitions = bracesCommas fieldDefinition
 
-fieldDefinition :: FieldDefinition -> Text
-fieldDefinition (FieldDefinition name args ty) =
+fieldDefinition :: AST.FieldDefinition -> Text
+fieldDefinition (AST.FieldDefinition name args ty) =
     name <> optempty argumentsDefinition args
          <> ":"
          <> type_ ty
 
-argumentsDefinition :: ArgumentsDefinition -> Text
+argumentsDefinition :: AST.ArgumentsDefinition -> Text
 argumentsDefinition = parensCommas inputValueDefinition
 
-interfaceTypeDefinition :: InterfaceTypeDefinition -> Text
-interfaceTypeDefinition (InterfaceTypeDefinition name fds) =
+interfaceTypeDefinition :: AST.InterfaceTypeDefinition -> Text
+interfaceTypeDefinition (AST.InterfaceTypeDefinition name fds) =
     "interface " <> name <> fieldDefinitions fds
 
-unionTypeDefinition :: UnionTypeDefinition -> Text
-unionTypeDefinition (UnionTypeDefinition name ums) =
+unionTypeDefinition :: AST.UnionTypeDefinition -> Text
+unionTypeDefinition (AST.UnionTypeDefinition name ums) =
     "union " <> name <> "=" <> unionMembers ums
 
-unionMembers :: [NamedType] -> Text
+unionMembers :: [AST.NamedType] -> Text
 unionMembers = intercalate "|" . fmap namedType
 
-scalarTypeDefinition :: ScalarTypeDefinition -> Text
-scalarTypeDefinition (ScalarTypeDefinition name) = "scalar " <> name
+scalarTypeDefinition :: AST.ScalarTypeDefinition -> Text
+scalarTypeDefinition (AST.ScalarTypeDefinition name) = "scalar " <> name
 
-enumTypeDefinition :: EnumTypeDefinition -> Text
-enumTypeDefinition (EnumTypeDefinition name evds) =
+enumTypeDefinition :: AST.EnumTypeDefinition -> Text
+enumTypeDefinition (AST.EnumTypeDefinition name evds) =
     "enum " <> name
             <> bracesCommas enumValueDefinition evds
 
-enumValueDefinition :: EnumValueDefinition -> Text
-enumValueDefinition (EnumValueDefinition name) = name
+enumValueDefinition :: AST.EnumValueDefinition -> Text
+enumValueDefinition (AST.EnumValueDefinition name) = name
 
-inputObjectTypeDefinition :: InputObjectTypeDefinition -> Text
-inputObjectTypeDefinition (InputObjectTypeDefinition name ivds) =
+inputObjectTypeDefinition :: AST.InputObjectTypeDefinition -> Text
+inputObjectTypeDefinition (AST.InputObjectTypeDefinition name ivds) =
     "input " <> name <> inputValueDefinitions ivds
 
-inputValueDefinitions :: [InputValueDefinition] -> Text
+inputValueDefinitions :: [AST.InputValueDefinition] -> Text
 inputValueDefinitions = bracesCommas inputValueDefinition
 
-inputValueDefinition :: InputValueDefinition -> Text
-inputValueDefinition (InputValueDefinition name ty dv) =
+inputValueDefinition :: AST.InputValueDefinition -> Text
+inputValueDefinition (AST.InputValueDefinition name ty dv) =
     name <> ":" <> type_ ty <> maybe mempty defaultValue dv
 
-typeExtensionDefinition :: TypeExtensionDefinition -> Text
-typeExtensionDefinition (TypeExtensionDefinition otd) =
+typeExtensionDefinition :: AST.TypeExtensionDefinition -> Text
+typeExtensionDefinition (AST.TypeExtensionDefinition otd) =
     "extend " <> objectTypeDefinition otd
 
 -- * Internal

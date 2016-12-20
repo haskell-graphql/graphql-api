@@ -1,4 +1,45 @@
-module GraphQL.Internal.AST where
+module GraphQL.Internal.AST
+  ( Name
+  , Document(..)
+  , Definition(..)
+  , OperationDefinition(..)
+  , Node(..)
+  , VariableDefinition(..)
+  , Variable(..)
+  , SelectionSet
+  , Selection(..)
+  , Field(..)
+  , Alias
+  , Argument(..)
+  , FragmentSpread(..)
+  , InlineFragment(..)
+  , FragmentDefinition(..)
+  , TypeCondition
+  , Value(..)
+  , StringValue(..)
+  , ListValue(..)
+  , ObjectValue(..)
+  , ObjectField(..)
+  , DefaultValue
+  , Directive(..)
+  , Type(..)
+  , NamedType(..)
+  , ListType(..)
+  , NonNullType(..)
+  , TypeDefinition(..)
+  , ObjectTypeDefinition(..)
+  , Interfaces
+  , FieldDefinition(..)
+  , ArgumentsDefinition
+  , InputValueDefinition(..)
+  , InterfaceTypeDefinition(..)
+  , UnionTypeDefinition(..)
+  , ScalarTypeDefinition(..)
+  , EnumTypeDefinition(..)
+  , EnumValueDefinition(..)
+  , InputObjectTypeDefinition(..)
+  , TypeExtensionDefinition(..)
+  ) where
 
 import Protolude hiding (Type)
 
