@@ -44,8 +44,8 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
-import Data.Int (Int32)
-import Data.Text (Text)
+-- TODO: Our GraphQL.Value.Name has more guarantees than AST.Name (which is
+-- just a Text alias). We should change that so AST.Name is guaranteed valid.
 
 -- * Name
 

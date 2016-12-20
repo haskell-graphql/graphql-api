@@ -42,6 +42,7 @@ tests:
       - graphql-api
       - hspec
       - QuickCheck
+      - raw-strings-qq
       - tasty
       - tasty-hspec
 
