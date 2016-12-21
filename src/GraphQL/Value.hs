@@ -11,7 +11,7 @@ module GraphQL.Value
   , makeName
   , unsafeMakeName
   , List
-  , String
+  , String(..)
     -- * Objects
   , Object
   , ObjectField(ObjectField)
