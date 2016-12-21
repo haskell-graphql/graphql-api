@@ -181,6 +181,15 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- name doesn't match.
 data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
 
+executeNamedField :: Monad m => AST.Field -> NamedFieldExecutor m -> m (Maybe GValue.ObjectField)
+executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
+  | name == k = do
+      value <- mValue
+      let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+      pure (Just (GValue.ObjectField name' value))
+  | otherwise = pure Nothing
+
+
 -- | Derive the handler type from the Field/Argument type in a closed
 -- type family: We don't want anyone else to extend this ever.
 type family FieldHandler m (a :: Type) :: Type where
@@ -236,25 +245,10 @@ instance forall f fs m.
   type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
   -- Deconstruct object type signature and handler value at the same
   -- time and run type-directed code for each field.
-  runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let NamedFieldExecutor k mValue = buildFieldResolver @m @f lh selection
-    in case name == k of
-      False -> runFields @m @fs rh selection
-      True -> do
-        -- execute action to retrieve field value
-        value <- mValue
-        -- NB "alias" is encoded in-band. It cannot be set to empty in
-        -- a query so the empty value means "no alias" and we use the
-        -- name instead.
-
-        -- TODO: We need to use 'unsafeMakeName' here (which might panic)
-        -- because our API is currently written in terms of the Data.GraphQL
-        -- parser, which provides no type-level guarantees of name safety. We
-        -- should instead have our APIs in terms of 'Canonicalquery' (and the
-        -- rest of 'Data.GraphQL.Input', not yet written), and have that be
-        -- responsible for rejecting queries with invalid names.
-        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
-        pure (GValue.ObjectField name' value)
+  runFields (lh :<> rh) selection@(AST.SelectionField field) = do
+    let fieldExecutor = buildFieldResolver @m @f lh selection
+    objectField <- executeNamedField @m field fieldExecutor
+    maybe (runFields @m @fs rh selection) pure objectField
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
@@ -264,14 +258,10 @@ instance forall ks t m.
          , MonadIO m
          ) => RunFields m (Field ks t) where
   type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
-  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let NamedFieldExecutor k mValue = buildFieldResolver @m @(Field ks t) lh selection
-    in case name == k of
-      False -> queryError ("Query for undefined selection:" <> show selection)
-      True -> do
-        value <- mValue
-        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
-        pure (GValue.ObjectField name' value)
+  runFields lh selection@(AST.SelectionField field) = do
+    let fieldExecutor = buildFieldResolver @m @(Field ks t) lh selection
+    objectField <- executeNamedField @m field fieldExecutor
+    maybe (queryError ("Query for undefined selection:" <> show selection)) pure objectField
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 instance forall m a b.
@@ -280,14 +270,10 @@ instance forall m a b.
          , MonadIO m
          ) => RunFields m (a :> b) where
   type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
-  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let NamedFieldExecutor k mValue = buildFieldResolver @m @(a :> b) lh selection
-    in case name == k of
-      False -> queryError ("Query for undefined selection:" <> show selection)
-      True -> do
-        value <- mValue
-        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
-        pure (GValue.ObjectField name' value)
+  runFields lh selection@(AST.SelectionField field) = do
+    let fieldExecutor = buildFieldResolver @m @(a :> b) lh selection
+    objectField <- executeNamedField @m field fieldExecutor
+    maybe (queryError ("Query for undefined selection:" <> show selection)) pure objectField
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
