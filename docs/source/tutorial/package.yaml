@@ -1,0 +1,17 @@
+name:          tutorial
+version:       0.0.1
+synopsis:      GraphQL library tutorial
+license:       Apache
+license-file:  LICENSE
+maintainer:    tehunger@gmail.com, Jonathan M. Lange <jml@mumak.net>
+
+ghc-options: -Wall -pgmL markdown-unlit
+
+library:
+  exposed-modules:
+    - Introduction
+  dependencies:
+    - base >= 4.9 && < 5
+    - protolude
+    - graphql-api
+    - markdown-unlit >= 0.4
