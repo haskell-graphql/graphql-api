@@ -89,6 +89,7 @@ test-suite graphql-api-tests
     , containers
     , graphql-api
     , hspec
+    , QuickCheck
     , tasty
     , tasty-hspec
   other-modules:

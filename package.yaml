@@ -41,6 +41,7 @@ tests:
       - containers
       - graphql-api
       - hspec
+      - QuickCheck
       - tasty
       - tasty-hspec
 
