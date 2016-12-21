@@ -154,14 +154,14 @@ typeCondition = namedType
 -- This will try to pick the first type it can parse. If you are working with
 -- explicit types use the `typedValue` parser.
 value :: Parser AST.Value
-value = AST.ValueVariable <$> variable
-  <|> number
-  <|> AST.ValueBoolean  <$> booleanValue
-  <|> AST.ValueString   <$> stringValue
+value = AST.ValueVariable <$> (variable <?> "variable")
+  <|> (number <?> "number")
+  <|> AST.ValueBoolean  <$> (booleanValue <?> "booleanValue")
+  <|> AST.ValueString   <$> (stringValue <?> "stringValue")
   -- `true` and `false` have been tried before
-  <|> AST.ValueEnum     <$> name
-  <|> AST.ValueList     <$> listValue
-  <|> AST.ValueObject   <$> objectValue
+  <|> AST.ValueEnum     <$> (name <?> "name")
+  <|> AST.ValueList     <$> (listValue <?> "listValue")
+  <|> AST.ValueObject   <$> (objectValue <?> "objectValue")
   <?> "value error!"
   where
     number =  do
@@ -209,10 +209,10 @@ listValue = AST.ListValue <$> brackets (many value)
 
 -- Notice it can be empty
 objectValue :: Parser AST.ObjectValue
-objectValue = AST.ObjectValue <$> braces (many objectField)
+objectValue = AST.ObjectValue <$> braces (many (objectField <?> "objectField"))
 
 objectField :: Parser AST.ObjectField
-objectField = AST.ObjectField <$> name <* tok ":" <*> value
+objectField = AST.ObjectField <$> name <* tok ":" <*> tok value
 
 -- * Directives
 

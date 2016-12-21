@@ -4,7 +4,7 @@ import Protolude
 
 import Data.Attoparsec.Text (parseOnly)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Gen, arbitrary, discard, forAll)
+import Test.QuickCheck (Gen, arbitrary, discard, forAll, verbose)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
@@ -52,7 +52,7 @@ tests = testSpec "AST" $ do
         parseOnly Parser.value output `shouldBe` Right input
     describe "parsing values" $ do
       prop "works for all literal values" $ do
-        forAll genASTValue $ \x -> (parseOnly Parser.value . Encoder.value) x `shouldBe` Right x
+        forAll genASTValue $ \x -> verbose $ (parseOnly Parser.value) (Encoder.value x) `shouldBe` Right x
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue
@@ -60,7 +60,7 @@ tests = testSpec "AST" $ do
                        (AST.ValueString (AST.StringValue "\224\225v^6{FPDk\DC3\a")),
                        AST.ObjectField "Hsr" (AST.ValueInt 0)
                      ])
-        let output = Encoder.value input
+        let output = traceShowId $ Encoder.value input
         parseOnly Parser.value output `shouldBe` Right input
       it "parses lists of floats" $ do
         let input = AST.ValueList
@@ -71,4 +71,3 @@ tests = testSpec "AST" $ do
         let output = Encoder.value input
         output `shouldBe` "[1.5,1.5]"
         parseOnly Parser.value output `shouldBe` Right input
-
