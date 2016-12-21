@@ -7,6 +7,7 @@ import Test.Hspec.QuickCheck (prop)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
+import GraphQL.Value (String(..))
 import qualified GraphQL.Internal.AST as AST
 import qualified GraphQL.Internal.Parser as Parser
 import qualified GraphQL.Internal.Encoder as Encoder
@@ -31,13 +32,26 @@ tests = testSpec "AST" $ do
         parseOnly Parser.value "0.0" `shouldBe` Right (AST.ValueFloat 0.0)
       prop "works for floats" $ do
         \x -> parseOnly Parser.value (show x) == Right (AST.ValueFloat x)
+    describe "strings" $ do
+      prop "works for all strings" $ do
+        \(String x) ->
+          let input = AST.ValueString (AST.StringValue x)
+              output = Encoder.value input in
+          parseOnly Parser.value output == Right input
+      it "handles unusual strings" $ do
+        let input = AST.ValueString (AST.StringValue "\fh\244")
+        let output = Encoder.value input
+        -- \f is \u000c
+        output `shouldBe` "\"\\u000ch\244\""
+        parseOnly Parser.value output `shouldBe` Right input
     describe "parsing values" $ do
       it "parses lists of floats" $ do
         let input = AST.ValueList
                       (AST.ListValue
-                       [ (AST.ValueFloat 1.5)
-                       , (AST.ValueFloat 1.5)
+                       [ AST.ValueFloat 1.5
+                       , AST.ValueFloat 1.5
                        ])
         let output = Encoder.value input
         output `shouldBe` "[1.5,1.5]"
         parseOnly Parser.value output `shouldBe` Right input
+

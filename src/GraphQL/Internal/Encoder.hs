@@ -5,6 +5,7 @@ module GraphQL.Internal.Encoder
 
 import Protolude hiding (Type, intercalate)
 
+import qualified Data.Aeson as Aeson
 import Data.Text (Text, cons, intercalate, pack, snoc)
 
 import qualified GraphQL.Internal.AST as AST
@@ -104,7 +105,7 @@ booleanValue False = "false"
 
 -- TODO: Escape characters
 stringValue :: AST.StringValue -> Text
-stringValue (AST.StringValue v) = quotes v
+stringValue (AST.StringValue v) = toS $ Aeson.encode v
 
 listValue :: AST.ListValue -> Text
 listValue (AST.ListValue vs) = bracketsCommas value vs
@@ -223,9 +224,6 @@ brackets = between '[' ']'
 
 braces :: Text -> Text
 braces = between '{' '}'
-
-quotes :: Text -> Text
-quotes = between '"' '"'
 
 spaces :: (a -> Text) -> [a] -> Text
 spaces f = intercalate "\SP" . fmap f

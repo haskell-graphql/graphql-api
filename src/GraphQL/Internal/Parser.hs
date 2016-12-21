@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module GraphQL.Internal.Parser
   ( document
   , name
@@ -7,16 +8,18 @@ module GraphQL.Internal.Parser
 import Protolude hiding (Type, takeWhile)
 
 import Control.Applicative ((<|>), empty, many, optional)
-import Control.Monad (when)
+import Control.Monad (fail, when)
+import Data.Aeson.Parser (jstring)
 import Data.Char (isDigit, isSpace)
 import Data.Foldable (traverse_)
 import Data.Scientific (floatingOrInteger)
-
 import Data.Text (Text, append, find)
+import qualified Data.Attoparsec.ByteString as A
 import Data.Attoparsec.Text
   ( Parser
   , (<?>)
   , anyChar
+  , char
   , endOfLine
   , inClass
   , match
@@ -24,6 +27,7 @@ import Data.Attoparsec.Text
   , manyTill
   , option
   , peekChar
+  , scan
   , scientific
   , sepBy1
   , takeWhile
@@ -39,7 +43,7 @@ name = tok $ append <$> takeWhile1 isA_z
                     <*> takeWhile ((||) <$> isDigit <*> isA_z)
   where
     -- `isAlpha` handles many more Unicode Chars
-    isA_z =  inClass $ '_' : ['A'..'Z'] ++ ['a'..'z']
+    isA_z =  inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
 
 -- * Document
 
@@ -162,7 +166,7 @@ value = AST.ValueVariable <$> variable
   where
     number =  do
       (numText, num) <- match (tok scientific)
-      case ((Data.Text.find (== '.') numText), floatingOrInteger num) of
+      case (Data.Text.find (== '.') numText, floatingOrInteger num) of
         (Just _, Left r) -> pure (AST.ValueFloat r)
         (Just _, Right i) -> pure (AST.ValueFloat (fromIntegral i))
         -- TODO: Handle maxBound, Int32 in spec.
@@ -173,9 +177,31 @@ booleanValue :: Parser Bool
 booleanValue = True  <$ tok "true"
    <|> False <$ tok "false"
 
--- TODO: Escape characters. Look at `jsstring_` in aeson package.
 stringValue :: Parser AST.StringValue
-stringValue = AST.StringValue <$> quotes (takeWhile (/= '"'))
+stringValue = do
+  parsed <- char '"' *> jstring_
+  case unescapeText parsed of
+    Left err -> fail err
+    Right escaped -> pure (AST.StringValue escaped)
+  where
+    -- | Parse a string without a leading quote, ignoring any escaped characters.
+    jstring_ :: Parser Text
+    jstring_ = scan startState go <* anyChar
+
+    startState = False
+    go a c
+      | a = Just False
+      | c == '"' = Nothing
+      | otherwise = let a' = c == backslash
+                    in Just a'
+      where backslash = '\\'
+
+    -- | Unescape a string.
+    --
+    -- Turns out this is really tricky, so we're going to cheat by
+    -- reconstructing a literal string (by putting quotes around it) and
+    -- delegating all the hard work to Aeson.
+    unescapeText str = A.parseOnly jstring ("\"" <> toS str <> "\"")
 
 -- Notice it can be empty
 listValue :: Parser AST.ListValue
@@ -318,9 +344,6 @@ parens = between "(" ")"
 
 braces :: Parser a -> Parser a
 braces = between "{" "}"
-
-quotes :: Parser a -> Parser a
-quotes = between "\"" "\""
 
 brackets :: Parser a -> Parser a
 brackets = between "[" "]"
