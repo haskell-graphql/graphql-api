@@ -174,8 +174,8 @@ data InterfaceTypeDefinition = InterfaceTypeDefinition Name [FieldDefinition]
 data UnionTypeDefinition = UnionTypeDefinition Name [NamedType]
                            deriving (Eq,Show)
 
-data ScalarTypeDefinition = ScalarTypeDefinition Name
-                            deriving (Eq,Show)
+newtype ScalarTypeDefinition = ScalarTypeDefinition Name
+                             deriving (Eq,Show)
 
 data EnumTypeDefinition = EnumTypeDefinition Name [EnumValueDefinition]
                           deriving (Eq,Show)

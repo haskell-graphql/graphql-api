@@ -35,8 +35,8 @@ tests = testSpec "AST" $ do
       it "parses lists of floats" $ do
         let input = AST.ValueList
                       (AST.ListValue
-                       [ (AST.ValueFloat 1.5)
-                       , (AST.ValueFloat 1.5)
+                       [ AST.ValueFloat 1.5
+                       , AST.ValueFloat 1.5
                        ])
         let output = Encoder.value input
         output `shouldBe` "[1.5,1.5]"

@@ -162,7 +162,7 @@ value = AST.ValueVariable <$> variable
   where
     number =  do
       (numText, num) <- match (tok scientific)
-      case ((Data.Text.find (== '.') numText), floatingOrInteger num) of
+      case (Data.Text.find (== '.') numText, floatingOrInteger num) of
         (Just _, Left r) -> pure (AST.ValueFloat r)
         (Just _, Right i) -> pure (AST.ValueFloat (fromIntegral i))
         -- TODO: Handle maxBound, Int32 in spec.
