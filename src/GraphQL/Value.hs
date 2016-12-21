@@ -7,6 +7,7 @@ module GraphQL.Value
   ( Value(..)
   , toObject
   , ToValue(..)
+  , valueToAST
   , Name
   , makeName
   , unsafeMakeName
@@ -34,6 +35,8 @@ import Data.Attoparsec.Text (parseOnly)
 import qualified Data.Map as Map
 import qualified GraphQL.Internal.Parser as Parser
 import Test.QuickCheck (Arbitrary(..), elements, oneof, listOf)
+
+import qualified GraphQL.Internal.AST as AST
 
 -- | A name in GraphQL.
 --
@@ -210,3 +213,21 @@ instance ToValue List where
 
 instance ToValue Object where
   toValue = ValueObject
+
+-- | Convert a literal value into an AST value.
+--
+-- Nulls are converted into Nothing.
+--
+-- This function probably isn't particularly useful, but it functions as a
+-- stop-gap until we have QuickCheck generators for the AST.
+valueToAST :: Value -> Maybe AST.Value
+valueToAST (ValueInt x) = pure $ AST.ValueInt x
+valueToAST (ValueFloat x) = pure $ AST.ValueFloat x
+valueToAST (ValueBoolean x) = pure $ AST.ValueBoolean x
+valueToAST (ValueString (String x)) = pure $ AST.ValueString (AST.StringValue x)
+valueToAST (ValueEnum x) = pure $ AST.ValueEnum (getName x)
+valueToAST (ValueList (List xs)) = AST.ValueList . AST.ListValue <$> traverse valueToAST xs
+valueToAST (ValueObject (Object fields)) = AST.ValueObject . AST.ObjectValue <$> traverse toObjectField fields
+  where
+    toObjectField (ObjectField name value) = AST.ObjectField (getName name) <$> valueToAST value
+valueToAST ValueNull = empty
