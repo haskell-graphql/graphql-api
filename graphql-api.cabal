@@ -43,6 +43,7 @@ library
       GraphQL.Internal.Output
       GraphQL.Internal.Parser
       GraphQL.Internal.Schema
+      GraphQL.Internal.Tokens
       GraphQL.Internal.Validation
       GraphQL.Server
       GraphQL.Value

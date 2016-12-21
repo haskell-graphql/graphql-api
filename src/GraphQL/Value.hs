@@ -33,7 +33,7 @@ import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import Data.Attoparsec.Text (parseOnly)
 import qualified Data.Map as Map
-import qualified GraphQL.Internal.Parser as Parser
+import qualified GraphQL.Internal.AST as AST
 import Test.QuickCheck (Arbitrary(..), elements, oneof, listOf)
 
 import qualified GraphQL.Internal.AST as AST
@@ -65,7 +65,7 @@ instance Arbitrary Name where
 -- >>> makeName "9-bar"
 -- Nothing
 makeName :: Text -> Maybe Name
-makeName = map Name . hush . parseOnly Parser.name
+makeName = map Name . hush . parseOnly AST.pName
 
 -- | Create a 'Name', panicking if the given text is invalid.
 --

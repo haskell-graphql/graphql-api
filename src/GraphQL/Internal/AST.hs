@@ -1,5 +1,6 @@
 module GraphQL.Internal.AST
   ( Name
+  , pName
   , Document(..)
   , Definition(..)
   , OperationDefinition(..)
@@ -44,12 +45,23 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
+import Data.Char (isDigit)
+import qualified Data.Attoparsec.Text as A
+import GraphQL.Internal.Tokens (tok)
+
 -- TODO: Our GraphQL.Value.Name has more guarantees than AST.Name (which is
 -- just a Text alias). We should change that so AST.Name is guaranteed valid.
 
 -- * Name
 
 type Name = Text
+
+pName :: A.Parser Name
+pName = tok $ (<>) <$> A.takeWhile1 isA_z
+                   <*> A.takeWhile ((||) <$> isDigit <*> isA_z)
+  where
+    -- `isAlpha` handles many more Unicode Chars
+    isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
 
 -- * Document
 
