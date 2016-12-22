@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 module GraphQL.Internal.AST
   ( Name(getNameText)
+  , NameError
   , nameParser
   , makeName
   , unsafeMakeName
@@ -86,17 +87,22 @@ nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
     -- `isAlpha` handles many more Unicode Chars
     isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
 
+newtype NameError = NameError Text deriving (Eq, Show)
+
+formatNameError :: NameError -> Text
+formatNameError (NameError name) = "Not a valid GraphQL name: " <> show name
+
 -- | Create a 'Name'.
 --
 -- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
 -- not match, return Nothing.
 --
 -- >>> makeName "foo"
--- Just (Name {getNameText = "foo"})
+-- Right (Name {getNameText = "foo"})
 -- >>> makeName "9-bar"
--- Nothing
-makeName :: Text -> Maybe Name
-makeName = hush . A.parseOnly nameParser
+-- NameError "9-bar"
+makeName :: Text -> Either NameError Name
+makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
 
 -- | Create a 'Name', panicking if the given text is invalid.
 --
@@ -105,7 +111,10 @@ makeName = hush . A.parseOnly nameParser
 -- >>> unsafeMakeName "foo"
 -- Name {getNameText = "foo"}
 unsafeMakeName :: Text -> Name
-unsafeMakeName name = fromMaybe (panic $ "Not a valid GraphQL name: " <> show name) (makeName name)
+unsafeMakeName name =
+  case makeName name of
+    Left e -> panic (formatNameError e)
+    Right n -> n
 
 -- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
 --

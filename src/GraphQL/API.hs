@@ -31,7 +31,7 @@ import qualified GraphQL.Internal.Schema (Type)
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
-import GraphQL.Internal.AST (makeName)
+import GraphQL.Internal.AST (NameError, makeName)
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -79,18 +79,12 @@ data Argument (name :: Symbol) (argType :: Type)
 -- https://hackage.haskell.org/package/optional-args-1.0.1)
 data DefaultArgument (name :: Symbol) (argType :: Type)
 
-
-newtype NameError = NameError Text deriving (Eq, Show)
+-- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
+nameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Either NameError Name
+nameFromSymbol proxy = makeName (toS (symbolVal proxy))
 
 cons :: a -> [a] -> [a]
 cons = (:)
-
--- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
-nameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Either NameError Name
-nameFromSymbol proxy = note (NameError name) (makeName name)
-  where
-    name = toS (symbolVal proxy)
-
 
 -- Transform into a Schema definition
 class HasObjectDefinition a where
