@@ -324,7 +324,7 @@ instance forall m typeName interfaces fields rest.
          , MonadThrow m
          , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
-         ) => RunUnion m ((Object typeName interfaces fields) :<|> rest) where
+         ) => RunUnion m (Object typeName interfaces fields :<|> rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
@@ -342,7 +342,7 @@ instance forall m typeName interfaces fields.
          , MonadThrow m
          , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
-         ) => RunUnion m ((Object typeName interfaces fields)) where
+         ) => RunUnion m (Object typeName interfaces fields) where
   runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
