@@ -27,11 +27,12 @@ module GraphQL.Server
 -- - Enforce non-empty lists (might only be doable via value-level validation)
 
 import Protolude hiding (Enum)
-import GHC.TypeLits (KnownSymbol, symbolVal)
+import GHC.TypeLits (KnownSymbol)
 import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
 import qualified GraphQL.Internal.AST as AST
+-- TODO: Explicit import
 import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
 
@@ -94,7 +95,7 @@ class ReadValue a where
   -- values for certain cases. E.g. there is an instance for @@Maybe a@@
   -- that returns Nothing if the value is missing.
   valueMissing :: AST.Name -> Either Text a
-  valueMissing name' = Left ("Value missing: " <> name')
+  valueMissing name' = Left ("Value missing: " <> AST.getName name')
 
 
 -- TODO not super hot on individual values having to be instances of
@@ -185,7 +186,7 @@ executeNamedField :: Monad m => AST.Field -> NamedFieldExecutor m -> m (Maybe GV
 executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
   | name == k = do
       value <- mValue
-      let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+      let name' = fromMaybe name alias
       pure (Just (GValue.ObjectField name' value))
   | otherwise = pure Nothing
 
@@ -214,7 +215,7 @@ class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
-        name = toS (symbolVal (Proxy :: Proxy ks))
+        name = AST.unsafeNameFromSymbol (Proxy :: Proxy ks)
     in Right (NamedFieldExecutor name childResolver)
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
@@ -222,7 +223,7 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
-    let argName = toS (symbolVal (Proxy :: Proxy ks))
+    let argName = AST.unsafeNameFromSymbol (Proxy :: Proxy ks)
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
          Left err' -> Left (QueryError err')
@@ -333,7 +334,7 @@ instance forall m typeName interfaces fields rest.
           Nothing -> panic $ "Expected object as result of union query: " <> show result
           Just object -> pure object
     | otherwise = runUnion @m @rest rh fragment
-    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+    where typeName = AST.unsafeNameFromSymbol (Proxy :: Proxy typeName)
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
@@ -351,7 +352,7 @@ instance forall m typeName interfaces fields.
           Nothing -> panic $ "Expected object as result of union query: " <> show result
           Just object -> pure object
     | otherwise = queryError ("Union type could not be resolved:" <> show fragment)
-    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+    where typeName = AST.unsafeNameFromSymbol (Proxy :: Proxy typeName)
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 

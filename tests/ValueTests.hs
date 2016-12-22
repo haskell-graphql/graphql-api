@@ -6,10 +6,10 @@ import Test.Hspec.QuickCheck (prop)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
+import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Value
   ( Object(..)
   , ObjectField(..)
-  , unsafeMakeName
   , unionObjects
   , objectFromList
   , toValue

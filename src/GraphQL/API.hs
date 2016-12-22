@@ -28,9 +28,10 @@ import Protolude hiding (Enum)
 
 import GraphQL.Internal.Schema hiding (Type)
 import qualified GraphQL.Internal.Schema (Type)
-import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
+import GHC.TypeLits (Symbol, KnownSymbol)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
+import GraphQL.Internal.AST (unsafeNameFromSymbol)
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -93,7 +94,7 @@ class HasFieldDefinitions a where
   getFieldDefinitions :: [FieldDefinition]
 
 instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasFieldDefinitions (a:as) where
-  getFieldDefinitions = (getFieldDefinition @a):(getFieldDefinitions @as)
+  getFieldDefinitions = getFieldDefinition @a:getFieldDefinitions @as
 
 instance HasFieldDefinitions '[] where
   getFieldDefinitions = []
@@ -113,17 +114,10 @@ class UnionTypeObjectTypeDefinitionList a where
   getUnionTypeObjectTypeDefinitions :: [ObjectTypeDefinition]
 
 instance forall a as. (HasObjectDefinition a, UnionTypeObjectTypeDefinitionList as) => UnionTypeObjectTypeDefinitionList (a:as) where
-  getUnionTypeObjectTypeDefinitions = (getDefinition @a):(getUnionTypeObjectTypeDefinitions @as)
+  getUnionTypeObjectTypeDefinitions = getDefinition @a:getUnionTypeObjectTypeDefinitions @as
 
 instance UnionTypeObjectTypeDefinitionList '[] where
   getUnionTypeObjectTypeDefinitions = []
-
-
--- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
---
--- Panics if the name is not valid GraphQL.
-unsafeNameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Name
-unsafeNameFromSymbol = GValue.unsafeMakeName . toS . symbolVal
 
 -- Interfaces
 class HasInterfaceDefinitions a where

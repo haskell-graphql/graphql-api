@@ -64,7 +64,7 @@ validate :: Alternative m => AST.Document -> m ValidDocument
 validate = pure . Valid
 
 data ValidationError
-  = DuplicateOperation AST.Name
+  = DuplicateOperation (Maybe AST.Name)
   deriving (Eq, Show)
 
 

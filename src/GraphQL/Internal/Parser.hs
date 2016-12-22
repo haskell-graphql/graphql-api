@@ -37,7 +37,7 @@ document = whiteSpace
   <|> (AST.Document . pure
         . AST.DefinitionOperation
         . AST.Query
-        . AST.Node mempty empty empty
+        . AST.Node empty empty empty
         <$> selectionSet)
   <?> "document error!"
 
@@ -54,7 +54,7 @@ operationDefinition =
   <?> "operationDefinition error!"
 
 node :: Parser AST.Node
-node = AST.Node <$> AST.nameParser
+node = AST.Node <$> (pure <$> AST.nameParser)
                 <*> optempty variableDefinitions
                 <*> optempty directives
                 <*> selectionSet
@@ -86,7 +86,7 @@ selection = AST.SelectionField <$> field
         <?> "selection error!"
 
 field :: Parser AST.Field
-field = AST.Field <$> optempty alias
+field = AST.Field <$> option empty (pure <$> alias)
                   <*> AST.nameParser
                   <*> optempty arguments
                   <*> optempty directives
@@ -334,4 +334,3 @@ between open close p = tok open *> p <* tok close
 -- `empty` /= `pure mempty` for `Parser`.
 optempty :: Monoid a => Parser a -> Parser a
 optempty = option mempty
-

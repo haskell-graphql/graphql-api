@@ -1,6 +1,12 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 module GraphQL.Internal.AST
-  ( Name
+  ( Name(getName)
   , nameParser
+  , makeName
+  , unsafeMakeName
+  , unsafeNameFromSymbol
   , Document(..)
   , Definition(..)
   , OperationDefinition(..)
@@ -45,23 +51,68 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
-import Data.Char (isDigit)
+import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
-import GraphQL.Internal.Tokens (tok)
+import Data.Char (isDigit)
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import Test.QuickCheck (Arbitrary(..), elements, listOf)
 
--- TODO: Our GraphQL.Value.Name has more guarantees than AST.Name (which is
--- just a Text alias). We should change that so AST.Name is guaranteed valid.
+import GraphQL.Internal.Tokens (tok)
 
 -- * Name
 
-type Name = Text
+-- | A name in GraphQL.
+--
+-- https://facebook.github.io/graphql/#sec-Names
+newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show)
 
+instance Aeson.ToJSON Name where
+  toJSON = Aeson.toJSON . getName
+
+instance Arbitrary Name where
+  arbitrary = do
+    initial <- elements alpha
+    rest <- listOf (elements (alpha <> numeric))
+    pure (unsafeMakeName (toS (initial:rest)))
+    where
+      alpha = ['A'..'Z'] <> ['a'..'z'] <> ['_']
+      numeric = ['0'..'9']
+
+-- | Parser for 'Name'.
 nameParser :: A.Parser Name
-nameParser = tok $ (<>) <$> A.takeWhile1 isA_z
-                   <*> A.takeWhile ((||) <$> isDigit <*> isA_z)
+nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
+                                <*> A.takeWhile ((||) <$> isDigit <*> isA_z))
   where
     -- `isAlpha` handles many more Unicode Chars
     isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
+
+-- | Create a 'Name'.
+--
+-- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
+-- not match, return Nothing.
+--
+-- >>> makeName "foo"
+-- Just (Name {getName = "foo"})
+-- >>> makeName "9-bar"
+-- Nothing
+makeName :: Text -> Maybe Name
+makeName = hush . A.parseOnly nameParser
+
+-- | Create a 'Name', panicking if the given text is invalid.
+--
+-- Prefer 'makeName' to this in all cases.
+--
+-- >>> unsafeMakeName "foo"
+-- Name {getName = "foo"}
+unsafeMakeName :: Text -> Name
+unsafeMakeName name = fromMaybe (panic $ "Not a valid GraphQL name: " <> show name) (makeName name)
+
+-- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
+--
+-- Panics if the name is not valid GraphQL.
+unsafeNameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Name
+unsafeNameFromSymbol = unsafeMakeName . toS . symbolVal
+
 
 -- * Document
 
@@ -76,12 +127,12 @@ data OperationDefinition = Query    { getNode :: Node }
                          | Mutation { getNode :: Node }
                            deriving (Eq,Show)
 
-data Node = Node Name [VariableDefinition] [Directive] SelectionSet
+data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
 -- XXX: Lots of things have names. Maybe we should define a typeclass for
 -- getting the name?
-getNodeName :: Node -> Name
+getNodeName :: Node -> Maybe Name
 getNodeName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
@@ -96,9 +147,7 @@ data Selection = SelectionField Field
                | SelectionInlineFragment InlineFragment
                  deriving (Eq,Show)
 
-data Field = Field Alias Name [Argument]
-                              [Directive]
-                              SelectionSet
+data Field = Field (Maybe Alias) Name [Argument] [Directive] SelectionSet
              deriving (Eq,Show)
 
 type Alias = Name
