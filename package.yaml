@@ -42,6 +42,7 @@ tests:
       - graphql-api
       - hspec
       - QuickCheck
+      - raw-strings-qq
       - tasty
       - tasty-hspec
 
@@ -51,3 +52,11 @@ tests:
     source-dirs: tests
     dependencies:
       - doctest
+
+benchmarks:
+  criterion:
+    main: Main.hs
+    source-dirs: benchmarks
+    dependencies:
+      - criterion
+      - graphql-api

@@ -181,6 +181,27 @@ instance forall v. ReadValue v => ReadValue (Maybe v) where
 -- name doesn't match.
 data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
 
+executeNamedField :: Monad m => AST.Field -> NamedFieldExecutor m -> m (Maybe GValue.ObjectField)
+executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
+  | name == k = do
+      value <- mValue
+      let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+      pure (Just (GValue.ObjectField name' value))
+  | otherwise = pure Nothing
+
+-- Deconstruct object type signature and handler value at the same
+-- time and run type-directed code for each field.
+resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a => m GValue.ObjectField -> FieldHandler m a -> AST.Selection -> m GValue.ObjectField
+resolveField fallback lh selection@(AST.SelectionField field) = do
+  let fieldExecutor = buildFieldResolver @m @a lh selection
+  case fieldExecutor of
+    Left err -> throwM err
+    Right executor -> do
+      objectField <- executeNamedField field executor
+      maybe fallback pure objectField
+resolveField _ _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+
+
 -- | Derive the handler type from the Field/Argument type in a closed
 -- type family: We don't want anyone else to extend this ever.
 type family FieldHandler m (a :: Type) :: Type where
@@ -188,15 +209,15 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
 
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedFieldExecutor m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
-    in NamedFieldExecutor name childResolver
+    in Right (NamedFieldExecutor name childResolver)
   buildFieldResolver _ f =
-    NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -204,10 +225,10 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
-         Left err' -> NamedFieldExecutor "" (queryError err')
+         Left err' -> Right (NamedFieldExecutor "" (queryError err'))
          Right v' -> buildFieldResolver @m @f (handler v') selection
   buildFieldResolver _ f =
-    NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 -- We only allow Field and Argument :> Field combinations:
@@ -234,29 +255,10 @@ instance forall f fs m.
          , MonadIO m
          ) => RunFields m (f :<> fs) where
   type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
-  -- Deconstruct object type signature and handler value at the same
-  -- time and run type-directed code for each field.
-  runFields (lh :<> rh) selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let NamedFieldExecutor k mValue = buildFieldResolver @m @f lh selection
-    in case name == k of
-      False -> runFields @m @fs rh selection
-      True -> do
-        -- execute action to retrieve field value
-        value <- mValue
-        -- NB "alias" is encoded in-band. It cannot be set to empty in
-        -- a query so the empty value means "no alias" and we use the
-        -- name instead.
-
-        -- TODO: We need to use 'unsafeMakeName' here (which might panic)
-        -- because our API is currently written in terms of the Data.GraphQL
-        -- parser, which provides no type-level guarantees of name safety. We
-        -- should instead have our APIs in terms of 'Canonicalquery' (and the
-        -- rest of 'Data.GraphQL.Input', not yet written), and have that be
-        -- responsible for rejecting queries with invalid names.
-        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
-        pure (GValue.ObjectField name' value)
-
-  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields (lh :<> rh) selection =
+    resolveField @f @m fallback lh selection
+    where
+      fallback = runFields @m @fs rh selection
 
 instance forall ks t m.
          ( BuildFieldResolver m (Field ks t)
@@ -264,15 +266,10 @@ instance forall ks t m.
          , MonadIO m
          ) => RunFields m (Field ks t) where
   type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
-  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let NamedFieldExecutor k mValue = buildFieldResolver @m @(Field ks t) lh selection
-    in case name == k of
-      False -> queryError ("Query for undefined selection:" <> show selection)
-      True -> do
-        value <- mValue
-        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
-        pure (GValue.ObjectField name' value)
-  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields lh selection =
+    resolveField @(Field ks t) @m fallback lh selection
+    where
+      fallback = queryError ("Query for undefined selection: " <> show selection)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
@@ -280,15 +277,10 @@ instance forall m a b.
          , MonadIO m
          ) => RunFields m (a :> b) where
   type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
-  runFields lh selection@(AST.SelectionField (AST.Field alias name _ _ _)) =
-    let NamedFieldExecutor k mValue = buildFieldResolver @m @(a :> b) lh selection
-    in case name == k of
-      False -> queryError ("Query for undefined selection:" <> show selection)
-      True -> do
-        value <- mValue
-        let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
-        pure (GValue.ObjectField name' value)
-  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields lh selection =
+    resolveField @(a :> b) @m fallback lh selection
+    where
+      fallback = queryError ("Query for undefined selection: " <> show selection)
 
 
 instance forall typeName interfaces fields m.
@@ -332,7 +324,7 @@ instance forall m typeName interfaces fields rest.
          , MonadThrow m
          , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
-         ) => RunUnion m ((Object typeName interfaces fields) :<|> rest) where
+         ) => RunUnion m (Object typeName interfaces fields :<|> rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
@@ -350,7 +342,7 @@ instance forall m typeName interfaces fields.
          , MonadThrow m
          , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
-         ) => RunUnion m ((Object typeName interfaces fields)) where
+         ) => RunUnion m (Object typeName interfaces fields) where
   runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
         result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection

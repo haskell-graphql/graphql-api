@@ -2,9 +2,9 @@ module ValueTests (tests) where
 
 import Protolude
 
+import Test.Hspec.QuickCheck (prop)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
-import Test.Hspec.QuickCheck (prop)
 
 import GraphQL.Value
   ( Object(..)

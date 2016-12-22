@@ -1,9 +1,11 @@
 module GraphQL.Internal.AST
   ( Name
+  , nameParser
   , Document(..)
   , Definition(..)
   , OperationDefinition(..)
   , Node(..)
+  , getNodeName
   , VariableDefinition(..)
   , Variable(..)
   , SelectionSet
@@ -43,28 +45,44 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
-import Data.Int (Int32)
-import Data.Text (Text)
+import Data.Char (isDigit)
+import qualified Data.Attoparsec.Text as A
+import GraphQL.Internal.Tokens (tok)
+
+-- TODO: Our GraphQL.Value.Name has more guarantees than AST.Name (which is
+-- just a Text alias). We should change that so AST.Name is guaranteed valid.
 
 -- * Name
 
 type Name = Text
 
+nameParser :: A.Parser Name
+nameParser = tok $ (<>) <$> A.takeWhile1 isA_z
+                   <*> A.takeWhile ((||) <$> isDigit <*> isA_z)
+  where
+    -- `isAlpha` handles many more Unicode Chars
+    isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
+
 -- * Document
 
-newtype Document = Document [Definition] deriving (Eq,Show)
+newtype Document = Document { getDefinitions :: [Definition] } deriving (Eq,Show)
 
 data Definition = DefinitionOperation OperationDefinition
                 | DefinitionFragment  FragmentDefinition
                 | DefinitionType      TypeDefinition
                   deriving (Eq,Show)
 
-data OperationDefinition = Query    Node
-                         | Mutation Node
+data OperationDefinition = Query    { getNode :: Node }
+                         | Mutation { getNode :: Node }
                            deriving (Eq,Show)
 
 data Node = Node Name [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
+
+-- XXX: Lots of things have names. Maybe we should define a typeclass for
+-- getting the name?
+getNodeName :: Node -> Name
+getNodeName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)

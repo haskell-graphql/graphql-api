@@ -1,8 +1,12 @@
+{-# LANGUAGE QuasiQuotes #-}
+
+-- | Tests for AST, including parser and encoder.
 module ASTTests (tests) where
 
 import Protolude
 
 import Data.Attoparsec.Text (parseOnly)
+import Text.RawString.QQ (r)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Gen, arbitrary, discard, forAll)
 import Test.Tasty (TestTree)
@@ -52,7 +56,7 @@ tests = testSpec "AST" $ do
         parseOnly Parser.value output `shouldBe` Right input
     describe "parsing values" $ do
       prop "works for all literal values" $ do
-        forAll genASTValue $ \x -> (parseOnly Parser.value) (Encoder.value x) `shouldBe` Right x
+        forAll genASTValue $ \x -> parseOnly Parser.value (Encoder.value x) `shouldBe` Right x
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue
@@ -71,3 +75,79 @@ tests = testSpec "AST" $ do
         let output = Encoder.value input
         output `shouldBe` "[1.5,1.5]"
         parseOnly Parser.value output `shouldBe` Right input
+  describe "Parser" $ do
+    it "parses anonymous query documents" $ do
+      let query = [r|{
+                       dog {
+                         name
+                       }
+                     }|]
+      let Right parsed = parseOnly Parser.document query
+      let expected = AST.Document
+                     [ AST.DefinitionOperation
+                       (AST.Query
+                         (AST.Node "" [] []
+                           [ AST.SelectionField
+                               (AST.Field "" "dog" [] []
+                                 [ AST.SelectionField (AST.Field "" "name" [] [] [])
+                                 ])
+                           ]))
+                     ]
+      parsed `shouldBe` expected
+
+    it "silently mis-parses invalid documents" $ do
+      let query = [r|{
+                       dog {
+                         name
+                       }
+                     }
+
+                     query getName {
+                       dog {
+                         owner {
+                           name
+                         }
+                       }
+                     }|]
+      let Right parsed = parseOnly Parser.document query
+      let expected = AST.Document
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node "" [] []
+                            [ AST.SelectionField
+                                (AST.Field "" "dog" [] []
+                                  [ AST.SelectionField (AST.Field "" "name" [] [] [])
+                                  ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected
+
+    it "includes variable definitions" $ do
+      let query = [r|
+                    query houseTrainedQuery($atOtherHomes: Boolean = true) {
+                      dog {
+                        isHousetrained(atOtherHomes: $atOtherHomes)
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.document query
+      let expected = AST.Document
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node "houseTrainedQuery"
+                            [ AST.VariableDefinition
+                                (AST.Variable "atOtherHomes")
+                                (AST.TypeNamed (AST.NamedType "Boolean"))
+                                (Just (AST.ValueBoolean True))
+                            ] []
+                            [ AST.SelectionField
+                                (AST.Field "" "dog" [] []
+                                 [ AST.SelectionField
+                                     (AST.Field "" "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected
