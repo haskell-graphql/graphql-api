@@ -80,24 +80,29 @@ data Argument (name :: Symbol) (argType :: Type)
 data DefaultArgument (name :: Symbol) (argType :: Type)
 
 
+newtype NameError = NameError Text deriving (Eq, Show)
+
+cons :: a -> [a] -> [a]
+cons = (:)
+
 -- Transform into a Schema definition
 class HasObjectDefinition a where
   -- Todo rename to getObjectTypeDefinition
-  getDefinition :: ObjectTypeDefinition
+  getDefinition :: Either NameError ObjectTypeDefinition
 
 class HasFieldDefinition a where
-  getFieldDefinition :: FieldDefinition
+  getFieldDefinition :: Either NameError FieldDefinition
 
 
 -- Fields
 class HasFieldDefinitions a where
-  getFieldDefinitions :: [FieldDefinition]
+  getFieldDefinitions :: Either NameError [FieldDefinition]
 
 instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasFieldDefinitions (a:as) where
-  getFieldDefinitions = getFieldDefinition @a:getFieldDefinitions @as
+  getFieldDefinitions = cons <$> getFieldDefinition @a <*> getFieldDefinitions @as
 
 instance HasFieldDefinitions '[] where
-  getFieldDefinitions = []
+  getFieldDefinitions = pure []
 
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
@@ -111,31 +116,31 @@ class GraphQLEnum a where
 -- Union "Horse" '[Leg, Head, Tail]
 --               ^^^^^^^^^^^^^^^^^^ this part
 class UnionTypeObjectTypeDefinitionList a where
-  getUnionTypeObjectTypeDefinitions :: [ObjectTypeDefinition]
+  getUnionTypeObjectTypeDefinitions :: Either NameError [ObjectTypeDefinition]
 
 instance forall a as. (HasObjectDefinition a, UnionTypeObjectTypeDefinitionList as) => UnionTypeObjectTypeDefinitionList (a:as) where
-  getUnionTypeObjectTypeDefinitions = getDefinition @a:getUnionTypeObjectTypeDefinitions @as
+  getUnionTypeObjectTypeDefinitions = cons <$> getDefinition @a <*> getUnionTypeObjectTypeDefinitions @as
 
 instance UnionTypeObjectTypeDefinitionList '[] where
-  getUnionTypeObjectTypeDefinitions = []
+  getUnionTypeObjectTypeDefinitions = pure []
 
 -- Interfaces
 class HasInterfaceDefinitions a where
-  getInterfaceDefinitions :: Interfaces
+  getInterfaceDefinitions :: Either NameError Interfaces
 
 instance forall a as. (HasInterfaceDefinition a, HasInterfaceDefinitions as) => HasInterfaceDefinitions (a:as) where
-  getInterfaceDefinitions = getInterfaceDefinition @a:getInterfaceDefinitions @as
+  getInterfaceDefinitions = cons <$> getInterfaceDefinition @a <*> getInterfaceDefinitions @as
 
 instance HasInterfaceDefinitions '[] where
-  getInterfaceDefinitions = []
+  getInterfaceDefinitions = pure []
 
 class HasInterfaceDefinition a where
-  getInterfaceDefinition :: InterfaceTypeDefinition
+  getInterfaceDefinition :: Either NameError InterfaceTypeDefinition
 
 instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasInterfaceDefinition (Interface ks fields) where
   getInterfaceDefinition =
     let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-        in InterfaceTypeDefinition name (NonEmptyList (getFieldDefinitions @fields))
+        in InterfaceTypeDefinition name . NonEmptyList <$> getFieldDefinitions @fields
 
 -- Give users some help if they don't terminate Arguments with a Field:
 -- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
@@ -146,28 +151,30 @@ instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments m
 instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
     let obj = getDefinition @(Object ks is ts)
-    in (TypeNamed . DefinedType . TypeDefinitionObject) obj
+    in (TypeNamed . DefinedType . TypeDefinitionObject) <$> obj
 
 instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
   getFieldDefinition =
     let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-    in FieldDefinition name [] (getAnnotatedType @t)
+    in FieldDefinition name [] <$> getAnnotatedType @t
 
 
 instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition (Argument ks t :> b) where
-  getFieldDefinition =
-    let (FieldDefinition name argDefs at) = getFieldDefinition @b
-        argName = unsafeNameFromSymbol (Proxy :: Proxy ks)
-        arg = ArgumentDefinition argName (getAnnotatedInputType @t) Nothing
-    in FieldDefinition name (arg:argDefs) at
+  getFieldDefinition = do
+    FieldDefinition name argDefs at <- getFieldDefinition @b
+    let argName = unsafeNameFromSymbol (Proxy :: Proxy ks)
+    let arg = ArgumentDefinition argName <$> getAnnotatedInputType @t <*> pure Nothing
+    FieldDefinition name <$> (cons <$> arg <*> pure argDefs) <*> pure at
 
 
 instance forall ks is fields.
   (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) =>
   HasObjectDefinition (Object ks is fields) where
-  getDefinition =
+  getDefinition = do
     let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-    in ObjectTypeDefinition name (getInterfaceDefinitions @is) (NonEmptyList (getFieldDefinitions @fields))
+    interfaces <- getInterfaceDefinitions @is
+    fields <- getFieldDefinitions @fields
+    pure (ObjectTypeDefinition name interfaces (NonEmptyList fields))
 
 -- Builtin output types (annotated types)
 class HasAnnotatedType a where
@@ -176,43 +183,51 @@ class HasAnnotatedType a where
   -- forget this. Maybe we can flip the internal encoding to be
   -- non-null by default and needing explicit null-encoding (via
   -- Maybe).
-  getAnnotatedType :: AnnotatedType GraphQL.Internal.Schema.Type
+  getAnnotatedType :: Either NameError (AnnotatedType GraphQL.Internal.Schema.Type)
+
+-- | Turn a non-null type into the optional version of its own type.
+dropNonNull :: AnnotatedType t -> AnnotatedType t
+dropNonNull (TypeNonNull (NonNullTypeNamed t)) = TypeNamed t
+dropNonNull (TypeNonNull (NonNullTypeList t)) = TypeList t
+dropNonNull x@(TypeNamed _) = x
+dropNonNull x@(TypeList _) = x
 
 instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
   -- see TODO in HasAnnotatedType class
-  getAnnotatedType =
-    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedType @a
-    in TypeNamed t
+  getAnnotatedType = dropNonNull <$> getAnnotatedType @a
+
+builtinType :: Builtin -> Either NameError (AnnotatedType GraphQL.Internal.Schema.Type)
+builtinType = pure . TypeNonNull . NonNullTypeNamed . BuiltinType
 
 instance HasAnnotatedType Int where
-  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GInt
+  getAnnotatedType = builtinType GInt
 
 instance HasAnnotatedType Bool where
-  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GBool
+  getAnnotatedType = builtinType GBool
 
 instance HasAnnotatedType Text where
-  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GString
+  getAnnotatedType = builtinType GString
 
 instance HasAnnotatedType Double where
-  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GFloat
+  getAnnotatedType = builtinType GFloat
 
 instance HasAnnotatedType Float where
-  getAnnotatedType = (TypeNonNull . NonNullTypeNamed . BuiltinType) GFloat
+  getAnnotatedType = builtinType GFloat
 
 instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
-  getAnnotatedType = TypeList (ListType (getAnnotatedType @t))
+  getAnnotatedType = TypeList . ListType <$> getAnnotatedType @t
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
-  getAnnotatedType =
+  getAnnotatedType = do
     let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-        et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
-    in TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum et)))
+    let et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
+    pure . TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum $ et
 
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
   getAnnotatedType =
     let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-        types = NonEmptyList (getUnionTypeObjectTypeDefinitions @as)
-    in TypeNamed (DefinedType (TypeDefinitionUnion (UnionTypeDefinition name types)))
+        types = NonEmptyList <$> getUnionTypeObjectTypeDefinitions @as
+    in TypeNamed . DefinedType . TypeDefinitionUnion . UnionTypeDefinition name <$> types
 
 -- Help users with better type errors
 instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
@@ -223,33 +238,34 @@ instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer becau
 -- Builtin input types
 class HasAnnotatedInputType a where
   -- See TODO comment in "HasAnnotatedType" class for nullability.
-  getAnnotatedInputType :: AnnotatedType InputType
+  getAnnotatedInputType :: Either NameError (AnnotatedType InputType)
 
 instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) where
-  getAnnotatedInputType =
-    let TypeNonNull (NonNullTypeNamed t) = getAnnotatedInputType @a
-    in TypeNamed t
+  getAnnotatedInputType = dropNonNull <$> getAnnotatedInputType @a
+
+builtinInputType :: Builtin -> Either NameError (AnnotatedType InputType)
+builtinInputType = pure . TypeNonNull . NonNullTypeNamed . BuiltinInputType
 
 instance HasAnnotatedInputType Int where
-  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GInt
+  getAnnotatedInputType = builtinInputType GInt
 
 instance HasAnnotatedInputType Bool where
-  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GBool
+  getAnnotatedInputType = builtinInputType GBool
 
 instance HasAnnotatedInputType Text where
-  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GString
+  getAnnotatedInputType = builtinInputType GString
 
 instance HasAnnotatedInputType Double where
-  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GFloat
+  getAnnotatedInputType = builtinInputType GFloat
 
 instance HasAnnotatedInputType Float where
-  getAnnotatedInputType = (TypeNonNull . NonNullTypeNamed . BuiltinInputType) GFloat
+  getAnnotatedInputType = builtinInputType GFloat
 
 instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) where
-  getAnnotatedInputType = TypeList (ListType (getAnnotatedInputType @t))
+  getAnnotatedInputType = TypeList . ListType <$> getAnnotatedInputType @t
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType =
     let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
         et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
-    in TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et)))
+    in pure (TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et))))
