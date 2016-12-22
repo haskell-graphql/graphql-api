@@ -261,7 +261,7 @@ instance forall ks t m.
   runFields lh selection@(AST.SelectionField field) = do
     let fieldExecutor = buildFieldResolver @m @(Field ks t) lh selection
     objectField <- executeNamedField @m field fieldExecutor
-    maybe (queryError ("Query for undefined selection:" <> show selection)) pure objectField
+    maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 instance forall m a b.
@@ -273,7 +273,7 @@ instance forall m a b.
   runFields lh selection@(AST.SelectionField field) = do
     let fieldExecutor = buildFieldResolver @m @(a :> b) lh selection
     objectField <- executeNamedField @m field fieldExecutor
-    maybe (queryError ("Query for undefined selection:" <> show selection)) pure objectField
+    maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
