@@ -28,10 +28,10 @@ import Protolude hiding (Enum)
 
 import GraphQL.Internal.Schema hiding (Type)
 import qualified GraphQL.Internal.Schema (Type)
-import GHC.TypeLits (Symbol, KnownSymbol)
+import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
 import qualified GraphQL.Value as GValue
-import GraphQL.Internal.AST (unsafeNameFromSymbol)
+import GraphQL.Internal.AST (makeName)
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -84,6 +84,13 @@ newtype NameError = NameError Text deriving (Eq, Show)
 
 cons :: a -> [a] -> [a]
 cons = (:)
+
+-- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
+nameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Either NameError Name
+nameFromSymbol proxy = note (NameError name) (makeName name)
+  where
+    name = toS (symbolVal proxy)
+
 
 -- Transform into a Schema definition
 class HasObjectDefinition a where
@@ -139,8 +146,9 @@ class HasInterfaceDefinition a where
 
 instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasInterfaceDefinition (Interface ks fields) where
   getInterfaceDefinition =
-    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-        in InterfaceTypeDefinition name . NonEmptyList <$> getFieldDefinitions @fields
+    let name = nameFromSymbol (Proxy :: Proxy ks)
+        fields = NonEmptyList <$> getFieldDefinitions @fields
+    in InterfaceTypeDefinition <$> name <*> fields
 
 -- Give users some help if they don't terminate Arguments with a Field:
 -- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
@@ -155,26 +163,27 @@ instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldD
 
 instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition (Field ks t) where
   getFieldDefinition =
-    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-    in FieldDefinition name [] <$> getAnnotatedType @t
+    let name = nameFromSymbol (Proxy :: Proxy ks)
+    in FieldDefinition <$> name <*> pure [] <*> getAnnotatedType @t
 
 
 instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition (Argument ks t :> b) where
-  getFieldDefinition = do
-    FieldDefinition name argDefs at <- getFieldDefinition @b
-    let argName = unsafeNameFromSymbol (Proxy :: Proxy ks)
-    let arg = ArgumentDefinition argName <$> getAnnotatedInputType @t <*> pure Nothing
-    FieldDefinition name <$> (cons <$> arg <*> pure argDefs) <*> pure at
-
+  getFieldDefinition =
+    prependArg <$> argument <*> getFieldDefinition @b
+    where
+      prependArg arg (FieldDefinition name argDefs at) = FieldDefinition name (arg:argDefs) at
+      argument = ArgumentDefinition <$> argName <*> argType <*> pure Nothing
+      argName = nameFromSymbol (Proxy :: Proxy ks)
+      argType = getAnnotatedInputType @t
 
 instance forall ks is fields.
   (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) =>
   HasObjectDefinition (Object ks is fields) where
-  getDefinition = do
-    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-    interfaces <- getInterfaceDefinitions @is
-    fields <- getFieldDefinitions @fields
-    pure (ObjectTypeDefinition name interfaces (NonEmptyList fields))
+  getDefinition =
+    let name = nameFromSymbol (Proxy :: Proxy ks)
+        interfaces = getInterfaceDefinitions @is
+        fields = NonEmptyList <$> getFieldDefinitions @fields
+    in ObjectTypeDefinition <$> name <*> interfaces <*> fields
 
 -- Builtin output types (annotated types)
 class HasAnnotatedType a where
@@ -219,15 +228,15 @@ instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType = do
-    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-    let et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
-    pure . TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum $ et
+    let name = nameFromSymbol (Proxy :: Proxy ks)
+    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
+    TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum <$> et
 
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
   getAnnotatedType =
-    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
+    let name = nameFromSymbol (Proxy :: Proxy ks)
         types = NonEmptyList <$> getUnionTypeObjectTypeDefinitions @as
-    in TypeNamed . DefinedType . TypeDefinitionUnion . UnionTypeDefinition name <$> types
+    in (TypeNamed . DefinedType . TypeDefinitionUnion) <$> (UnionTypeDefinition <$> name <*> types)
 
 -- Help users with better type errors
 instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
@@ -265,7 +274,8 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
   getAnnotatedInputType = TypeList . ListType <$> getAnnotatedInputType @t
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
-  getAnnotatedInputType =
-    let name = unsafeNameFromSymbol (Proxy :: Proxy ks)
-        et = EnumTypeDefinition name (map EnumValueDefinition (enumValues @enum))
-    in pure (TypeNonNull (NonNullTypeNamed (DefinedInputType (InputTypeDefinitionEnum et))))
+  getAnnotatedInputType = do
+    -- TODO: rewrite applicative
+    let name = nameFromSymbol (Proxy :: Proxy ks)
+    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
+    TypeNonNull . NonNullTypeNamed . DefinedInputType . InputTypeDefinitionEnum <$> et
