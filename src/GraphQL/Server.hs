@@ -189,6 +189,18 @@ executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
       pure (Just (GValue.ObjectField name' value))
   | otherwise = pure Nothing
 
+-- Deconstruct object type signature and handler value at the same
+-- time and run type-directed code for each field.
+resolveField :: forall a (m :: * -> *). BuildFieldResolver m a => m GValue.ObjectField -> FieldHandler m a -> AST.Selection -> m GValue.ObjectField
+resolveField fallback lh selection@(AST.SelectionField field) = do
+  let fieldExecutor = buildFieldResolver @m @a lh selection
+  case fieldExecutor of
+    Left err -> throwM err
+    Right executor -> do
+      objectField <- executeNamedField field executor
+      maybe fallback pure objectField
+resolveField _ _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+
 
 -- | Derive the handler type from the Field/Argument type in a closed
 -- type family: We don't want anyone else to extend this ever.
@@ -243,17 +255,10 @@ instance forall f fs m.
          , MonadIO m
          ) => RunFields m (f :<> fs) where
   type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
-  -- Deconstruct object type signature and handler value at the same
-  -- time and run type-directed code for each field.
-  runFields (lh :<> rh) selection@(AST.SelectionField field) = do
-    let fieldExecutor = buildFieldResolver @m @f lh selection
-    case fieldExecutor of
-      Left err -> throwM err
-      Right executor -> do
-        objectField <- executeNamedField @m field executor
-        maybe (runFields @m @fs rh selection) pure objectField
-
-  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields (lh :<> rh) selection =
+    resolveField @f @m fallback lh selection
+    where
+      fallback = runFields @m @fs rh selection
 
 instance forall ks t m.
          ( BuildFieldResolver m (Field ks t)
@@ -261,14 +266,10 @@ instance forall ks t m.
          , MonadIO m
          ) => RunFields m (Field ks t) where
   type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
-  runFields lh selection@(AST.SelectionField field) = do
-    let fieldExecutor = buildFieldResolver @m @(Field ks t) lh selection
-    case fieldExecutor of
-      Left err -> throwM err
-      Right executor -> do
-        objectField <- executeNamedField @m field executor
-        maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
-  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields lh selection =
+    resolveField @(Field ks t) @m fallback lh selection
+    where
+      fallback = queryError ("Query for undefined selection: " <> show selection)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
@@ -276,14 +277,10 @@ instance forall m a b.
          , MonadIO m
          ) => RunFields m (a :> b) where
   type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
-  runFields lh selection@(AST.SelectionField field) = do
-    let fieldExecutor = buildFieldResolver @m @(a :> b) lh selection
-    case fieldExecutor of
-      Left err -> throwM err
-      Right executor -> do
-        objectField <- executeNamedField @m field executor
-        maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
-  runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+  runFields lh selection =
+    resolveField @(a :> b) @m fallback lh selection
+    where
+      fallback = queryError ("Query for undefined selection: " <> show selection)
 
 
 instance forall typeName interfaces fields m.
