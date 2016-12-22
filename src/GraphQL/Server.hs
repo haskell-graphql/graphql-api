@@ -197,15 +197,15 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
 
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> NamedFieldExecutor m
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedFieldExecutor m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
         name = toS (symbolVal (Proxy :: Proxy ks))
-    in NamedFieldExecutor name childResolver
+    in Right (NamedFieldExecutor name childResolver)
   buildFieldResolver _ f =
-    NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
@@ -213,10 +213,10 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
-         Left err' -> NamedFieldExecutor "" (queryError err')
+         Left err' -> Right (NamedFieldExecutor "" (queryError err'))
          Right v' -> buildFieldResolver @m @f (handler v') selection
   buildFieldResolver _ f =
-    NamedFieldExecutor "" (queryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
 -- We only allow Field and Argument :> Field combinations:
@@ -247,8 +247,11 @@ instance forall f fs m.
   -- time and run type-directed code for each field.
   runFields (lh :<> rh) selection@(AST.SelectionField field) = do
     let fieldExecutor = buildFieldResolver @m @f lh selection
-    objectField <- executeNamedField @m field fieldExecutor
-    maybe (runFields @m @fs rh selection) pure objectField
+    case fieldExecutor of
+      Left err -> throwM err
+      Right executor -> do
+        objectField <- executeNamedField @m field executor
+        maybe (runFields @m @fs rh selection) pure objectField
 
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
@@ -260,8 +263,11 @@ instance forall ks t m.
   type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
   runFields lh selection@(AST.SelectionField field) = do
     let fieldExecutor = buildFieldResolver @m @(Field ks t) lh selection
-    objectField <- executeNamedField @m field fieldExecutor
-    maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
+    case fieldExecutor of
+      Left err -> throwM err
+      Right executor -> do
+        objectField <- executeNamedField @m field executor
+        maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 instance forall m a b.
@@ -272,8 +278,11 @@ instance forall m a b.
   type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
   runFields lh selection@(AST.SelectionField field) = do
     let fieldExecutor = buildFieldResolver @m @(a :> b) lh selection
-    objectField <- executeNamedField @m field fieldExecutor
-    maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
+    case fieldExecutor of
+      Left err -> throwM err
+      Right executor -> do
+        objectField <- executeNamedField @m field executor
+        maybe (queryError ("Query for undefined selection: " <> show selection)) pure objectField
   runFields _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
 
 
