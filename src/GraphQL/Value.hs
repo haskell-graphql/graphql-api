@@ -65,7 +65,7 @@ instance Arbitrary Name where
 -- >>> makeName "9-bar"
 -- Nothing
 makeName :: Text -> Maybe Name
-makeName = map Name . hush . parseOnly AST.pName
+makeName = map Name . hush . parseOnly AST.nameParser
 
 -- | Create a 'Name', panicking if the given text is invalid.
 --

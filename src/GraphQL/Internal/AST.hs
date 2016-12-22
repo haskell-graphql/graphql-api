@@ -1,6 +1,6 @@
 module GraphQL.Internal.AST
   ( Name
-  , pName
+  , nameParser
   , Document(..)
   , Definition(..)
   , OperationDefinition(..)
@@ -56,8 +56,8 @@ import GraphQL.Internal.Tokens (tok)
 
 type Name = Text
 
-pName :: A.Parser Name
-pName = tok $ (<>) <$> A.takeWhile1 isA_z
+nameParser :: A.Parser Name
+nameParser = tok $ (<>) <$> A.takeWhile1 isA_z
                    <*> A.takeWhile ((||) <$> isDigit <*> isA_z)
   where
     -- `isAlpha` handles many more Unicode Chars

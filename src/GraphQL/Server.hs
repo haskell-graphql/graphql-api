@@ -191,7 +191,7 @@ executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
 
 -- Deconstruct object type signature and handler value at the same
 -- time and run type-directed code for each field.
-resolveField :: forall a (m :: * -> *). BuildFieldResolver m a => m GValue.ObjectField -> FieldHandler m a -> AST.Selection -> m GValue.ObjectField
+resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a => m GValue.ObjectField -> FieldHandler m a -> AST.Selection -> m GValue.ObjectField
 resolveField fallback lh selection@(AST.SelectionField field) = do
   let fieldExecutor = buildFieldResolver @m @a lh selection
   case fieldExecutor of

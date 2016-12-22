@@ -54,7 +54,7 @@ operationDefinition =
   <?> "operationDefinition error!"
 
 node :: Parser AST.Node
-node = AST.Node <$> AST.pName
+node = AST.Node <$> AST.nameParser
                 <*> optempty variableDefinitions
                 <*> optempty directives
                 <*> selectionSet
@@ -73,7 +73,7 @@ defaultValue :: Parser AST.DefaultValue
 defaultValue = tok "=" *> value
 
 variable :: Parser AST.Variable
-variable = AST.Variable <$ tok "$" <*> AST.pName
+variable = AST.Variable <$ tok "$" <*> AST.nameParser
 
 selectionSet :: Parser AST.SelectionSet
 selectionSet = braces $ many1 selection
@@ -87,19 +87,19 @@ selection = AST.SelectionField <$> field
 
 field :: Parser AST.Field
 field = AST.Field <$> optempty alias
-                  <*> AST.pName
+                  <*> AST.nameParser
                   <*> optempty arguments
                   <*> optempty directives
                   <*> optempty selectionSet
 
 alias :: Parser AST.Alias
-alias = AST.pName <* tok ":"
+alias = AST.nameParser <* tok ":"
 
 arguments :: Parser [AST.Argument]
 arguments = parens $ many1 argument
 
 argument :: Parser AST.Argument
-argument = AST.Argument <$> AST.pName <* tok ":" <*> value
+argument = AST.Argument <$> AST.nameParser <* tok ":" <*> value
 
 -- * Fragments
 
@@ -108,7 +108,7 @@ fragmentSpread :: Parser AST.FragmentSpread
 -- See https://facebook.github.io/graphql/#FragmentSpread
 fragmentSpread = AST.FragmentSpread
   <$  tok "..."
-  <*> AST.pName
+  <*> AST.nameParser
   <*> optempty directives
 
 -- InlineFragment tried first in order to guard against 'on' keyword
@@ -123,7 +123,7 @@ inlineFragment = AST.InlineFragment
 fragmentDefinition :: Parser AST.FragmentDefinition
 fragmentDefinition = AST.FragmentDefinition
   <$  tok "fragment"
-  <*> AST.pName
+  <*> AST.nameParser
   <*  tok "on"
   <*> typeCondition
   <*> optempty directives
@@ -142,7 +142,7 @@ value = tok (AST.ValueVariable <$> (variable <?> "variable")
   <|> AST.ValueBoolean  <$> (booleanValue <?> "booleanValue")
   <|> AST.ValueString   <$> (stringValue <?> "stringValue")
   -- `true` and `false` have been tried before
-  <|> AST.ValueEnum     <$> (AST.pName <?> "name")
+  <|> AST.ValueEnum     <$> (AST.nameParser <?> "name")
   <|> AST.ValueList     <$> (listValue <?> "listValue")
   <|> AST.ValueObject   <$> (objectValue <?> "objectValue")
   <?> "value error!")
@@ -195,7 +195,7 @@ objectValue :: Parser AST.ObjectValue
 objectValue = AST.ObjectValue <$> braces (many (objectField <?> "objectField"))
 
 objectField :: Parser AST.ObjectField
-objectField = AST.ObjectField <$> AST.pName <* tok ":" <*> value
+objectField = AST.ObjectField <$> AST.nameParser <* tok ":" <*> value
 
 -- * Directives
 
@@ -205,7 +205,7 @@ directives = many1 directive
 directive :: Parser AST.Directive
 directive = AST.Directive
   <$  tok "@"
-  <*> AST.pName
+  <*> AST.nameParser
   <*> optempty arguments
 
 -- * Type Reference
@@ -217,7 +217,7 @@ type_ = AST.TypeList    <$> listType
     <?> "type_ error!"
 
 namedType :: Parser AST.NamedType
-namedType = AST.NamedType <$> AST.pName
+namedType = AST.NamedType <$> AST.nameParser
 
 listType :: Parser AST.ListType
 listType = AST.ListType <$> brackets type_
@@ -243,7 +243,7 @@ typeDefinition =
 objectTypeDefinition :: Parser AST.ObjectTypeDefinition
 objectTypeDefinition = AST.ObjectTypeDefinition
   <$  tok "type"
-  <*> AST.pName
+  <*> AST.nameParser
   <*> optempty interfaces
   <*> fieldDefinitions
 
@@ -255,7 +255,7 @@ fieldDefinitions = braces $ many1 fieldDefinition
 
 fieldDefinition :: Parser AST.FieldDefinition
 fieldDefinition = AST.FieldDefinition
-  <$> AST.pName
+  <$> AST.nameParser
   <*> optempty argumentsDefinition
   <*  tok ":"
   <*> type_
@@ -266,13 +266,13 @@ argumentsDefinition = parens $ many1 inputValueDefinition
 interfaceTypeDefinition :: Parser AST.InterfaceTypeDefinition
 interfaceTypeDefinition = AST.InterfaceTypeDefinition
   <$  tok "interface"
-  <*> AST.pName
+  <*> AST.nameParser
   <*> fieldDefinitions
 
 unionTypeDefinition :: Parser AST.UnionTypeDefinition
 unionTypeDefinition = AST.UnionTypeDefinition
   <$  tok "union"
-  <*> AST.pName
+  <*> AST.nameParser
   <*  tok "="
   <*> unionMembers
 
@@ -282,24 +282,24 @@ unionMembers = namedType `sepBy1` tok "|"
 scalarTypeDefinition :: Parser AST.ScalarTypeDefinition
 scalarTypeDefinition = AST.ScalarTypeDefinition
   <$  tok "scalar"
-  <*> AST.pName
+  <*> AST.nameParser
 
 enumTypeDefinition :: Parser AST.EnumTypeDefinition
 enumTypeDefinition = AST.EnumTypeDefinition
   <$  tok "enum"
-  <*> AST.pName
+  <*> AST.nameParser
   <*> enumValueDefinitions
 
 enumValueDefinitions :: Parser [AST.EnumValueDefinition]
 enumValueDefinitions = braces $ many1 enumValueDefinition
 
 enumValueDefinition :: Parser AST.EnumValueDefinition
-enumValueDefinition = AST.EnumValueDefinition <$> AST.pName
+enumValueDefinition = AST.EnumValueDefinition <$> AST.nameParser
 
 inputObjectTypeDefinition :: Parser AST.InputObjectTypeDefinition
 inputObjectTypeDefinition = AST.InputObjectTypeDefinition
   <$  tok "input"
-  <*> AST.pName
+  <*> AST.nameParser
   <*> inputValueDefinitions
 
 inputValueDefinitions :: Parser [AST.InputValueDefinition]
@@ -307,7 +307,7 @@ inputValueDefinitions = braces $ many1 inputValueDefinition
 
 inputValueDefinition :: Parser AST.InputValueDefinition
 inputValueDefinition = AST.InputValueDefinition
-  <$> AST.pName
+  <$> AST.nameParser
   <*  tok ":"
   <*> type_
   <*> optional defaultValue
