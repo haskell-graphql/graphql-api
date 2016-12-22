@@ -2,7 +2,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 module GraphQL.Internal.AST
-  ( Name(getName)
+  ( Name(getNameText)
   , nameParser
   , makeName
   , unsafeMakeName
@@ -64,10 +64,10 @@ import GraphQL.Internal.Tokens (tok)
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show)
+newtype Name = Name { getNameText :: Text } deriving (Eq, Ord, Show)
 
 instance Aeson.ToJSON Name where
-  toJSON = Aeson.toJSON . getName
+  toJSON = Aeson.toJSON . getNameText
 
 instance Arbitrary Name where
   arbitrary = do
@@ -92,7 +92,7 @@ nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
 -- not match, return Nothing.
 --
 -- >>> makeName "foo"
--- Just (Name {getName = "foo"})
+-- Just (Name {getNameText = "foo"})
 -- >>> makeName "9-bar"
 -- Nothing
 makeName :: Text -> Maybe Name
@@ -103,7 +103,7 @@ makeName = hush . A.parseOnly nameParser
 -- Prefer 'makeName' to this in all cases.
 --
 -- >>> unsafeMakeName "foo"
--- Name {getName = "foo"}
+-- Name {getNameText = "foo"}
 unsafeMakeName :: Text -> Name
 unsafeMakeName name = fromMaybe (panic $ "Not a valid GraphQL name: " <> show name) (makeName name)
 

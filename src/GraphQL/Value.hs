@@ -131,8 +131,8 @@ unionObjects objects = makeObject (objects >>= objectFields)
 
 instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Object xs) = toJSON (Map.fromList [(getName k, v) | ObjectField k v <- xs])
-  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getName k) .= v) xs)
+  toJSON (Object xs) = toJSON (Map.fromList [(getNameText k, v) | ObjectField k v <- xs])
+  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getNameText k) .= v) xs)
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where

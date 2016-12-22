@@ -95,7 +95,7 @@ class ReadValue a where
   -- values for certain cases. E.g. there is an instance for @@Maybe a@@
   -- that returns Nothing if the value is missing.
   valueMissing :: AST.Name -> Either Text a
-  valueMissing name' = Left ("Value missing: " <> AST.getName name')
+  valueMissing name' = Left ("Value missing: " <> AST.getNameText name')
 
 
 -- TODO not super hot on individual values having to be instances of
