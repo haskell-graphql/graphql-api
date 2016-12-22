@@ -225,7 +225,7 @@ instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f,
     let argName = toS (symbolVal (Proxy :: Proxy ks))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
-         Left err' -> Right (NamedFieldExecutor "" (queryError err'))
+         Left err' -> Left (QueryError err')
          Right v' -> buildFieldResolver @m @f (handler v') selection
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))

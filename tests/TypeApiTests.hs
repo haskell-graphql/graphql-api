@@ -59,11 +59,10 @@ tests = testSpec "TypeAPI" $ do
       -- think we may need to use MonadFail??
       let wrongQuery = getQuery "{ not_a_field }"
       caught <- (runQuery wrongQuery >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
-      caught `shouldBe` Just (QueryError "Query for undefined selection: SelectionField (Field \"\" \"not_a_field\" [] [] [])")
+      -- TODO: jml thinks this is a really bad error message. Real problem is
+      -- that `not_a_field` was provided.
+      caught `shouldBe` Just (QueryError "Value missing: x")
     it "complains about missing argument" $ do
       let wrongQuery = getQuery "{ t }"
       caught <- (runQuery wrongQuery >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
-      -- TODO: jml thinks this should be Just (QueryError "Value missing: x"),
-      -- but exercising current behaviour is an improvement, even if it just
-      -- helps us understand what all this code does.
-      caught `shouldBe` Just (QueryError "Query for undefined selection: SelectionField (Field \"\" \"t\" [] [] [])")
+      caught `shouldBe` Just (QueryError "Value missing: x")
