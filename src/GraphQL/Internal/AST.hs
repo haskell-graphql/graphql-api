@@ -101,7 +101,7 @@ formatNameError (NameError name) = "Not a valid GraphQL name: " <> show name
 -- >>> makeName "foo"
 -- Right (Name {getNameText = "foo"})
 -- >>> makeName "9-bar"
--- NameError "9-bar"
+-- Left (NameError "9-bar")
 makeName :: Text -> Either NameError Name
 makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
 
