@@ -213,7 +213,13 @@ builtinType = pure . TypeNonNull . NonNullTypeNamed . BuiltinType
 -- a great deal of duplication by making HasAnnotatedType a parametrised type
 -- class.
 
+-- TODO(jml): Be smarter and figure out how to say "all integral types" rather
+-- than listing each individually.
+
 instance HasAnnotatedType Int where
+  getAnnotatedType = builtinType GInt
+
+instance HasAnnotatedType Int32 where
   getAnnotatedType = builtinType GInt
 
 instance HasAnnotatedType Bool where
@@ -261,6 +267,9 @@ builtinInputType :: Builtin -> Either NameError (AnnotatedType InputType)
 builtinInputType = pure . TypeNonNull . NonNullTypeNamed . BuiltinInputType
 
 instance HasAnnotatedInputType Int where
+  getAnnotatedInputType = builtinInputType GInt
+
+instance HasAnnotatedInputType Int32 where
   getAnnotatedInputType = builtinInputType GInt
 
 instance HasAnnotatedInputType Bool where
