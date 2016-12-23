@@ -50,9 +50,6 @@ instance Exception QueryError
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
 
-unsafeGetName :: HasName a => Either AST.NameError a -> AST.Name
-unsafeGetName = either (panic . AST.formatNameError) getName
-
 -- | Object field separation operator.
 --
 -- Use this to provide handlers for fields of an object.
@@ -216,10 +213,11 @@ class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedFieldExecutor m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
-  buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
+  buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
     let childResolver = buildResolver @m @t handler selectionSet
-        name = unsafeGetName (getFieldDefinition @(Field ks t))
-    in Right (NamedFieldExecutor name childResolver)
+    field <- first (QueryError. AST.formatNameError) (getFieldDefinition @(Field ks t))
+    let name = getName field
+    pure (NamedFieldExecutor name childResolver)
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
@@ -231,12 +229,11 @@ instance forall ks t f m.
          , ReadValue t
          , HasAnnotatedInputType t
          ) => BuildFieldResolver m (Argument ks t :> f) where
-  buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
-    let argName = unsafeGetName (getArgumentDefinition @(Argument ks t))
-        v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
-    in case v of
-         Left err' -> Left (QueryError err')
-         Right v' -> buildFieldResolver @m @f (handler v') selection
+  buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
+    argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
+    let argName = getName argument
+    value <- first QueryError (maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments))
+    buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
@@ -335,15 +332,22 @@ instance forall m object rest.
          , HasGraph m object
          , HasObjectDefinition object
          ) => RunUnion m (object :<|> rest) where
-  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
-    | typeName == queryTypeName = do
-        result <- buildResolver @m @object lh subSelection
-        -- TODO: See if we can prevent this from happening at compile time.
-        case GValue.toObject result of
-          Nothing -> panic $ "Expected object as result of union query: " <> show result
-          Just object -> pure object
-    | otherwise = runUnion @m @rest rh fragment
-    where typeName = unsafeGetName (getDefinition @object)
+  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection)) =
+    case getDefinition @object of
+      Left err -> queryError (AST.formatNameError err)
+      Right object ->
+        if getName object == queryTypeName
+        then do
+          result <- buildResolver @m @object lh subSelection
+          -- TODO: See if we can prevent this from happening at compile time.
+          --
+          -- We should definitely not be panicking in our library code because
+          -- the user returned a Bool from their union type.
+          case GValue.toObject result of
+            Nothing -> panic $ "Expected object as result of union query: " <> show result
+            Just obj -> pure obj
+        else
+          runUnion @m @rest rh fragment
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
@@ -356,15 +360,19 @@ instance forall m typeName interfaces fields.
          , KnownSymbol typeName
          , HasObjectDefinition (Object typeName interfaces fields)
          ) => RunUnion m (Object typeName interfaces fields) where
-  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
-    | typeName == queryTypeName = do
-        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
-        -- TODO: See if we can prevent this from happening at compile time.
-        case GValue.toObject result of
-          Nothing -> panic $ "Expected object as result of union query: " <> show result
-          Just object -> pure object
-    | otherwise = queryError ("Union type could not be resolved:" <> show fragment)
-    where typeName = unsafeGetName (getDefinition @(Object typeName interfaces fields))
+  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection)) =
+    case getDefinition @(Object typeName interfaces fields) of
+      Left err -> queryError (AST.formatNameError err)
+      Right object ->
+        if getName object == queryTypeName
+        then do
+          result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
+          -- TODO: See if we can prevent this from happening at compile time.
+          case GValue.toObject result of
+            Nothing -> panic $ "Expected object as result of union query: " <> show result
+            Just obj -> pure obj
+        else
+          queryError ("Union type could not be resolved:" <> show fragment)
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
