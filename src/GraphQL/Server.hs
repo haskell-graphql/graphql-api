@@ -32,6 +32,7 @@ import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Schema (HasName(..))
 -- TODO: Explicit import
 import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
@@ -48,6 +49,9 @@ instance Exception QueryError
 -- throwM.
 queryError :: forall m a. MonadThrow m => Text -> m a
 queryError = throwM . QueryError
+
+unsafeGetName :: HasName a => Either AST.NameError a -> AST.Name
+unsafeGetName = either (panic . AST.formatNameError) getName
 
 -- | Object field separation operator.
 --
@@ -75,7 +79,6 @@ infixr 8 :<>
 -- | Union type separation operator.
 data a :<|> b = a :<|> b
 infixr 8 :<|>
-
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
@@ -212,19 +215,24 @@ type family FieldHandler m (a :: Type) :: Type where
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedFieldExecutor m)
 
-instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
     let childResolver = buildResolver @m @t handler selectionSet
-        name = AST.unsafeNameFromSymbol (Proxy :: Proxy ks)
+        name = unsafeGetName (getFieldDefinition @(Field ks t))
     in Right (NamedFieldExecutor name childResolver)
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
--- TODO: Remove all unsafeNameFromSymbol and replace with getName on schema values
-instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
+instance forall ks t f m.
+         ( MonadThrow m
+         , KnownSymbol ks
+         , BuildFieldResolver m f
+         , ReadValue t
+         , HasAnnotatedInputType t
+         ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
-    let argName = AST.unsafeNameFromSymbol (Proxy :: Proxy ks)
+    let argName = unsafeGetName (getArgumentDefinition @(Argument ks t))
         v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
     in case v of
          Left err' -> Left (QueryError err')
@@ -320,30 +328,33 @@ type family RunUnionHandlerType m (a :: Type) :: Type where
 class RunUnion m a where
   runUnion :: RunUnionHandlerType m a -> AST.Selection -> m GValue.Object
 
-instance forall m typeName interfaces fields rest.
+instance forall m object rest.
          ( RunUnion m rest
          , MonadIO m
          , MonadThrow m
-         , RunFields m (RunFieldsType m fields)
-         , KnownSymbol typeName
-         ) => RunUnion m (Object typeName interfaces fields :<|> rest) where
+         , HasGraph m object
+         , HasObjectDefinition object
+         ) => RunUnion m (object :<|> rest) where
   runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
-        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
+        result <- buildResolver @m @object lh subSelection
         -- TODO: See if we can prevent this from happening at compile time.
         case GValue.toObject result of
           Nothing -> panic $ "Expected object as result of union query: " <> show result
           Just object -> pure object
     | otherwise = runUnion @m @rest rh fragment
-    where typeName = AST.unsafeNameFromSymbol (Proxy :: Proxy typeName)
+    where typeName = unsafeGetName (getDefinition @object)
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
+-- TODO(jml): I don't understand why I can't extract (Object typeName interfaces fields)
+-- from this instance as I did for the above instance.
 instance forall m typeName interfaces fields.
          ( MonadIO m
          , MonadThrow m
          , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
+         , HasObjectDefinition (Object typeName interfaces fields)
          ) => RunUnion m (Object typeName interfaces fields) where
   runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
     | typeName == queryTypeName = do
@@ -353,10 +364,9 @@ instance forall m typeName interfaces fields.
           Nothing -> panic $ "Expected object as result of union query: " <> show result
           Just object -> pure object
     | otherwise = queryError ("Union type could not be resolved:" <> show fragment)
-    where typeName = AST.unsafeNameFromSymbol (Proxy :: Proxy typeName)
+    where typeName = unsafeGetName (getDefinition @(Object typeName interfaces fields))
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
-
 
 instance forall m ks ru.
          ( MonadThrow m

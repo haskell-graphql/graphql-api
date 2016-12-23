@@ -16,11 +16,13 @@ module GraphQL.API
   , GraphQLEnum(..)
   , Interface
   , (:>)(..)
+  , HasAnnotatedType(..)
+  , HasAnnotatedInputType
+  , HasObjectDefinition(..)
+  , getArgumentDefinition
   -- | Exported for testing. Perhaps should be a different module.
   , getFieldDefinition
-  , getDefinition
   , getInterfaceDefinition
-  , getAnnotatedType
   , getAnnotatedInputType
   ) where
 

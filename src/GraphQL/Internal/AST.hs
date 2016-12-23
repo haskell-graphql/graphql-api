@@ -4,10 +4,10 @@
 module GraphQL.Internal.AST
   ( Name(getNameText)
   , NameError
+  , formatNameError
   , nameParser
   , makeName
   , unsafeMakeName
-  , unsafeNameFromSymbol
   , Document(..)
   , Definition(..)
   , OperationDefinition(..)
@@ -55,7 +55,6 @@ import Protolude hiding (Type)
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
-import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Test.QuickCheck (Arbitrary(..), elements, listOf)
 
 import GraphQL.Internal.Tokens (tok)
@@ -89,6 +88,8 @@ nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
 
 newtype NameError = NameError Text deriving (Eq, Show)
 
+-- TODO: error-handling: if we do go for an ADT error style, we should have a
+-- type class for pretty-printing errors. See jml/graphql-api#20.
 formatNameError :: NameError -> Text
 formatNameError (NameError name) = "Not a valid GraphQL name: " <> show name
 
@@ -115,13 +116,6 @@ unsafeMakeName name =
   case makeName name of
     Left e -> panic (formatNameError e)
     Right n -> n
-
--- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
---
--- Panics if the name is not valid GraphQL.
-unsafeNameFromSymbol :: forall (n :: Symbol) (proxy :: Symbol -> *). KnownSymbol n => proxy n -> Name
-unsafeNameFromSymbol = unsafeMakeName . toS . symbolVal
-
 
 -- * Document
 
