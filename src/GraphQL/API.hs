@@ -160,15 +160,22 @@ instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition
     let name = nameFromSymbol (Proxy :: Proxy ks)
     in FieldDefinition <$> name <*> pure [] <*> getAnnotatedType @t
 
+class HasArgumentDefinition a where
+  getArgumentDefinition :: Either NameError ArgumentDefinition
 
-instance forall ks t b. (KnownSymbol ks, HasAnnotatedInputType t, HasFieldDefinition b) => HasFieldDefinition (Argument ks t :> b) where
+instance forall ks t. (KnownSymbol ks, HasAnnotatedInputType t) => HasArgumentDefinition (Argument ks t) where
+  getArgumentDefinition = ArgumentDefinition <$> argName <*> argType <*> defaultValue
+    where
+      argName = nameFromSymbol (Proxy :: Proxy ks)
+      argType = getAnnotatedInputType @t
+      defaultValue = pure Nothing
+
+instance forall a b. (HasArgumentDefinition a, HasFieldDefinition b) => HasFieldDefinition (a :> b) where
   getFieldDefinition =
     prependArg <$> argument <*> getFieldDefinition @b
     where
       prependArg arg (FieldDefinition name argDefs at) = FieldDefinition name (arg:argDefs) at
-      argument = ArgumentDefinition <$> argName <*> argType <*> pure Nothing
-      argName = nameFromSymbol (Proxy :: Proxy ks)
-      argType = getAnnotatedInputType @t
+      argument = getArgumentDefinition @a
 
 instance forall ks is fields.
   (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions fields) =>
@@ -201,6 +208,10 @@ instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
 
 builtinType :: Builtin -> Either NameError (AnnotatedType GraphQL.Internal.Schema.Type)
 builtinType = pure . TypeNonNull . NonNullTypeNamed . BuiltinType
+
+-- TODO(jml): Given that AnnotatedType is parametrised, we can probably reduce
+-- a great deal of duplication by making HasAnnotatedType a parametrised type
+-- class.
 
 instance HasAnnotatedType Int where
   getAnnotatedType = builtinType GInt

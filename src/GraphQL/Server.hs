@@ -221,6 +221,7 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) 
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
+-- TODO: Remove all unsafeNameFromSymbol and replace with getName on schema values
 instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
     let argName = AST.unsafeNameFromSymbol (Proxy :: Proxy ks)
