@@ -291,7 +291,6 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
 
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType = do
-    -- TODO: rewrite applicative
     let name = nameFromSymbol (Proxy :: Proxy ks)
     let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
     TypeNonNull . NonNullTypeNamed . DefinedInputType . InputTypeDefinitionEnum <$> et
