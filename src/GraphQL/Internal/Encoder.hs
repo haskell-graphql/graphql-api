@@ -165,8 +165,8 @@ fieldDefinitions = bracesCommas fieldDefinition
 fieldDefinition :: AST.FieldDefinition -> Text
 fieldDefinition (AST.FieldDefinition name args ty) =
   AST.getNameText name <> optempty argumentsDefinition args
-                   <> ":"
-                   <> type_ ty
+                       <> ":"
+                       <> type_ ty
 
 argumentsDefinition :: AST.ArgumentsDefinition -> Text
 argumentsDefinition = parensCommas inputValueDefinition
