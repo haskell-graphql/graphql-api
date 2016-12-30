@@ -88,7 +88,7 @@ ok v = Result [] v
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
-class (MonadIO m) => HasGraph m a where
+class (Monad m) => HasGraph m a where
   type Handler m a
   buildResolver :: Handler m a -> CanonicalQuery -> m Result
 
@@ -110,24 +110,24 @@ class ReadValue a where
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
-instance forall m. (MonadIO m) => HasGraph m Int32 where
+instance forall m. (Monad m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  do
     map (ok . GValue.toValue) handler
 
-instance forall m. (MonadIO m) => HasGraph m Double where
+instance forall m. (Monad m) => HasGraph m Double where
   type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map (ok . GValue.toValue) handler
 
-instance forall m. (MonadIO m) => HasGraph m Text where
+instance forall m. (Monad m) => HasGraph m Text where
   type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map (ok . GValue.toValue) handler
 
 
-instance forall m hg. (MonadIO m, HasGraph m hg) => HasGraph m (List hg) where
+instance forall m hg. (Monad m, HasGraph m hg) => HasGraph m (List hg) where
   type Handler m (List hg) = [Handler m hg]
   buildResolver handler selectionSet = map resultValues a
     where
@@ -140,7 +140,7 @@ instance forall m hg. (MonadIO m, HasGraph m hg) => HasGraph m (List hg) where
         let (errs, valueList) = foldl' (\(eb, vb) (Result ea va) -> ((eb <> ea), va:vb)) ([], []) r
         in Result errs (GValue.toValue valueList)
 
-instance forall m ks enum. (MonadIO m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
+instance forall m ks enum. (Monad m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
   type Handler m (Enum ks enum) = enum
   buildResolver handler _ = (pure . ok . enumToValue) handler
 
@@ -235,10 +235,10 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Field ks t) = Handler m t
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
 
-class (MonadIO m) => BuildFieldResolver m a where
+class (Monad m) => BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedValueResolver m)
 
-instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, MonadIO m) => BuildFieldResolver m (Field ks t) where
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
     let resolver = buildResolver @m @t handler selectionSet
     field <- first (QueryError. AST.formatNameError) (getFieldDefinition @(Field ks t))
@@ -289,7 +289,7 @@ class RunFields m a where
 instance forall f fs m.
          ( BuildFieldResolver m f
          , RunFields m fs
-         , MonadIO m
+         , Monad m
          ) => RunFields m (f :<> fs) where
   runFields (handler :<> nextHandlers) selection =
     resolveField @f @m handler nextHandler selection
@@ -298,7 +298,7 @@ instance forall f fs m.
 
 instance forall ks t m.
          ( BuildFieldResolver m (Field ks t)
-         , MonadIO m
+         , Monad m
          ) => RunFields m (Field ks t) where
   runFields handler selection =
     resolveField @(Field ks t) @m handler nextHandler selection
@@ -307,7 +307,7 @@ instance forall ks t m.
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
-         , MonadIO m
+         , Monad m
          ) => RunFields m (a :> b) where
   runFields handler selection =
     resolveField @(a :> b) @m handler nextHandler selection
@@ -317,7 +317,7 @@ instance forall m a b.
 
 instance forall typeName interfaces fields m.
          ( RunFields m (RunFieldsType m fields)
-         , MonadIO m
+         , Monad m
          ) => HasGraph m (Object typeName interfaces fields) where
   type Handler m (Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
