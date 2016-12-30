@@ -1,10 +1,17 @@
 {-# LANGUAGE DataKinds #-}
 module Examples.UnionExample  where
 
+-- TODO: union code is totally wrong because I misunderstood the
+-- spec. The server decides the return type and we'll probably need an
+-- open sum type for returning.
+
+{-
+
 import Protolude hiding (Enum)
 import qualified GraphQL.Internal.AST as AST
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import GraphQL.Internal.Parser (document)
+
 
 import GraphQL.API
 import GraphQL.Server
@@ -32,3 +39,4 @@ query q =
   let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
        parseOnly (document <* endOfInput) q
   in selectionSet
+-}
