@@ -5,7 +5,7 @@ module Examples.FileSystem where
 import Protolude hiding (Enum)
 
 import GraphQL.API
-import GraphQL.Resolver
+import GraphQL.Server
 import qualified GraphQL.Internal.AST as AST
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import GraphQL.Internal.Parser (document)

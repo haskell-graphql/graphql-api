@@ -65,6 +65,7 @@ test-suite graphql-api-doctests
     , doctest
   other-modules:
       ASTTests
+      Examples.FileSystem
       Examples.UnionExample
       Spec
       TypeApiTests
@@ -98,6 +99,7 @@ test-suite graphql-api-tests
   other-modules:
       ASTTests
       Doctests
+      Examples.FileSystem
       Examples.UnionExample
       TypeApiTests
       TypeTests

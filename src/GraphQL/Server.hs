@@ -203,7 +203,7 @@ data NamedValueResolver m = NamedValueResolver AST.Name (m Result)
 -- Iterate through handlers (zipped together with their type
 -- definition) and execute handler if the name matches.
 --
--- TODO: tuple return not great (but either is wrong, too because it discards errors. Also probably need Maybe for ObjectField?
+-- TODO: tuple return not great (but either is wrong, too because it discards errors.
 type ResolveFieldResult = ([QueryError], Maybe GValue.ObjectField)
 resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a
   => FieldHandler m a -> m ResolveFieldResult -> AST.Selection -> m ResolveFieldResult
@@ -244,8 +244,8 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad
     field <- first (QueryError. AST.formatNameError) (getFieldDefinition @(Field ks t))
     let name = getName field
     Right (NamedValueResolver name resolver)
-  buildFieldResolver _ _ =
-    panic "this can not happen"
+  buildFieldResolver _ f =
+    Left (InternalError ("Unexpected query selection in buildFieldResolver: " <> show f))
 
 
 instance forall ks t f m.
@@ -259,8 +259,8 @@ instance forall ks t f m.
     let argName = getName argument
     value <- first QueryError (maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
-  buildFieldResolver _ _ =
-    panic "this can not happen"
+  buildFieldResolver _ f =
+    Left (InternalError ("Unexpected query selection in buildFieldResolver: " <> show f))
 
 
 -- We only allow Field and Argument :> Field combinations:
