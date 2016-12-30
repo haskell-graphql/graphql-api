@@ -14,6 +14,7 @@ import qualified ValueTests
 
 -- import examples to ensure they compile
 import Examples.UnionExample ()
+import Examples.FileSystem ()
 
 main :: IO ()
 main = do

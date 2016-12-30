@@ -45,6 +45,7 @@ tests:
       - raw-strings-qq
       - tasty
       - tasty-hspec
+      - directory
 
   graphql-api-doctests:
     main: Doctests.hs
