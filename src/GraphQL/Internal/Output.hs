@@ -12,10 +12,10 @@ import Data.List.NonEmpty (NonEmpty)
 import GraphQL.Value
   ( Object
   , objectFromList
-  , unsafeMakeName
   , ToValue(..)
   , Value(ValueObject, ValueNull)
   )
+import GraphQL.Internal.AST (unsafeMakeName)
 
 -- | GraphQL response.
 --

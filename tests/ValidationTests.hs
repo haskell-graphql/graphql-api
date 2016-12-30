@@ -17,6 +17,11 @@ import GraphQL.Internal.Validation
   , getErrors
   )
 
+me :: AST.Name
+me = AST.unsafeMakeName "me"
+
+someName :: AST.Name
+someName = AST.unsafeMakeName "name"
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do
@@ -25,8 +30,8 @@ tests = testSpec "Validation" $ do
       let doc = AST.Document
                 [ AST.DefinitionOperation
                   ( AST.Query
-                    ( AST.Node "me" [] []
-                      [ AST.SelectionField (AST.Field "name" "name" [] [] [])
+                    ( AST.Node (Just me) [] []
+                      [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
                   )
@@ -37,20 +42,20 @@ tests = testSpec "Validation" $ do
       let doc = AST.Document
                 [ AST.DefinitionOperation
                   ( AST.Query
-                    ( AST.Node "me" [] []
-                      [ AST.SelectionField (AST.Field "name" "name" [] [] [])
+                    ( AST.Node (Just me) [] []
+                      [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
                   )
                 , AST.DefinitionOperation
                   ( AST.Query
-                    ( AST.Node "me" [] []
-                      [ AST.SelectionField (AST.Field "name" "name" [] [] [])
+                    ( AST.Node (Just me) [] []
+                      [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
                   )
                 ]
-      getErrors doc `shouldBe` [DuplicateOperation "me"]
+      getErrors doc `shouldBe` [DuplicateOperation (Just me)]
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do

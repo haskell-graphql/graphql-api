@@ -27,7 +27,7 @@ operationDefinition (AST.Mutation n) = "mutation " <> node n
 
 node :: AST.Node -> Text
 node (AST.Node name vds ds ss) =
-     name
+     maybe mempty AST.getNameText name
   <> optempty variableDefinitions vds
   <> optempty directives ds
   <> selectionSet ss
@@ -43,7 +43,7 @@ defaultValue :: AST.DefaultValue -> Text
 defaultValue val = "=" <> value val
 
 variable :: AST.Variable -> Text
-variable (AST.Variable name) = "$" <> name
+variable (AST.Variable name) = "$" <> AST.getNameText name
 
 selectionSet :: AST.SelectionSet -> Text
 selectionSet = bracesCommas selection
@@ -55,8 +55,8 @@ selection (AST.SelectionFragmentSpread x) = fragmentSpread x
 
 field :: AST.Field -> Text
 field (AST.Field alias name args ds ss) =
-       optempty (`snoc` ':') alias
-    <> name
+       optempty (`snoc` ':') (maybe mempty AST.getNameText alias)
+    <> AST.getNameText name
     <> optempty arguments args
     <> optempty directives ds
     <> optempty selectionSet ss
@@ -65,23 +65,23 @@ arguments :: [AST.Argument] -> Text
 arguments = parensCommas argument
 
 argument :: AST.Argument -> Text
-argument (AST.Argument name v) = name <> ":" <> value v
+argument (AST.Argument name v) = AST.getNameText name <> ":" <> value v
 
 -- * Fragments
 
 fragmentSpread :: AST.FragmentSpread -> Text
 fragmentSpread (AST.FragmentSpread name ds) =
-  "..." <> name <> optempty directives ds
+  "..." <> AST.getNameText name <> optempty directives ds
 
 inlineFragment :: AST.InlineFragment -> Text
 inlineFragment (AST.InlineFragment (AST.NamedType tc) ds ss) =
-  "... on " <> tc
+  "... on " <> AST.getNameText tc
             <> optempty directives ds
             <> optempty selectionSet ss
 
 fragmentDefinition :: AST.FragmentDefinition -> Text
 fragmentDefinition (AST.FragmentDefinition name (AST.NamedType tc) ds ss) =
-  "fragment " <> name <> " on " <> tc
+  "fragment " <> AST.getNameText name <> " on " <> AST.getNameText tc
               <> optempty directives ds
               <> selectionSet ss
 
@@ -95,7 +95,7 @@ value (AST.ValueInt      x) = pack $ show x
 value (AST.ValueFloat    x) = pack $ show x
 value (AST.ValueBoolean  x) = booleanValue x
 value (AST.ValueString   x) = stringValue x
-value (AST.ValueEnum     x) = x
+value (AST.ValueEnum     x) = AST.getNameText x
 value (AST.ValueList     x) = listValue x
 value (AST.ValueObject   x) = objectValue x
 
@@ -114,7 +114,7 @@ objectValue :: AST.ObjectValue -> Text
 objectValue (AST.ObjectValue ofs) = bracesCommas objectField ofs
 
 objectField :: AST.ObjectField -> Text
-objectField (AST.ObjectField name v) = name <> ":" <> value v
+objectField (AST.ObjectField name v) = AST.getNameText name <> ":" <> value v
 
 -- * Directives
 
@@ -122,23 +122,23 @@ directives :: [AST.Directive] -> Text
 directives = spaces directive
 
 directive :: AST.Directive -> Text
-directive (AST.Directive name args) = "@" <> name <> optempty arguments args
+directive (AST.Directive name args) = "@" <> AST.getNameText name <> optempty arguments args
 
 -- * Type Reference
 
 type_ :: AST.Type -> Text
-type_ (AST.TypeNamed (AST.NamedType x)) = x
+type_ (AST.TypeNamed (AST.NamedType x)) = AST.getNameText x
 type_ (AST.TypeList x) = listType x
 type_ (AST.TypeNonNull x) = nonNullType x
 
 namedType :: AST.NamedType -> Text
-namedType (AST.NamedType name) = name
+namedType (AST.NamedType name) = AST.getNameText name
 
 listType :: AST.ListType -> Text
 listType (AST.ListType ty) = brackets (type_ ty)
 
 nonNullType :: AST.NonNullType -> Text
-nonNullType (AST.NonNullTypeNamed (AST.NamedType x)) = x <> "!"
+nonNullType (AST.NonNullTypeNamed (AST.NamedType x)) = AST.getNameText x <> "!"
 nonNullType (AST.NonNullTypeList  x) = listType x <> "!"
 
 typeDefinition :: AST.TypeDefinition -> Text
@@ -152,7 +152,7 @@ typeDefinition (AST.TypeDefinitionTypeExtension x) = typeExtensionDefinition x
 
 objectTypeDefinition :: AST.ObjectTypeDefinition -> Text
 objectTypeDefinition (AST.ObjectTypeDefinition name ifaces fds) =
-  "type " <> name
+  "type " <> AST.getNameText name
           <> optempty (spaced . interfaces) ifaces
           <> optempty fieldDefinitions fds
 
@@ -164,45 +164,45 @@ fieldDefinitions = bracesCommas fieldDefinition
 
 fieldDefinition :: AST.FieldDefinition -> Text
 fieldDefinition (AST.FieldDefinition name args ty) =
-  name <> optempty argumentsDefinition args
-       <> ":"
-       <> type_ ty
+  AST.getNameText name <> optempty argumentsDefinition args
+                       <> ":"
+                       <> type_ ty
 
 argumentsDefinition :: AST.ArgumentsDefinition -> Text
 argumentsDefinition = parensCommas inputValueDefinition
 
 interfaceTypeDefinition :: AST.InterfaceTypeDefinition -> Text
 interfaceTypeDefinition (AST.InterfaceTypeDefinition name fds) =
-  "interface " <> name <> fieldDefinitions fds
+  "interface " <> AST.getNameText name <> fieldDefinitions fds
 
 unionTypeDefinition :: AST.UnionTypeDefinition -> Text
 unionTypeDefinition (AST.UnionTypeDefinition name ums) =
-  "union " <> name <> "=" <> unionMembers ums
+  "union " <> AST.getNameText name <> "=" <> unionMembers ums
 
 unionMembers :: [AST.NamedType] -> Text
 unionMembers = intercalate "|" . fmap namedType
 
 scalarTypeDefinition :: AST.ScalarTypeDefinition -> Text
-scalarTypeDefinition (AST.ScalarTypeDefinition name) = "scalar " <> name
+scalarTypeDefinition (AST.ScalarTypeDefinition name) = "scalar " <> AST.getNameText name
 
 enumTypeDefinition :: AST.EnumTypeDefinition -> Text
 enumTypeDefinition (AST.EnumTypeDefinition name evds) =
-  "enum " <> name
+  "enum " <> AST.getNameText name
           <> bracesCommas enumValueDefinition evds
 
 enumValueDefinition :: AST.EnumValueDefinition -> Text
-enumValueDefinition (AST.EnumValueDefinition name) = name
+enumValueDefinition (AST.EnumValueDefinition name) = AST.getNameText name
 
 inputObjectTypeDefinition :: AST.InputObjectTypeDefinition -> Text
 inputObjectTypeDefinition (AST.InputObjectTypeDefinition name ivds) =
-  "input " <> name <> inputValueDefinitions ivds
+  "input " <> AST.getNameText name <> inputValueDefinitions ivds
 
 inputValueDefinitions :: [AST.InputValueDefinition] -> Text
 inputValueDefinitions = bracesCommas inputValueDefinition
 
 inputValueDefinition :: AST.InputValueDefinition -> Text
 inputValueDefinition (AST.InputValueDefinition name ty dv) =
-  name <> ":" <> type_ ty <> maybe mempty defaultValue dv
+  AST.getNameText name <> ":" <> type_ ty <> maybe mempty defaultValue dv
 
 typeExtensionDefinition :: AST.TypeExtensionDefinition -> Text
 typeExtensionDefinition (AST.TypeExtensionDefinition otd) =

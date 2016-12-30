@@ -1,6 +1,13 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 module GraphQL.Internal.AST
-  ( Name
+  ( Name(getNameText)
+  , NameError
+  , formatNameError
   , nameParser
+  , makeName
+  , unsafeMakeName
   , Document(..)
   , Definition(..)
   , OperationDefinition(..)
@@ -45,23 +52,70 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
-import Data.Char (isDigit)
+import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
-import GraphQL.Internal.Tokens (tok)
+import Data.Char (isDigit)
+import Test.QuickCheck (Arbitrary(..), elements, listOf)
 
--- TODO: Our GraphQL.Value.Name has more guarantees than AST.Name (which is
--- just a Text alias). We should change that so AST.Name is guaranteed valid.
+import GraphQL.Internal.Tokens (tok)
 
 -- * Name
 
-type Name = Text
+-- | A name in GraphQL.
+--
+-- https://facebook.github.io/graphql/#sec-Names
+newtype Name = Name { getNameText :: Text } deriving (Eq, Ord, Show)
 
+instance Aeson.ToJSON Name where
+  toJSON = Aeson.toJSON . getNameText
+
+instance Arbitrary Name where
+  arbitrary = do
+    initial <- elements alpha
+    rest <- listOf (elements (alpha <> numeric))
+    pure (unsafeMakeName (toS (initial:rest)))
+    where
+      alpha = ['A'..'Z'] <> ['a'..'z'] <> ['_']
+      numeric = ['0'..'9']
+
+-- | Parser for 'Name'.
 nameParser :: A.Parser Name
-nameParser = tok $ (<>) <$> A.takeWhile1 isA_z
-                   <*> A.takeWhile ((||) <$> isDigit <*> isA_z)
+nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
+                                <*> A.takeWhile ((||) <$> isDigit <*> isA_z))
   where
     -- `isAlpha` handles many more Unicode Chars
     isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
+
+newtype NameError = NameError Text deriving (Eq, Show)
+
+-- TODO: error-handling: if we do go for an ADT error style, we should have a
+-- type class for pretty-printing errors. See jml/graphql-api#20.
+formatNameError :: NameError -> Text
+formatNameError (NameError name) = "Not a valid GraphQL name: " <> show name
+
+-- | Create a 'Name'.
+--
+-- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
+-- not match, return Nothing.
+--
+-- >>> makeName "foo"
+-- Right (Name {getNameText = "foo"})
+-- >>> makeName "9-bar"
+-- Left (NameError "9-bar")
+makeName :: Text -> Either NameError Name
+makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
+
+-- | Create a 'Name', panicking if the given text is invalid.
+--
+-- Prefer 'makeName' to this in all cases.
+--
+-- >>> unsafeMakeName "foo"
+-- Name {getNameText = "foo"}
+unsafeMakeName :: Text -> Name
+unsafeMakeName name =
+  case makeName name of
+    Left e -> panic (formatNameError e)
+    Right n -> n
 
 -- * Document
 
@@ -76,12 +130,12 @@ data OperationDefinition = Query    { getNode :: Node }
                          | Mutation { getNode :: Node }
                            deriving (Eq,Show)
 
-data Node = Node Name [VariableDefinition] [Directive] SelectionSet
+data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
 -- XXX: Lots of things have names. Maybe we should define a typeclass for
 -- getting the name?
-getNodeName :: Node -> Name
+getNodeName :: Node -> Maybe Name
 getNodeName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
@@ -96,9 +150,7 @@ data Selection = SelectionField Field
                | SelectionInlineFragment InlineFragment
                  deriving (Eq,Show)
 
-data Field = Field Alias Name [Argument]
-                              [Directive]
-                              SelectionSet
+data Field = Field (Maybe Alias) Name [Argument] [Directive] SelectionSet
              deriving (Eq,Show)
 
 type Alias = Name

@@ -25,6 +25,12 @@ genASTValue = do
   v <- valueToAST <$> arbitrary
   maybe discard pure v
 
+dog :: AST.Name
+dog = AST.unsafeMakeName "dog"
+
+someName :: AST.Name
+someName = AST.unsafeMakeName "name"
+
 tests :: IO TestTree
 tests = testSpec "AST" $ do
   describe "Parser and encoder" $ do
@@ -60,9 +66,9 @@ tests = testSpec "AST" $ do
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue
-                     [ AST.ObjectField "s"
+                     [ AST.ObjectField (AST.unsafeMakeName "s")
                        (AST.ValueString (AST.StringValue "\224\225v^6{FPDk\DC3\a")),
-                       AST.ObjectField "Hsr" (AST.ValueInt 0)
+                       AST.ObjectField (AST.unsafeMakeName "Hsr") (AST.ValueInt 0)
                      ])
         let output = Encoder.value input
         parseOnly Parser.value output `shouldBe` Right input
@@ -86,10 +92,10 @@ tests = testSpec "AST" $ do
       let expected = AST.Document
                      [ AST.DefinitionOperation
                        (AST.Query
-                         (AST.Node "" [] []
+                         (AST.Node Nothing [] []
                            [ AST.SelectionField
-                               (AST.Field "" "dog" [] []
-                                 [ AST.SelectionField (AST.Field "" "name" [] [] [])
+                               (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                  ])
                            ]))
                      ]
@@ -113,10 +119,10 @@ tests = testSpec "AST" $ do
       let expected = AST.Document
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node "" [] []
+                           (AST.Node Nothing [] []
                             [ AST.SelectionField
-                                (AST.Field "" "dog" [] []
-                                  [ AST.SelectionField (AST.Field "" "name" [] [] [])
+                                (AST.Field Nothing dog [] []
+                                  [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                   ])
                             ]))
                      ]
@@ -134,18 +140,18 @@ tests = testSpec "AST" $ do
       let expected = AST.Document
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node "houseTrainedQuery"
+                           (AST.Node (Just (AST.unsafeMakeName "houseTrainedQuery"))
                             [ AST.VariableDefinition
-                                (AST.Variable "atOtherHomes")
-                                (AST.TypeNamed (AST.NamedType "Boolean"))
+                                (AST.Variable (AST.unsafeMakeName "atOtherHomes"))
+                                (AST.TypeNamed (AST.NamedType (AST.unsafeMakeName "Boolean")))
                                 (Just (AST.ValueBoolean True))
                             ] []
                             [ AST.SelectionField
-                                (AST.Field "" "dog" [] []
+                                (AST.Field Nothing dog [] []
                                  [ AST.SelectionField
-                                     (AST.Field "" "isHousetrained"
-                                      [ AST.Argument "atOtherHomes"
-                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                     (AST.Field Nothing (AST.unsafeMakeName "isHousetrained")
+                                      [ AST.Argument (AST.unsafeMakeName "atOtherHomes")
+                                          (AST.ValueVariable (AST.Variable (AST.unsafeMakeName "atOtherHomes")))
                                       ] [] [])
                                  ])
                             ]))

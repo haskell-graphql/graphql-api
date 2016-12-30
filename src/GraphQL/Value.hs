@@ -9,8 +9,6 @@ module GraphQL.Value
   , ToValue(..)
   , valueToAST
   , Name
-  , makeName
-  , unsafeMakeName
   , List
   , String(..)
     -- * Objects
@@ -31,50 +29,11 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.String
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
-import Data.Attoparsec.Text (parseOnly)
 import qualified Data.Map as Map
+import Test.QuickCheck (Arbitrary(..), oneof, listOf)
+
+import GraphQL.Internal.AST (Name(..))
 import qualified GraphQL.Internal.AST as AST
-import Test.QuickCheck (Arbitrary(..), elements, oneof, listOf)
-
-import qualified GraphQL.Internal.AST as AST
-
--- | A name in GraphQL.
---
--- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { getName :: Text } deriving (Eq, Ord, Show)
-
-instance ToJSON Name where
-  toJSON = toJSON . getName
-
-instance Arbitrary Name where
-  arbitrary = do
-    initial <- elements alpha
-    rest <- listOf (elements (alpha <> numeric))
-    pure (unsafeMakeName (toS (initial:rest)))
-    where
-      alpha = ['A'..'Z'] <> ['a'..'z'] <> ['_']
-      numeric = ['0'..'9']
-
--- | Create a 'Name'.
---
--- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
--- not match, return Nothing.
---
--- >>> makeName "foo"
--- Just (Name {getName = "foo"})
--- >>> makeName "9-bar"
--- Nothing
-makeName :: Text -> Maybe Name
-makeName = map Name . hush . parseOnly AST.nameParser
-
--- | Create a 'Name', panicking if the given text is invalid.
---
--- Prefer 'makeName' to this in all cases.
---
--- >>> unsafeMakeName "foo"
--- Name {getName = "foo"}
-unsafeMakeName :: Text -> Name
-unsafeMakeName name = fromMaybe (panic $ "Not a valid GraphQL name: " <> show name) (makeName name)
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -172,8 +131,8 @@ unionObjects objects = makeObject (objects >>= objectFields)
 
 instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Object xs) = toJSON (Map.fromList [(getName k, v) | ObjectField k v <- xs])
-  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getName k) .= v) xs)
+  toJSON (Object xs) = toJSON (Map.fromList [(getNameText k, v) | ObjectField k v <- xs])
+  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getNameText k) .= v) xs)
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
@@ -225,9 +184,9 @@ valueToAST (ValueInt x) = pure $ AST.ValueInt x
 valueToAST (ValueFloat x) = pure $ AST.ValueFloat x
 valueToAST (ValueBoolean x) = pure $ AST.ValueBoolean x
 valueToAST (ValueString (String x)) = pure $ AST.ValueString (AST.StringValue x)
-valueToAST (ValueEnum x) = pure $ AST.ValueEnum (getName x)
+valueToAST (ValueEnum x) = pure $ AST.ValueEnum x
 valueToAST (ValueList (List xs)) = AST.ValueList . AST.ListValue <$> traverse valueToAST xs
 valueToAST (ValueObject (Object fields)) = AST.ValueObject . AST.ObjectValue <$> traverse toObjectField fields
   where
-    toObjectField (ObjectField name value) = AST.ObjectField (getName name) <$> valueToAST value
+    toObjectField (ObjectField name value) = AST.ObjectField name <$> valueToAST value
 valueToAST ValueNull = empty

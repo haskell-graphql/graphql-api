@@ -27,11 +27,13 @@ module GraphQL.Server
 -- - Enforce non-empty lists (might only be doable via value-level validation)
 
 import Protolude hiding (Enum)
-import GHC.TypeLits (KnownSymbol, symbolVal)
+import GHC.TypeLits (KnownSymbol)
 import qualified GHC.TypeLits as TypeLits
 
 import qualified GraphQL.Value as GValue
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Schema (HasName(..))
+-- TODO: Explicit import
 import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
 
@@ -75,7 +77,6 @@ infixr 8 :<>
 data a :<|> b = a :<|> b
 infixr 8 :<|>
 
-
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
 class (MonadThrow m, MonadIO m) => HasGraph m a where
@@ -94,7 +95,7 @@ class ReadValue a where
   -- values for certain cases. E.g. there is an instance for @@Maybe a@@
   -- that returns Nothing if the value is missing.
   valueMissing :: AST.Name -> Either Text a
-  valueMissing name' = Left ("Value missing: " <> name')
+  valueMissing name' = Left ("Value missing: " <> AST.getNameText name')
 
 
 -- TODO not super hot on individual values having to be instances of
@@ -185,7 +186,7 @@ executeNamedField :: Monad m => AST.Field -> NamedFieldExecutor m -> m (Maybe GV
 executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
   | name == k = do
       value <- mValue
-      let name' = GValue.unsafeMakeName $ if alias == "" then name else alias
+      let name' = fromMaybe name alias
       pure (Just (GValue.ObjectField name' value))
   | otherwise = pure Nothing
 
@@ -211,22 +212,28 @@ type family FieldHandler m (a :: Type) :: Type where
 class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedFieldExecutor m)
 
-instance forall ks t m. (KnownSymbol ks, HasGraph m t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
-  buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) =
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
+  buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
     let childResolver = buildResolver @m @t handler selectionSet
-        name = toS (symbolVal (Proxy :: Proxy ks))
-    in Right (NamedFieldExecutor name childResolver)
+    field <- first (QueryError. AST.formatNameError) (getFieldDefinition @(Field ks t))
+    let name = getName field
+    pure (NamedFieldExecutor name childResolver)
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
 
-instance forall ks t f m. (MonadThrow m, KnownSymbol ks, BuildFieldResolver m f, ReadValue t) => BuildFieldResolver m (Argument ks t :> f) where
-  buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) =
-    let argName = toS (symbolVal (Proxy :: Proxy ks))
-        v = maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments)
-    in case v of
-         Left err' -> Left (QueryError err')
-         Right v' -> buildFieldResolver @m @f (handler v') selection
+instance forall ks t f m.
+         ( MonadThrow m
+         , KnownSymbol ks
+         , BuildFieldResolver m f
+         , ReadValue t
+         , HasAnnotatedInputType t
+         ) => BuildFieldResolver m (Argument ks t :> f) where
+  buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
+    argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
+    let argName = getName argument
+    value <- first QueryError (maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments))
+    buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
 
@@ -318,43 +325,56 @@ type family RunUnionHandlerType m (a :: Type) :: Type where
 class RunUnion m a where
   runUnion :: RunUnionHandlerType m a -> AST.Selection -> m GValue.Object
 
-instance forall m typeName interfaces fields rest.
+instance forall m object rest.
          ( RunUnion m rest
          , MonadIO m
          , MonadThrow m
-         , RunFields m (RunFieldsType m fields)
-         , KnownSymbol typeName
-         ) => RunUnion m (Object typeName interfaces fields :<|> rest) where
-  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
-    | typeName == queryTypeName = do
-        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
-        -- TODO: See if we can prevent this from happening at compile time.
-        case GValue.toObject result of
-          Nothing -> panic $ "Expected object as result of union query: " <> show result
-          Just object -> pure object
-    | otherwise = runUnion @m @rest rh fragment
-    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+         , HasGraph m object
+         , HasObjectDefinition object
+         ) => RunUnion m (object :<|> rest) where
+  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection)) =
+    case getDefinition @object of
+      Left err -> queryError (AST.formatNameError err)
+      Right object ->
+        if getName object == queryTypeName
+        then do
+          result <- buildResolver @m @object lh subSelection
+          -- TODO: See if we can prevent this from happening at compile time.
+          --
+          -- We should definitely not be panicking in our library code because
+          -- the user returned a Bool from their union type.
+          case GValue.toObject result of
+            Nothing -> panic $ "Expected object as result of union query: " <> show result
+            Just obj -> pure obj
+        else
+          runUnion @m @rest rh fragment
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
 
+-- TODO(jml): I don't understand why I can't extract (Object typeName interfaces fields)
+-- from this instance as I did for the above instance.
 instance forall m typeName interfaces fields.
          ( MonadIO m
          , MonadThrow m
          , RunFields m (RunFieldsType m fields)
          , KnownSymbol typeName
+         , HasObjectDefinition (Object typeName interfaces fields)
          ) => RunUnion m (Object typeName interfaces fields) where
-  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection))
-    | typeName == queryTypeName = do
-        result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
-        -- TODO: See if we can prevent this from happening at compile time.
-        case GValue.toObject result of
-          Nothing -> panic $ "Expected object as result of union query: " <> show result
-          Just object -> pure object
-    | otherwise = queryError ("Union type could not be resolved:" <> show fragment)
-    where typeName = toS (symbolVal (Proxy :: Proxy typeName))
+  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection)) =
+    case getDefinition @(Object typeName interfaces fields) of
+      Left err -> queryError (AST.formatNameError err)
+      Right object ->
+        if getName object == queryTypeName
+        then do
+          result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
+          -- TODO: See if we can prevent this from happening at compile time.
+          case GValue.toObject result of
+            Nothing -> panic $ "Expected object as result of union query: " <> show result
+            Just obj -> pure obj
+        else
+          queryError ("Union type could not be resolved:" <> show fragment)
   runUnion _ _ =
     queryError "Non-InlineFragment used for a union type query."
-
 
 instance forall m ks ru.
          ( MonadThrow m
