@@ -35,12 +35,12 @@ import Protolude
 
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
-import qualified Data.String
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), oneof, listOf)
 
+import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.AST (Name(..))
 import qualified GraphQL.Internal.AST as AST
 
@@ -86,7 +86,7 @@ instance Arbitrary Value where
 newtype String = String Text deriving (Eq, Ord, Show)
 
 instance Arbitrary String where
-  arbitrary = String . toS <$> arbitrary @Data.String.String
+  arbitrary = String <$> arbitraryText
 
 instance ToJSON String where
   toJSON (String x) = toJSON x

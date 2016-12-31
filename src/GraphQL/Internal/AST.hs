@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 module GraphQL.Internal.AST
   ( Name(getNameText)
@@ -55,9 +54,9 @@ import Protolude hiding (Type)
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
-import qualified Data.String
 import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
 
+import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.Tokens (tok)
 
 -- * Name
@@ -203,7 +202,7 @@ instance Arbitrary Value where
 newtype StringValue = StringValue Text deriving (Eq,Show)
 
 instance Arbitrary StringValue where
-  arbitrary = StringValue . toS <$> arbitrary @Data.String.String
+  arbitrary = StringValue <$> arbitraryText
 
 newtype ListValue = ListValue [Value] deriving (Eq,Show)
 

@@ -1,17 +1,14 @@
-{-# LANGUAGE RankNTypes #-}
 module ValueTests (tests) where
 
 import Protolude
 
-import qualified Data.List.NonEmpty as NonEmpty
-import Data.List.NonEmpty (NonEmpty)
-import qualified Data.String
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Gen, Arbitrary(..), arbitrary, forAll, listOf1)
+import Test.QuickCheck (forAll)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
 import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Value
   ( Object(..)
@@ -25,16 +22,6 @@ import GraphQL.Value
   , toValue
   )
 
-
-arbitraryText :: Gen Text
-arbitraryText = toS <$> arbitrary @Data.String.String
-
-arbitraryNonEmpty :: forall a. Arbitrary a => Gen (NonEmpty a)
-arbitraryNonEmpty =
-  -- NonEmpty.fromList panics, but that's OK, because listOf1 is guaranteed to
-  -- return a non-empty list, and because a panic in a test is highly
-  -- informative and indicative of a bug.
-  NonEmpty.fromList <$> listOf1 arbitrary
 
 tests :: IO TestTree
 tests = testSpec "Value" $ do
