@@ -3,6 +3,7 @@ module GraphQL.Internal.Validation
   , ValidDocument
   , validate
   , getErrors
+  , getOperationName
   -- * Exported for testing
   , findDuplicates
   ) where
