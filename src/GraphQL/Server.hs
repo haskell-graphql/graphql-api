@@ -14,7 +14,6 @@ module GraphQL.Server
   , HasGraph(..)
   , (:<>)(..)
   , (:<|>)(..)
-  , ReadValue(..)
   , BuildFieldResolver(..)
   ) where
 
@@ -83,17 +82,33 @@ class (MonadThrow m, MonadIO m) => HasGraph m a where
   type Handler m a
   buildResolver :: Handler m a -> CanonicalQuery -> m GValue.Value
 
--- | The ReadValue instance converts AST.Value types like ValueInt to
--- the type expected by the handler function. It's the boundary
--- between incoming types and your custom application Haskell types.
-class ReadValue a where
-  -- | Convert the already-parsed value into the type needed for the
-  -- function call.
+
+-- | @a@ can be converted from a GraphQL 'Value' to a Haskell value.
+--
+-- The @FromValue@ instance converts 'AST.Value' to the type expected by the
+-- handler function. It is the boundary between incoming data and your custom
+-- application Haskell types.
+class FromValue a where
+  -- TODO: Rename to fromValue.
+  -- | Convert an already-parsed value into a Haskell value, generally to be
+  -- passed to a handler.
   readValue :: AST.Value -> Either Text a
 
-  -- | valueMissing is a separate function so we can provide default
-  -- values for certain cases. E.g. there is an instance for @@Maybe a@@
-  -- that returns Nothing if the value is missing.
+-- | Specify a default value for a type in a GraphQL schema.
+--
+-- GraphQL schema can have default values in certain places. For example,
+-- arguments to fields can have default values. Because we cannot lift
+-- arbitrary values to the type level, we need some way of getting at those
+-- values. This typeclass provides the means.
+--
+-- To specify a default, implement this typeclass.
+--
+-- The default implementation is to say that there *is* no default for this
+-- type.
+class Defaultable a where
+  -- TODO: Change `valueMissing` to return a Maybe and have the error handling
+  -- magic happen a layer higher.
+  -- | valueMissing returns the value for when none is specified.
   valueMissing :: AST.Name -> Either Text a
   valueMissing name' = Left ("Value missing: " <> AST.getNameText name')
 
@@ -141,31 +156,33 @@ lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) arg
 wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
 wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
 
-instance ReadValue Int32 where
+instance FromValue Int32 where
   readValue (AST.ValueInt v) = pure v
   readValue v = wrongType "Int" v
 
--- TODO: Double parsing is broken in graphql-haskell.
--- See https://github.com/jdnavarro/graphql-haskell/pull/16
-instance ReadValue Double where
+instance Defaultable Int32
+
+instance FromValue Double where
   readValue (AST.ValueFloat v) = pure v
   readValue v = wrongType "Double" v
 
-instance ReadValue Bool where
+instance Defaultable Double
+
+instance FromValue Bool where
   readValue (AST.ValueBoolean v) = pure v
   readValue v = wrongType "Bool" v
 
-instance ReadValue Text where
+instance Defaultable Bool
+
+instance FromValue Text where
   readValue (AST.ValueString (AST.StringValue v)) = pure v
   readValue v = wrongType "String" v
 
-instance forall v. ReadValue v => ReadValue [v] where
+instance Defaultable Text
+
+instance forall v. FromValue v => FromValue [v] where
   readValue (AST.ValueList (AST.ListValue values)) = traverse (readValue @v) values
   readValue v = wrongType "List" v
-
-instance forall v. ReadValue v => ReadValue (Maybe v) where
-  valueMissing _ = pure Nothing
-  readValue v = map Just (readValue @v v)
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -226,7 +243,8 @@ instance forall ks t f m.
          ( MonadThrow m
          , KnownSymbol ks
          , BuildFieldResolver m f
-         , ReadValue t
+         , FromValue t
+         , Defaultable t
          , HasAnnotatedInputType t
          ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
