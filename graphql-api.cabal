@@ -37,6 +37,7 @@ library
     , text
   exposed-modules:
       GraphQL.API
+      GraphQL.Internal.Arbitrary
       GraphQL.Internal.AST
       GraphQL.Internal.Encoder
       GraphQL.Internal.Input

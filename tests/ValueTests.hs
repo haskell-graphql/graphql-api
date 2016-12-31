@@ -3,17 +3,25 @@ module ValueTests (tests) where
 import Protolude
 
 import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (forAll)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
+import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
 import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Value
   ( Object(..)
   , ObjectField(..)
+  , astToValue
   , unionObjects
   , objectFromList
+  , prop_roundtripFromAST
+  , prop_roundtripFromValue
+  , prop_roundtripValue
   , toValue
   )
+
 
 tests :: IO TestTree
 tests = testSpec "Value" $ do
@@ -41,6 +49,24 @@ tests = testSpec "Value" $ do
   describe "Objects" $ do
     prop "have unique fields" $ do
       prop_fieldsUnique
+  describe "ToValue / FromValue instances" $ do
+    prop "Bool" $ prop_roundtripValue @Bool
+    prop "Int32" $ prop_roundtripValue @Int32
+    prop "Double" $ prop_roundtripValue @Double
+    prop "Text" $ forAll arbitraryText prop_roundtripValue
+    prop "Lists" $ prop_roundtripValue @[Int32]
+    prop "Maybes" $ prop_roundtripValue @(Maybe Int32)
+    prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
+  describe "AST" $ do
+    prop "Values can be converted to AST and back" $ do
+      prop_roundtripFromValue
+    prop "Values can be converted from AST and back" $ do
+      prop_roundtripFromAST
+    it "Objects converted from AST have unique fields" $ do
+      let input = AST.ObjectValue [ AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "bar"))
+                                  , AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "qux"))
+                                  ]
+      astToValue (AST.ValueObject input) `shouldBe` Nothing
 
 
 -- | All of the fields in an object should have unique names.

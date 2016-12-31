@@ -14,7 +14,6 @@ module GraphQL.Server
   , HasGraph(..)
   , (:<>)(..)
   , (:<|>)(..)
-  , ReadValue(..)
   , BuildFieldResolver(..)
   , Result(..)
   ) where
@@ -92,20 +91,35 @@ class (Monad m) => HasGraph m a where
   type Handler m a
   buildResolver :: Handler m a -> CanonicalQuery -> m Result
 
--- | The ReadValue instance converts AST.Value types like ValueInt to
--- the type expected by the handler function. It's the boundary
--- between incoming types and your custom application Haskell types.
-class ReadValue a where
-  -- | Convert the already-parsed value into the type needed for the
-  -- function call.
-  readValue :: AST.Value -> Either Text a
 
-  -- | valueMissing is a separate function so we can provide default
-  -- values for certain cases. E.g. there is an instance for @@Maybe a@@
-  -- that returns Nothing if the value is missing.
-  valueMissing :: AST.Name -> Either Text a
-  valueMissing name' = Left ("Value missing: " <> AST.getNameText name')
+-- | Specify a default value for a type in a GraphQL schema.
+--
+-- GraphQL schema can have default values in certain places. For example,
+-- arguments to fields can have default values. Because we cannot lift
+-- arbitrary values to the type level, we need some way of getting at those
+-- values. This typeclass provides the means.
+--
+-- To specify a default, implement this typeclass.
+--
+-- The default implementation is to say that there *is* no default for this
+-- type.
+class Defaultable a where
+  -- | defaultFor returns the value to be used when no value has been given.
+  defaultFor :: AST.Name -> Maybe a
+  defaultFor _ = empty
 
+-- | Called when the schema expects an input argument @name@ of type @a@ but
+-- @name@ has not been provided.
+valueMissing :: Defaultable a => AST.Name -> Either Text a
+valueMissing name = maybe (Left ("Value missing: " <> AST.getNameText name)) Right (defaultFor name)
+
+instance Defaultable Int32
+
+instance Defaultable Double
+
+instance Defaultable Bool
+
+instance Defaultable Text
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
@@ -115,6 +129,7 @@ instance forall m. (Monad m) => HasGraph m Int32 where
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  do
     map (ok . GValue.toValue) handler
+
 
 instance forall m. (Monad m) => HasGraph m Double where
   type Handler m Double = m Double
@@ -148,40 +163,11 @@ instance forall m ks enum. (Monad m, GraphQLEnum enum) => HasGraph m (Enum ks en
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.
-lookupValue :: AST.Name -> [AST.Argument] -> Maybe AST.Value
+lookupValue :: AST.Name -> [AST.Argument] -> Maybe GValue.Value
 lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
   Nothing -> Nothing
-  Just (AST.Argument _ value) -> Just value
+  Just (AST.Argument _ value) -> GValue.astToValue value
 
--- | Throw an error saying that @value@ does not have the @expected@ type.
-wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
-wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
-
-instance ReadValue Int32 where
-  readValue (AST.ValueInt v) = pure v
-  readValue v = wrongType "Int" v
-
--- TODO: Double parsing is broken in graphql-haskell.
--- See https://github.com/jdnavarro/graphql-haskell/pull/16
-instance ReadValue Double where
-  readValue (AST.ValueFloat v) = pure v
-  readValue v = wrongType "Double" v
-
-instance ReadValue Bool where
-  readValue (AST.ValueBoolean v) = pure v
-  readValue v = wrongType "Bool" v
-
-instance ReadValue Text where
-  readValue (AST.ValueString (AST.StringValue v)) = pure v
-  readValue v = wrongType "String" v
-
-instance forall v. ReadValue v => ReadValue [v] where
-  readValue (AST.ValueList (AST.ListValue values)) = traverse (readValue @v) values
-  readValue v = wrongType "List" v
-
-instance forall v. ReadValue v => ReadValue (Maybe v) where
-  valueMissing _ = pure Nothing
-  readValue v = map Just (readValue @v v)
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -251,13 +237,14 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad
 instance forall ks t f m.
   ( KnownSymbol ks
   , BuildFieldResolver m f
-  , ReadValue t
+  , GValue.FromValue t
+  , Defaultable t
   , HasAnnotatedInputType t
   ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
     argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
     let argName = getName argument
-    value <- first QueryError (maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments))
+    value <- first QueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
     Left (InternalError ("Unexpected query selection in buildFieldResolver: " <> show f))
