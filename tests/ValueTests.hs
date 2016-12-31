@@ -12,6 +12,7 @@ import GraphQL.Value
   , ObjectField(..)
   , unionObjects
   , objectFromList
+  , prop_roundtripFromValue
   , toValue
   )
 
@@ -41,6 +42,9 @@ tests = testSpec "Value" $ do
   describe "Objects" $ do
     prop "have unique fields" $ do
       prop_fieldsUnique
+  describe "AST" $ do
+    prop "Values can be converted to AST and back" $ do
+      prop_roundtripFromValue
 
 
 -- | All of the fields in an object should have unique names.

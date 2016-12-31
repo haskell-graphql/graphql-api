@@ -144,10 +144,10 @@ instance forall m ks enum. (MonadThrow m, MonadIO m, GraphQLEnum enum) => HasGra
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
 -- each argument in the list) but considering the graphql use case
 -- where N usually < 10 this is probably OK.
-lookupValue :: AST.Name -> [AST.Argument] -> Maybe AST.Value
+lookupValue :: AST.Name -> [AST.Argument] -> Maybe GValue.Value
 lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
   Nothing -> Nothing
-  Just (AST.Argument _ value) -> Just value
+  Just (AST.Argument _ value) -> GValue.astToValue value
 
 
 -- TODO: variables should error, they should have been resolved already.

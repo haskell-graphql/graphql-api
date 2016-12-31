@@ -10,7 +10,10 @@ module GraphQL.Value
   ( Value(..)
   , toObject
   , ToValue(..)
+  , astToValue
   , valueToAST
+  , prop_roundtripFromAST
+  , prop_roundtripFromValue
   , FromValue(..)
   , Name
   , List
@@ -185,31 +188,57 @@ instance ToValue Object where
 class FromValue a where
   -- | Convert an already-parsed value into a Haskell value, generally to be
   -- passed to a handler.
-  fromValue :: AST.Value -> Either Text a
+  fromValue :: Value -> Either Text a
 
 instance FromValue Int32 where
-  fromValue (AST.ValueInt v) = pure v
+  fromValue (ValueInt v) = pure v
   fromValue v = wrongType "Int" v
 
 instance FromValue Double where
-  fromValue (AST.ValueFloat v) = pure v
+  fromValue (ValueFloat v) = pure v
   fromValue v = wrongType "Double" v
 
 instance FromValue Bool where
-  fromValue (AST.ValueBoolean v) = pure v
+  fromValue (ValueBoolean v) = pure v
   fromValue v = wrongType "Bool" v
 
 instance FromValue Text where
-  fromValue (AST.ValueString (AST.StringValue v)) = pure v
+  fromValue (ValueString (String v)) = pure v
   fromValue v = wrongType "String" v
 
 instance forall v. FromValue v => FromValue [v] where
-  fromValue (AST.ValueList (AST.ListValue values)) = traverse (fromValue @v) values
+  fromValue (ValueList (List values)) = traverse (fromValue @v) values
   fromValue v = wrongType "List" v
 
 -- | Throw an error saying that @value@ does not have the @expected@ type.
 wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
 wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
+
+-- | Convert an AST value into a literal value.
+--
+-- This is a stop-gap until we have proper conversion of user queries into
+-- canonical forms.
+astToValue :: AST.Value -> Maybe Value
+astToValue (AST.ValueInt x) = pure $ ValueInt x
+astToValue (AST.ValueFloat x) = pure $ ValueFloat x
+astToValue (AST.ValueBoolean x) = pure $ ValueBoolean x
+astToValue (AST.ValueString (AST.StringValue x)) = pure $ ValueString $ String x
+astToValue (AST.ValueEnum x) = pure $ ValueEnum x
+astToValue (AST.ValueList (AST.ListValue xs)) = ValueList . List <$> traverse astToValue xs
+astToValue (AST.ValueObject (AST.ObjectValue fields)) = ValueObject . Object <$> traverse toObjectField fields
+  where
+    toObjectField (AST.ObjectField name value) = ObjectField name <$> astToValue value
+astToValue (AST.ValueVariable _) = empty
+
+-- | A value from the AST can be converted to a literal value and back, unless it's a variable.
+prop_roundtripFromAST :: AST.Value -> Bool
+prop_roundtripFromAST ast =
+  case astToValue ast of
+    Nothing -> True
+    Just value ->
+      case valueToAST value of
+        Nothing -> False
+        Just ast' -> ast == ast'
 
 -- | Convert a literal value into an AST value.
 --
@@ -228,3 +257,13 @@ valueToAST (ValueObject (Object fields)) = AST.ValueObject . AST.ObjectValue <$>
   where
     toObjectField (ObjectField name value) = AST.ObjectField name <$> valueToAST value
 valueToAST ValueNull = empty
+
+-- | A literal value can be converted to the AST and back, unless it's a null.
+prop_roundtripFromValue :: Value -> Bool
+prop_roundtripFromValue value =
+  case valueToAST value of
+    Nothing -> True
+    Just ast ->
+      case astToValue ast of
+        Nothing -> False
+        Just value' -> value == value'
