@@ -92,7 +92,7 @@ class FromValue a where
   -- TODO: Rename to fromValue.
   -- | Convert an already-parsed value into a Haskell value, generally to be
   -- passed to a handler.
-  readValue :: AST.Value -> Either Text a
+  fromValue :: AST.Value -> Either Text a
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -158,32 +158,32 @@ wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
 wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
 
 instance FromValue Int32 where
-  readValue (AST.ValueInt v) = pure v
-  readValue v = wrongType "Int" v
+  fromValue (AST.ValueInt v) = pure v
+  fromValue v = wrongType "Int" v
 
 instance Defaultable Int32
 
 instance FromValue Double where
-  readValue (AST.ValueFloat v) = pure v
-  readValue v = wrongType "Double" v
+  fromValue (AST.ValueFloat v) = pure v
+  fromValue v = wrongType "Double" v
 
 instance Defaultable Double
 
 instance FromValue Bool where
-  readValue (AST.ValueBoolean v) = pure v
-  readValue v = wrongType "Bool" v
+  fromValue (AST.ValueBoolean v) = pure v
+  fromValue v = wrongType "Bool" v
 
 instance Defaultable Bool
 
 instance FromValue Text where
-  readValue (AST.ValueString (AST.StringValue v)) = pure v
-  readValue v = wrongType "String" v
+  fromValue (AST.ValueString (AST.StringValue v)) = pure v
+  fromValue v = wrongType "String" v
 
 instance Defaultable Text
 
 instance forall v. FromValue v => FromValue [v] where
-  readValue (AST.ValueList (AST.ListValue values)) = traverse (readValue @v) values
-  readValue v = wrongType "List" v
+  fromValue (AST.ValueList (AST.ListValue values)) = traverse (fromValue @v) values
+  fromValue v = wrongType "List" v
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -251,7 +251,7 @@ instance forall ks t f m.
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
     argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
     let argName = getName argument
-    value <- first QueryError (maybe (valueMissing @t argName) (readValue @t) (lookupValue argName arguments))
+    value <- first QueryError (maybe (valueMissing @t argName) (fromValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
