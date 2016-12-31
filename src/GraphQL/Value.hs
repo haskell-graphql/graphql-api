@@ -1,5 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Literal GraphQL values.
@@ -8,6 +11,7 @@ module GraphQL.Value
   , toObject
   , ToValue(..)
   , valueToAST
+  , FromValue(..)
   , Name
   , List
   , String(..)
@@ -172,6 +176,40 @@ instance ToValue List where
 
 instance ToValue Object where
   toValue = ValueObject
+
+-- | @a@ can be converted from a GraphQL 'Value' to a Haskell value.
+--
+-- The @FromValue@ instance converts 'AST.Value' to the type expected by the
+-- handler function. It is the boundary between incoming data and your custom
+-- application Haskell types.
+class FromValue a where
+  -- | Convert an already-parsed value into a Haskell value, generally to be
+  -- passed to a handler.
+  fromValue :: AST.Value -> Either Text a
+
+instance FromValue Int32 where
+  fromValue (AST.ValueInt v) = pure v
+  fromValue v = wrongType "Int" v
+
+instance FromValue Double where
+  fromValue (AST.ValueFloat v) = pure v
+  fromValue v = wrongType "Double" v
+
+instance FromValue Bool where
+  fromValue (AST.ValueBoolean v) = pure v
+  fromValue v = wrongType "Bool" v
+
+instance FromValue Text where
+  fromValue (AST.ValueString (AST.StringValue v)) = pure v
+  fromValue v = wrongType "String" v
+
+instance forall v. FromValue v => FromValue [v] where
+  fromValue (AST.ValueList (AST.ListValue values)) = traverse (fromValue @v) values
+  fromValue v = wrongType "List" v
+
+-- | Throw an error saying that @value@ does not have the @expected@ type.
+wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
+wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
 
 -- | Convert a literal value into an AST value.
 --

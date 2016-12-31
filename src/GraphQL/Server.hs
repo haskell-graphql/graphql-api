@@ -83,17 +83,6 @@ class (MonadThrow m, MonadIO m) => HasGraph m a where
   buildResolver :: Handler m a -> CanonicalQuery -> m GValue.Value
 
 
--- | @a@ can be converted from a GraphQL 'Value' to a Haskell value.
---
--- The @FromValue@ instance converts 'AST.Value' to the type expected by the
--- handler function. It is the boundary between incoming data and your custom
--- application Haskell types.
-class FromValue a where
-  -- TODO: Rename to fromValue.
-  -- | Convert an already-parsed value into a Haskell value, generally to be
-  -- passed to a handler.
-  fromValue :: AST.Value -> Either Text a
-
 -- | Specify a default value for a type in a GraphQL schema.
 --
 -- GraphQL schema can have default values in certain places. For example,
@@ -114,6 +103,14 @@ class Defaultable a where
 valueMissing :: Defaultable a => AST.Name -> Either Text a
 valueMissing name = maybe (Left ("Value missing: " <> AST.getNameText name)) Right (defaultFor name)
 
+instance Defaultable Int32
+
+instance Defaultable Double
+
+instance Defaultable Bool
+
+instance Defaultable Text
+
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
@@ -121,7 +118,6 @@ instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map GValue.toValue handler
-
 
 instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
   type Handler m Double = m Double
@@ -153,37 +149,6 @@ lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) arg
   Nothing -> Nothing
   Just (AST.Argument _ value) -> Just value
 
--- | Throw an error saying that @value@ does not have the @expected@ type.
-wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
-wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
-
-instance FromValue Int32 where
-  fromValue (AST.ValueInt v) = pure v
-  fromValue v = wrongType "Int" v
-
-instance Defaultable Int32
-
-instance FromValue Double where
-  fromValue (AST.ValueFloat v) = pure v
-  fromValue v = wrongType "Double" v
-
-instance Defaultable Double
-
-instance FromValue Bool where
-  fromValue (AST.ValueBoolean v) = pure v
-  fromValue v = wrongType "Bool" v
-
-instance Defaultable Bool
-
-instance FromValue Text where
-  fromValue (AST.ValueString (AST.StringValue v)) = pure v
-  fromValue v = wrongType "String" v
-
-instance Defaultable Text
-
-instance forall v. FromValue v => FromValue [v] where
-  fromValue (AST.ValueList (AST.ListValue values)) = traverse (fromValue @v) values
-  fromValue v = wrongType "List" v
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -244,14 +209,14 @@ instance forall ks t f m.
          ( MonadThrow m
          , KnownSymbol ks
          , BuildFieldResolver m f
-         , FromValue t
+         , GValue.FromValue t
          , Defaultable t
          , HasAnnotatedInputType t
          ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
     argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
     let argName = getName argument
-    value <- first QueryError (maybe (valueMissing @t argName) (fromValue @t) (lookupValue argName arguments))
+    value <- first QueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
     Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
