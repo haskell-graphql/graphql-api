@@ -6,12 +6,15 @@ import Test.Hspec.QuickCheck (prop)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
+import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Value
   ( Object(..)
   , ObjectField(..)
+  , astToValue
   , unionObjects
   , objectFromList
+  , prop_roundtripFromAST
   , prop_roundtripFromValue
   , toValue
   )
@@ -45,6 +48,13 @@ tests = testSpec "Value" $ do
   describe "AST" $ do
     prop "Values can be converted to AST and back" $ do
       prop_roundtripFromValue
+    prop "Values can be converted from AST and back" $ do
+      prop_roundtripFromAST
+    it "Objects converted from AST have unique fields" $ do
+      let input = AST.ObjectValue [ AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "bar"))
+                                  , AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "qux"))
+                                  ]
+      astToValue (AST.ValueObject input) `shouldBe` Nothing
 
 
 -- | All of the fields in an object should have unique names.

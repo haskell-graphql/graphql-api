@@ -225,7 +225,10 @@ astToValue (AST.ValueBoolean x) = pure $ ValueBoolean x
 astToValue (AST.ValueString (AST.StringValue x)) = pure $ ValueString $ String x
 astToValue (AST.ValueEnum x) = pure $ ValueEnum x
 astToValue (AST.ValueList (AST.ListValue xs)) = ValueList . List <$> traverse astToValue xs
-astToValue (AST.ValueObject (AST.ObjectValue fields)) = ValueObject . Object <$> traverse toObjectField fields
+astToValue (AST.ValueObject (AST.ObjectValue fields)) = do
+  fields' <- traverse toObjectField fields
+  object <- makeObject fields'
+  pure (ValueObject object)
   where
     toObjectField (AST.ObjectField name value) = ObjectField name <$> astToValue value
 astToValue (AST.ValueVariable _) = empty

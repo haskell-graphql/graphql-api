@@ -55,7 +55,8 @@ import Protolude hiding (Type)
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
-import Test.QuickCheck (Arbitrary(..), elements, listOf)
+import qualified Data.String
+import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
 
 import GraphQL.Internal.Tokens (tok)
 
@@ -143,6 +144,9 @@ data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
 
 newtype Variable = Variable Name deriving (Eq,Show)
 
+instance Arbitrary Variable where
+  arbitrary = Variable <$> arbitrary
+
 type SelectionSet = [Selection]
 
 data Selection = SelectionField Field
@@ -185,13 +189,36 @@ data Value = ValueVariable Variable
            | ValueObject ObjectValue
              deriving (Eq,Show)
 
+instance Arbitrary Value where
+  arbitrary = oneof [ ValueVariable <$> arbitrary
+                    , ValueInt <$> arbitrary
+                    , ValueFloat <$> arbitrary
+                    , ValueBoolean <$> arbitrary
+                    , ValueString <$> arbitrary
+                    , ValueEnum <$> arbitrary
+                    , ValueList <$> arbitrary
+                    , ValueObject <$> arbitrary
+                    ]
+
 newtype StringValue = StringValue Text deriving (Eq,Show)
+
+instance Arbitrary StringValue where
+  arbitrary = StringValue . toS <$> arbitrary @Data.String.String
 
 newtype ListValue = ListValue [Value] deriving (Eq,Show)
 
+instance Arbitrary ListValue where
+  arbitrary = ListValue <$> listOf arbitrary
+
 newtype ObjectValue = ObjectValue [ObjectField] deriving (Eq,Show)
 
+instance Arbitrary ObjectValue where
+  arbitrary = ObjectValue <$> listOf arbitrary
+
 data ObjectField = ObjectField Name Value deriving (Eq,Show)
+
+instance Arbitrary ObjectField where
+  arbitrary = ObjectField <$> arbitrary <*> arbitrary
 
 type DefaultValue = Value
 
