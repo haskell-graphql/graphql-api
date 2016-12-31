@@ -32,15 +32,7 @@ import GraphQL.Internal.Tokens (tok, whiteSpace)
 -- * Document
 
 queryDocument :: Parser AST.QueryDocument
-queryDocument = whiteSpace
-   *> (AST.QueryDocument <$> many1 definition)
-  -- Try SelectionSet when no definition
-  <|> (AST.QueryDocument . pure
-        . AST.DefinitionOperation
-        . AST.Query
-        . AST.Node empty empty empty
-        <$> selectionSet)
-  <?> "query document error!"
+queryDocument = whiteSpace *> (AST.QueryDocument <$> many1 definition) <?> "query document error!"
 
 -- | Parser for a schema document.
 schemaDocument :: Parser AST.SchemaDocument
@@ -55,10 +47,11 @@ operationDefinition :: Parser AST.OperationDefinition
 operationDefinition =
       AST.Query    <$ tok "query"    <*> node
   <|> AST.Mutation <$ tok "mutation" <*> node
+  <|> (AST.AnonymousQuery <$> selectionSet)
   <?> "operationDefinition error!"
 
 node :: Parser AST.Node
-node = AST.Node <$> (pure <$> AST.nameParser)
+node = AST.Node <$> AST.nameParser
                 <*> optempty variableDefinitions
                 <*> optempty directives
                 <*> selectionSet

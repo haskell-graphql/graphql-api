@@ -134,16 +134,17 @@ data Definition = DefinitionOperation OperationDefinition
 -- https://facebook.github.io/graphql/#sec-Type-System
 newtype SchemaDocument = SchemaDocument [TypeDefinition] deriving (Eq, Show)
 
-data OperationDefinition = Query    { getNode :: Node }
-                         | Mutation { getNode :: Node }
-                           deriving (Eq,Show)
+data OperationDefinition
+  = Query Node
+  | Mutation Node
+  | AnonymousQuery SelectionSet
+  deriving (Eq,Show)
 
-data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
+data Node = Node Name [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
--- XXX: Lots of things have names. Maybe we should define a typeclass for
--- getting the name?
-getNodeName :: Node -> Maybe Name
+-- TODO: Just make Node implement HasName.
+getNodeName :: Node -> Name
 getNodeName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)

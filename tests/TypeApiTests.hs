@@ -39,7 +39,7 @@ tHandler =
 
 getQuery :: Text -> AST.SelectionSet
 getQuery query =
-  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
+  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.AnonymousQuery selectionSet)]) =
         parseOnly (queryDocument <* endOfInput) query
   in selectionSet
 

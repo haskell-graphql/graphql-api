@@ -13,7 +13,6 @@ import qualified GraphQL.Internal.AST as AST
 
 -- * Document
 
--- TODO: Use query shorthand
 queryDocument :: AST.QueryDocument -> Text
 queryDocument (AST.QueryDocument defs) = (`snoc` '\n') . mconcat $ definition <$> defs
 
@@ -27,10 +26,11 @@ schemaDocument (AST.SchemaDocument defs) = (`snoc` '\n') . mconcat $ typeDefinit
 operationDefinition :: AST.OperationDefinition -> Text
 operationDefinition (AST.Query    n) = "query "    <> node n
 operationDefinition (AST.Mutation n) = "mutation " <> node n
+operationDefinition (AST.AnonymousQuery ss) = selectionSet ss
 
 node :: AST.Node -> Text
 node (AST.Node name vds ds ss) =
-     maybe mempty AST.getNameText name
+     AST.getNameText name
   <> optempty variableDefinitions vds
   <> optempty directives ds
   <> selectionSet ss

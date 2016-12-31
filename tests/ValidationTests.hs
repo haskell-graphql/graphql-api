@@ -30,7 +30,7 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   ( AST.Query
-                    ( AST.Node (Just me) [] []
+                    ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
@@ -42,20 +42,35 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   ( AST.Query
-                    ( AST.Node (Just me) [] []
+                    ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
                   )
                 , AST.DefinitionOperation
                   ( AST.Query
-                    ( AST.Node (Just me) [] []
+                    ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
                   )
                 ]
-      getErrors doc `shouldBe` [DuplicateOperation (Just me)]
+      getErrors doc `shouldBe` [DuplicateOperation me]
+
+    it "Detects duplicate anonymous operations" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                  ( AST.AnonymousQuery
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    ]
+                  )
+                , AST.DefinitionOperation
+                  ( AST.AnonymousQuery
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    ]
+                  )
+                ]
+      getErrors doc `shouldBe` [MultipleAnonymousOperation 2]
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do

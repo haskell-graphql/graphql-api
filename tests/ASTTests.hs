@@ -91,17 +91,16 @@ tests = testSpec "AST" $ do
       let Right parsed = parseOnly Parser.queryDocument query
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
-                       (AST.Query
-                         (AST.Node Nothing [] []
-                           [ AST.SelectionField
-                               (AST.Field Nothing dog [] []
-                                 [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                                 ])
-                           ]))
+                       (AST.AnonymousQuery
+                         [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                             [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                             ])
+                         ])
                      ]
       parsed `shouldBe` expected
 
-    it "silently mis-parses invalid documents" $ do
+    it "parses invalid documents" $ do
       let query = [r|{
                        dog {
                          name
@@ -118,13 +117,23 @@ tests = testSpec "AST" $ do
       let Right parsed = parseOnly Parser.queryDocument query
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
-                         (AST.Query
-                           (AST.Node Nothing [] []
+                       (AST.AnonymousQuery
+                         [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                             [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                             ])
+                         ])
+                     , AST.DefinitionOperation
+                       (AST.Query
+                        (AST.Node (AST.unsafeMakeName "getName") [] []
+                         [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
                             [ AST.SelectionField
-                                (AST.Field Nothing dog [] []
-                                  [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                                  ])
-                            ]))
+                              (AST.Field Nothing (AST.unsafeMakeName "owner") [] []
+                               [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                               ])
+                            ])
+                         ]))
                      ]
       parsed `shouldBe` expected
 
@@ -140,7 +149,7 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node (Just (AST.unsafeMakeName "houseTrainedQuery"))
+                           (AST.Node (AST.unsafeMakeName "houseTrainedQuery")
                             [ AST.VariableDefinition
                                 (AST.Variable (AST.unsafeMakeName "atOtherHomes"))
                                 (AST.TypeNamed (AST.NamedType (AST.unsafeMakeName "Boolean")))
