@@ -14,6 +14,7 @@ module GraphQL.Value
   , valueToAST
   , prop_roundtripFromAST
   , prop_roundtripFromValue
+  , prop_roundtripValue
   , FromValue(..)
   , Name
   , List
@@ -32,6 +33,7 @@ module GraphQL.Value
 
 import Protolude
 
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.String
 import Data.Aeson (ToJSON(..), (.=), pairs)
@@ -209,6 +211,21 @@ instance FromValue Text where
 instance forall v. FromValue v => FromValue [v] where
   fromValue (ValueList (List values)) = traverse (fromValue @v) values
   fromValue v = wrongType "List" v
+
+instance forall v. FromValue v => FromValue (NonEmpty v) where
+  fromValue (ValueList (List values)) =
+    case NonEmpty.nonEmpty values of
+      Nothing -> Left "Cannot construct NonEmpty from empty list"
+      Just values' -> traverse (fromValue @v) values'
+  fromValue v = wrongType "List" v
+
+instance forall v. FromValue v => FromValue (Maybe v) where
+  fromValue ValueNull = pure Nothing
+  fromValue x = Just <$> fromValue @v x
+
+-- | Anything that can be converted to a value and from a value should roundtrip.
+prop_roundtripValue :: forall a. (Eq a, ToValue a, FromValue a) => a -> Bool
+prop_roundtripValue x = fromValue (toValue x) == Right x
 
 -- | Throw an error saying that @value@ does not have the @expected@ type.
 wrongType :: (MonadError Text m, Show a) => Text -> a -> m b

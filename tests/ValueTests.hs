@@ -1,8 +1,13 @@
+{-# LANGUAGE RankNTypes #-}
 module ValueTests (tests) where
 
 import Protolude
 
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.String
 import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (Gen, Arbitrary(..), arbitrary, forAll, listOf1)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
@@ -16,8 +21,20 @@ import GraphQL.Value
   , objectFromList
   , prop_roundtripFromAST
   , prop_roundtripFromValue
+  , prop_roundtripValue
   , toValue
   )
+
+
+arbitraryText :: Gen Text
+arbitraryText = toS <$> arbitrary @Data.String.String
+
+arbitraryNonEmpty :: forall a. Arbitrary a => Gen (NonEmpty a)
+arbitraryNonEmpty =
+  -- NonEmpty.fromList panics, but that's OK, because listOf1 is guaranteed to
+  -- return a non-empty list, and because a panic in a test is highly
+  -- informative and indicative of a bug.
+  NonEmpty.fromList <$> listOf1 arbitrary
 
 tests :: IO TestTree
 tests = testSpec "Value" $ do
@@ -45,6 +62,14 @@ tests = testSpec "Value" $ do
   describe "Objects" $ do
     prop "have unique fields" $ do
       prop_fieldsUnique
+  describe "ToValue / FromValue instances" $ do
+    prop "Bool" $ prop_roundtripValue @Bool
+    prop "Int32" $ prop_roundtripValue @Int32
+    prop "Double" $ prop_roundtripValue @Double
+    prop "Text" $ forAll arbitraryText prop_roundtripValue
+    prop "Lists" $ prop_roundtripValue @[Int32]
+    prop "Maybes" $ prop_roundtripValue @(Maybe Int32)
+    prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
   describe "AST" $ do
     prop "Values can be converted to AST and back" $ do
       prop_roundtripFromValue
