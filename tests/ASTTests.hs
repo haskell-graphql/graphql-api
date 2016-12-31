@@ -35,7 +35,7 @@ tests :: IO TestTree
 tests = testSpec "AST" $ do
   describe "Parser and encoder" $ do
     it "roundtrips on minified documents" $ do
-      let actual = Encoder.document <$> parseOnly Parser.document kitchenSink
+      let actual = Encoder.queryDocument <$> parseOnly Parser.queryDocument kitchenSink
       actual `shouldBe` Right kitchenSink
     describe "parsing numbers" $ do
       it "works for some integers" $ do
@@ -88,8 +88,8 @@ tests = testSpec "AST" $ do
                          name
                        }
                      }|]
-      let Right parsed = parseOnly Parser.document query
-      let expected = AST.Document
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                        (AST.Query
                          (AST.Node Nothing [] []
@@ -115,8 +115,8 @@ tests = testSpec "AST" $ do
                          }
                        }
                      }|]
-      let Right parsed = parseOnly Parser.document query
-      let expected = AST.Document
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
                            (AST.Node Nothing [] []
@@ -136,8 +136,8 @@ tests = testSpec "AST" $ do
                       }
                     }
                     |]
-      let Right parsed = parseOnly Parser.document query
-      let expected = AST.Document
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
                            (AST.Node (Just (AST.unsafeMakeName "houseTrainedQuery"))

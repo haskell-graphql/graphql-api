@@ -4,7 +4,7 @@ module Examples.UnionExample  where
 import Protolude hiding (Enum)
 import qualified GraphQL.Internal.AST as AST
 import Data.Attoparsec.Text (parseOnly, endOfInput)
-import GraphQL.Internal.Parser (document)
+import GraphQL.Internal.Parser (queryDocument)
 
 import GraphQL.API
 import GraphQL.Server
@@ -29,6 +29,6 @@ exampleQuery = buildResolver @IO @T tHandler (query "{ ... on O1 { o1 } ... on O
 
 query :: Text -> AST.SelectionSet
 query q =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-       parseOnly (document <* endOfInput) q
+  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
+       parseOnly (queryDocument <* endOfInput) q
   in selectionSet

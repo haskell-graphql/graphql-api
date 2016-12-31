@@ -58,9 +58,9 @@ type QueryRoot {
 }
 -}
 
-newtype ValidDocument = Valid AST.Document deriving (Eq, Show)
+newtype ValidDocument = Valid AST.QueryDocument deriving (Eq, Show)
 
-validate :: Alternative m => AST.Document -> m ValidDocument
+validate :: Alternative m => AST.QueryDocument -> m ValidDocument
 validate = pure . Valid
 
 data ValidationError
@@ -68,7 +68,7 @@ data ValidationError
   deriving (Eq, Show)
 
 
-getErrors :: AST.Document -> [ValidationError]
+getErrors :: AST.QueryDocument -> [ValidationError]
 getErrors doc = duplicateOperations
   where
     duplicateOperations = DuplicateOperation <$> findDuplicates nodeNames
