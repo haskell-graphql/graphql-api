@@ -99,7 +99,8 @@ class Defaultable a where
   defaultFor :: AST.Name -> Maybe a
   defaultFor _ = empty
 
--- | Called when we're missing a value of type @a@ with the given 'AST.Name'.
+-- | Called when the schema expects an input argument @name@ of type @a@ but
+-- @name@ has not been provided.
 valueMissing :: Defaultable a => AST.Name -> Either Text a
 valueMissing name = maybe (Left ("Value missing: " <> AST.getNameText name)) Right (defaultFor name)
 
