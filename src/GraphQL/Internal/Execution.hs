@@ -42,24 +42,25 @@ executeRequest document operationName variableValues initialValue =
         Left err -> ExecutionFailure (singleton (Error (formatError err) []))
         Right coercedVariableValues ->
           case operation of
-            AST.Query _ -> executeQuery operation coercedVariableValues initialValue
-            AST.Mutation _ -> executeMutation operation coercedVariableValues initialValue
-            AST.AnonymousQuery _ -> executeQuery operation coercedVariableValues initialValue
+            AST.Query (AST.Node _ _ _ ss) -> executeSelectionSet ss initialValue coercedVariableValues
+            AST.Mutation (AST.Node _ _ _ ss) -> executeSelectionSet ss initialValue coercedVariableValues
+            AST.AnonymousQuery ss -> executeSelectionSet ss initialValue coercedVariableValues
 
--- | Execute a query.
+-- | Execute a selection set.
 --
--- https://facebook.github.io/graphql/#sec-Executing-Operations
-executeQuery :: AST.OperationDefinition -> VariableValues -> Value -> Response
-executeQuery = notImplemented
-
--- | Execute a mutation.
---
--- This is pretty much like 'executeQuery', except that fields are evaluated
--- serially.
---
--- https://facebook.github.io/graphql/#sec-Executing-Operations
-executeMutation :: AST.OperationDefinition -> VariableValues -> Value -> Response
-executeMutation = notImplemented
+-- ExecuteSelectionSet(selectionSet, objectType, objectValue, variableValues)
+--   1. Let groupedFieldSet be the result of CollectFields(objectType, selectionSet, variableValues).
+--   2. Initialize resultMap to an empty ordered map.
+--   3. For each groupedFieldSet as responseKey and fields:
+--     a. Let fieldName be the name of the first entry in fields. Note: This value is unaffected if an alias is used.
+--     b. Let fieldType be the return type defined for the field fieldName of objectType.
+--     c. If fieldType is null:
+--       i. Continue to the next iteration of groupedFieldSet.
+--     d. Let responseValue be ExecuteField(objectType, objectValue, fields, fieldType, variableValues).
+--     e. Set responseValue as the value for responseKey in resultMap.
+--   4. Return resultMap.
+executeSelectionSet :: AST.SelectionSet -> Value -> VariableValues -> Response
+executeSelectionSet selectionSet objectValue variableValues = notImplemented
 
 -- | Get an operation from a GraphQL document
 --
