@@ -121,6 +121,10 @@ instance Defaultable Bool
 
 instance Defaultable Text
 
+instance Defaultable (Maybe a) where
+  -- | The default for @Maybe a@ is @Nothing@.
+  defaultFor _ = pure Nothing
+
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
