@@ -1,5 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Literal GraphQL values.
@@ -7,7 +10,12 @@ module GraphQL.Value
   ( Value(..)
   , toObject
   , ToValue(..)
+  , astToValue
   , valueToAST
+  , prop_roundtripFromAST
+  , prop_roundtripFromValue
+  , prop_roundtripValue
+  , FromValue(..)
   , Name
   , List
   , String(..)
@@ -25,13 +33,14 @@ module GraphQL.Value
 
 import Protolude
 
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
-import qualified Data.String
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), oneof, listOf)
 
+import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.AST (Name(..))
 import qualified GraphQL.Internal.AST as AST
 
@@ -77,7 +86,7 @@ instance Arbitrary Value where
 newtype String = String Text deriving (Eq, Ord, Show)
 
 instance Arbitrary String where
-  arbitrary = String . toS <$> arbitrary @Data.String.String
+  arbitrary = String <$> arbitraryText
 
 instance ToJSON String where
   toJSON (String x) = toJSON x
@@ -173,6 +182,84 @@ instance ToValue List where
 instance ToValue Object where
   toValue = ValueObject
 
+-- | @a@ can be converted from a GraphQL 'Value' to a Haskell value.
+--
+-- The @FromValue@ instance converts 'AST.Value' to the type expected by the
+-- handler function. It is the boundary between incoming data and your custom
+-- application Haskell types.
+class FromValue a where
+  -- | Convert an already-parsed value into a Haskell value, generally to be
+  -- passed to a handler.
+  fromValue :: Value -> Either Text a
+
+instance FromValue Int32 where
+  fromValue (ValueInt v) = pure v
+  fromValue v = wrongType "Int" v
+
+instance FromValue Double where
+  fromValue (ValueFloat v) = pure v
+  fromValue v = wrongType "Double" v
+
+instance FromValue Bool where
+  fromValue (ValueBoolean v) = pure v
+  fromValue v = wrongType "Bool" v
+
+instance FromValue Text where
+  fromValue (ValueString (String v)) = pure v
+  fromValue v = wrongType "String" v
+
+instance forall v. FromValue v => FromValue [v] where
+  fromValue (ValueList (List values)) = traverse (fromValue @v) values
+  fromValue v = wrongType "List" v
+
+instance forall v. FromValue v => FromValue (NonEmpty v) where
+  fromValue (ValueList (List values)) =
+    case NonEmpty.nonEmpty values of
+      Nothing -> Left "Cannot construct NonEmpty from empty list"
+      Just values' -> traverse (fromValue @v) values'
+  fromValue v = wrongType "List" v
+
+instance forall v. FromValue v => FromValue (Maybe v) where
+  fromValue ValueNull = pure Nothing
+  fromValue x = Just <$> fromValue @v x
+
+-- | Anything that can be converted to a value and from a value should roundtrip.
+prop_roundtripValue :: forall a. (Eq a, ToValue a, FromValue a) => a -> Bool
+prop_roundtripValue x = fromValue (toValue x) == Right x
+
+-- | Throw an error saying that @value@ does not have the @expected@ type.
+wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
+wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
+
+-- | Convert an AST value into a literal value.
+--
+-- This is a stop-gap until we have proper conversion of user queries into
+-- canonical forms.
+astToValue :: AST.Value -> Maybe Value
+astToValue (AST.ValueInt x) = pure $ ValueInt x
+astToValue (AST.ValueFloat x) = pure $ ValueFloat x
+astToValue (AST.ValueBoolean x) = pure $ ValueBoolean x
+astToValue (AST.ValueString (AST.StringValue x)) = pure $ ValueString $ String x
+astToValue (AST.ValueEnum x) = pure $ ValueEnum x
+astToValue (AST.ValueList (AST.ListValue xs)) = ValueList . List <$> traverse astToValue xs
+astToValue (AST.ValueObject (AST.ObjectValue fields)) = do
+  fields' <- traverse toObjectField fields
+  object <- makeObject fields'
+  pure (ValueObject object)
+  where
+    toObjectField (AST.ObjectField name value) = ObjectField name <$> astToValue value
+astToValue (AST.ValueVariable _) = empty
+
+-- | A value from the AST can be converted to a literal value and back, unless it's a variable.
+prop_roundtripFromAST :: AST.Value -> Bool
+prop_roundtripFromAST ast =
+  case astToValue ast of
+    Nothing -> True
+    Just value ->
+      case valueToAST value of
+        Nothing -> False
+        Just ast' -> ast == ast'
+
 -- | Convert a literal value into an AST value.
 --
 -- Nulls are converted into Nothing.
@@ -190,3 +277,13 @@ valueToAST (ValueObject (Object fields)) = AST.ValueObject . AST.ObjectValue <$>
   where
     toObjectField (ObjectField name value) = AST.ObjectField name <$> valueToAST value
 valueToAST ValueNull = empty
+
+-- | A literal value can be converted to the AST and back, unless it's a null.
+prop_roundtripFromValue :: Value -> Bool
+prop_roundtripFromValue value =
+  case valueToAST value of
+    Nothing -> True
+    Just ast ->
+      case astToValue ast of
+        Nothing -> False
+        Just value' -> value == value'
