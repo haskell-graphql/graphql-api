@@ -1,30 +1,65 @@
 {-# LANGUAGE FlexibleContexts #-}
-module GraphQL.Internal.Execution () where
+module GraphQL.Internal.Execution (executeRequest) where
 
 import Protolude
 
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as Map
 
 import GraphQL.Value (Value(..), astToValue)
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.AST (Name(..))
 import GraphQL.Internal.Schema (ObjectTypeDefinition)
+import GraphQL.Internal.Output (Response(..), Error(..))
 import GraphQL.Internal.Validation (getOperationName)
 
 --data Request = Request Schema Document (Maybe Operation) (Maybe VariableValues) InitialValue
 
-{-
-ExecuteRequest(schema, document, operationName, variableValues, initialValue)
-  1. Let operation be the result of GetOperation(document, operationName).
-  2. Let coercedVariableValues be the result of CoerceVariableValues(schema, operation, variableValues).
-  3. If operation is a query operation:
-     a. Return ExecuteQuery(operation, schema, coercedVariableValues, initialValue).
-  4. Otherwise if operation is a mutation operation:
-     a. Return ExecuteMutation(operation, schema, coercedVariableValues, initialValue).
+-- | Make a non-empty list. This is just an alias for the symbolic constructor.
+singleton :: a -> NonEmpty a
+singleton x = x :| []
 
--}
+-- | Execute a GraphQL request.
+--
+-- We don't *actually* want to do this here, probably. Instead, we want to use
+-- the type-level goodness of the 'GraphQL.Server' module. However,
+-- implementing all the bits of the GraphQL spec is probably the easiest route
+-- toward getting there.
+--
+-- ExecuteRequest(schema, document, operationName, variableValues, initialValue)
+--   1. Let operation be the result of GetOperation(document, operationName).
+--   2. Let coercedVariableValues be the result of CoerceVariableValues(schema, operation, variableValues).
+--   3. If operation is a query operation:
+--      a. Return ExecuteQuery(operation, schema, coercedVariableValues, initialValue).
+--   4. Otherwise if operation is a mutation operation:
+--      a. Return ExecuteMutation(operation, schema, coercedVariableValues, initialValue).
+executeRequest :: AST.QueryDocument -> Maybe Name -> VariableValues -> Value -> Response
+executeRequest document operationName variableValues initialValue =
+  case getOperation document operationName of
+    Nothing -> ExecutionFailure (singleton (Error "No such operation $operationName" []))
+    Just operation ->
+      case coerceVariableValues operation variableValues of
+        Left err -> ExecutionFailure (singleton (Error (formatError err) []))
+        Right coercedVariableValues ->
+          case operation of
+            AST.Query _ -> executeQuery operation coercedVariableValues initialValue
+            AST.Mutation _ -> executeMutation operation coercedVariableValues initialValue
+            AST.AnonymousQuery _ -> executeQuery operation coercedVariableValues initialValue
 
+-- | Execute a query.
+--
+-- https://facebook.github.io/graphql/#sec-Executing-Operations
+executeQuery :: AST.OperationDefinition -> VariableValues -> Value -> Response
+executeQuery = notImplemented
 
+-- | Execute a mutation.
+--
+-- This is pretty much like 'executeQuery', except that fields are evaluated
+-- serially.
+--
+-- https://facebook.github.io/graphql/#sec-Executing-Operations
+executeMutation :: AST.OperationDefinition -> VariableValues -> Value -> Response
+executeMutation = notImplemented
 
 -- | Get an operation from a GraphQL document
 --
@@ -67,14 +102,22 @@ type SchemaDefinition = ObjectTypeDefinition
 -- a way for doing so in the language.
 type VariableValues = Map Name Value
 
-data Error
+data ExecutionError
   = InvalidDefault Name AST.Value
   | MissingValue Name
   deriving (Eq, Show)
 
-formatError :: Error -> Text
+formatError :: ExecutionError -> Text
 formatError (InvalidDefault name value) = "Could not get default value for " <> show name <> ". Invalid value: " <> show value
 formatError (MissingValue name) = "Missing value for " <> show name <> " and must be non-null."
+
+coerceVariableValues :: AST.OperationDefinition -> VariableValues -> Either ExecutionError VariableValues
+coerceVariableValues op = coerceVariableValues' (getVariableDefinitions op)
+
+getVariableDefinitions :: AST.OperationDefinition -> [AST.VariableDefinition]
+getVariableDefinitions (AST.Query (AST.Node _ defns _ _)) = defns
+getVariableDefinitions (AST.Mutation (AST.Node _ defns _ _)) = defns
+getVariableDefinitions (AST.AnonymousQuery _) = []
 
 -- | Coerce variable values.
 --
@@ -88,16 +131,16 @@ formatError (MissingValue name) = "Missing value for " <> show name <> " and mus
 -- easily.
 --
 -- https://facebook.github.io/graphql/#sec-Coercing-Variable-Values
-coerceVariableValues :: [AST.VariableDefinition] -> VariableValues -> Either Error VariableValues
-coerceVariableValues variableDefinitions variableValues =
+coerceVariableValues' :: [AST.VariableDefinition] -> VariableValues -> Either ExecutionError VariableValues
+coerceVariableValues' variableDefinitions variableValues =
   Map.fromList <$> traverse getValue variableDefinitions
   where
 
-    getValue :: AST.VariableDefinition -> Either Error (Name, Value)
+    getValue :: AST.VariableDefinition -> Either ExecutionError (Name, Value)
     getValue (AST.VariableDefinition (AST.Variable variableName) variableType defaultValue) =
       (,) <$> pure variableName <*> getValue' variableName variableType defaultValue
 
-    getValue' :: Name -> AST.Type -> Maybe AST.DefaultValue -> Either Error Value
+    getValue' :: Name -> AST.Type -> Maybe AST.DefaultValue -> Either ExecutionError Value
     getValue' variableName variableType defaultValue =
       case Map.lookup variableName variableValues of
         Just value -> pure value
