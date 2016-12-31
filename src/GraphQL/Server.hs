@@ -106,12 +106,13 @@ class FromValue a where
 -- The default implementation is to say that there *is* no default for this
 -- type.
 class Defaultable a where
-  -- TODO: Change `valueMissing` to return a Maybe and have the error handling
-  -- magic happen a layer higher.
-  -- | valueMissing returns the value for when none is specified.
-  valueMissing :: AST.Name -> Either Text a
-  valueMissing name' = Left ("Value missing: " <> AST.getNameText name')
+  -- | defaultFor returns the value to be used when no value has been given.
+  defaultFor :: AST.Name -> Maybe a
+  defaultFor _ = empty
 
+-- | Called when we're missing a value of type @a@ with the given 'AST.Name'.
+valueMissing :: Defaultable a => AST.Name -> Either Text a
+valueMissing name = maybe (Left ("Value missing: " <> AST.getNameText name)) Right (defaultFor name)
 
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
