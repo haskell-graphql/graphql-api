@@ -70,7 +70,7 @@ tests = testSpec "Validation" $ do
                     ]
                   )
                 ]
-      getErrors doc `shouldBe` [MultipleAnonymousOperation 2]
+      getErrors doc `shouldBe` [MixedAnonymousOperations 2 []]
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do
