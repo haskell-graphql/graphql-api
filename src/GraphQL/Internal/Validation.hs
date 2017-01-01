@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Transform GraphQL query documents from AST into valid structures
 --
 -- This corresponds roughly to the
@@ -72,20 +73,11 @@ validate (AST.QueryDocument defns) =
     (operations, fragments) = splitBy splitDefns defns
     (anonymous, named) = splitBy splitOps operations
     frags = validateFragmentDefinitions fragments
-  in
+  in runValidation $
     case (anonymous, named) of
-      ([], ops) ->
-        case makeMap ops of
-          Left dups -> Left (map DuplicateOperation dups)
-          Right ops' ->
-            case frags of
-              Left err -> Left err
-              Right frags' -> Right (MultipleOperations ops' frags')
-      ([x], []) ->
-        case frags of
-          Left err -> Left err
-          Right frags' -> Right (LoneAnonymousOperation x frags')
-      _ -> Left (singleton (MixedAnonymousOperations (length anonymous) (map fst named)))
+      ([], ops) -> MultipleOperations <$> mapErrors DuplicateOperation (makeMap ops) <*> frags
+      ([x], []) -> LoneAnonymousOperation <$> pure x <*> frags
+      _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
     splitBy :: (a -> Either b c) -> [a] -> ([b], [c])
@@ -101,8 +93,8 @@ validate (AST.QueryDocument defns) =
 -- | A set of fragment definitions.
 type FragmentDefinitions = Map Name AST.FragmentDefinition
 
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Either (NonEmpty ValidationError) FragmentDefinitions
-validateFragmentDefinitions frags = first (map DuplicateFragmentDefinition) (makeMap [(name, value) | value@(AST.FragmentDefinition name _ _ _) <- frags])
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation ValidationError FragmentDefinitions
+validateFragmentDefinitions frags = mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(AST.FragmentDefinition name _ _ _) <- frags])
 
 -- | The set of arguments for a given field, directive, etc.
 --
@@ -112,8 +104,8 @@ type ArgumentSet = Map Name AST.Value
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
 -- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
-validateArguments :: [AST.Argument] -> Either (NonEmpty ValidationError) ArgumentSet
-validateArguments args = first (map DuplicateArgument) (makeMap [(name, value) | AST.Argument name value <- args])
+validateArguments :: [AST.Argument] -> Validation ValidationError ArgumentSet
+validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
 -- TODO: Might be nice to have something that goes from a validated document
 -- back to the AST. This would be especially useful for encoding, so we could
@@ -172,14 +164,41 @@ findDuplicates xs = findDups (sort xs)
 -- | Create a map from a list of key-value pairs.
 --
 -- Returns a list of duplicates on 'Left' if there are duplicates.
-makeMap :: Ord key => [(key, value)] -> Either (NonEmpty key) (Map key value)
+makeMap :: Ord key => [(key, value)] -> Validation key (Map key value)
 makeMap entries =
   case NonEmpty.nonEmpty (findDuplicates (map fst entries)) of
-    Nothing -> Right (Map.fromList entries)
-    Just dups -> Left dups
+    Nothing -> pure (Map.fromList entries)
+    Just dups -> throwErrors dups
 
 
 -- XXX: Copied from Execution
 -- | Make a non-empty list. This is just an alias for the symbolic constructor.
 singleton :: a -> NonEmpty a
 singleton x = x :| []
+
+
+-- | A 'Validation' is a value that can either be valid or have a non-empty
+-- list of errors.
+newtype Validation e a = Validation { runValidation :: Either (NonEmpty e) a } deriving (Eq, Show, Functor)
+
+-- | Throw a single validation error.
+throwE :: e -> Validation e a
+throwE = throwErrors . singleton
+
+-- | Throw multiple validation errors. There must be at least one.
+throwErrors :: NonEmpty e -> Validation e a
+throwErrors = Validation . Left
+
+-- | Map the errors on a validation. Useful for composing validations.
+mapErrors :: (e1 -> e2) -> Validation e1 a -> Validation e2 a
+mapErrors f (Validation (Left es)) = Validation (Left (map f es))
+mapErrors _ (Validation (Right x)) = Validation (Right x)
+
+-- | The applicative on Validation allows multiple potentially-valid values to
+-- be composed, and ensures that *all* validation errors bubble up.
+instance Applicative (Validation e) where
+  pure x = Validation (Right x)
+  Validation (Left e1) <*> (Validation (Left e2)) = Validation (Left (e1 <> e2))
+  Validation (Left e) <*> _ = Validation (Left e)
+  Validation _ <*> (Validation (Left e)) = Validation (Left e)
+  Validation (Right f) <*> Validation (Right x) = Validation (Right (f x))
