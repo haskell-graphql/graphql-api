@@ -1,3 +1,12 @@
+-- | Transform GraphQL query documents from AST into valid structures
+--
+-- This corresponds roughly to the
+-- [Validation](https://facebook.github.io/graphql/#sec-Validation) section of
+-- the specification, except where noted.
+--
+-- One core difference is that this module doesn't attempt to do any
+-- type-level validation, as we attempt to defer all of that to the Haskell
+-- type checker.
 module GraphQL.Internal.Validation
   ( ValidationError(..)
   , QueryDocument
@@ -17,53 +26,9 @@ import qualified Data.Map as Map
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.AST (Name)
 
-{-
-enum DogCommand { SIT, DOWN, HEEL }
-
-type Dog implements Pet {
-  name: String!
-  nickname: String
-  barkVolume: Int
-  doesKnowCommand(dogCommand: DogCommand!): Boolean!
-  isHousetrained(atOtherHomes: Boolean): Boolean!
-  owner: Human
-}
-
-interface Sentient {
-  name: String!
-}
-
-interface Pet {
-  name: String!
-}
-
-type Alien implements Sentient {
-  name: String!
-  homePlanet: String
-}
-
-type Human implements Sentient {
-  name: String!
-}
-
-enum CatCommand { JUMP }
-
-type Cat implements Pet {
-  name: String!
-  nickname: String
-  doesKnowCommand(catCommand: CatCommand!): Boolean!
-  meowVolume: Int
-}
-
-union CatOrDog = Cat | Dog
-union DogOrHuman = Dog | Human
-union HumanOrAlien = Human | Alien
-
-type QueryRoot {
-  dog: Dog
-}
--}
-
+-- | A valid query document.
+--
+-- Construct this using 'validate' on an 'AST.QueryDocument'.
 data QueryDocument
   -- | The query document contains a single anonymous operation.
   = LoneAnonymousOperation AST.SelectionSet [AST.FragmentDefinition]
@@ -76,7 +41,7 @@ data QueryDocument
 -- Technically this is part of the "Execution" phase, but we're keeping it
 -- here for now to avoid exposing constructors for valid documents.
 --
--- https://facebook.github.io/graphql/#sec-Executing-Requests
+-- <https://facebook.github.io/graphql/#sec-Executing-Requests>
 --
 -- GetOperation(document, operationName):
 --
@@ -97,6 +62,10 @@ getOperation (MultipleOperations ops _) Nothing =
     _ -> empty
 getOperation _ _ = empty
 
+-- | Turn a parsed document into a known valid one.
+--
+-- The document is known to be syntactically valid, as we've got its AST.
+-- Here, we confirm that it's semantically valid (modulo types).
 validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
 validate (AST.QueryDocument defns) =
   let
@@ -137,12 +106,12 @@ data ValidationError
   -- | 'DuplicateOperation' means there was more than one operation defined
   -- with the given name.
   --
-  -- https://facebook.github.io/graphql/#sec-Operation-Name-Uniqueness
+  -- <https://facebook.github.io/graphql/#sec-Operation-Name-Uniqueness>
   = DuplicateOperation AST.Name
   -- | 'MixedAnonymousOperations' means there was more than one operation
   -- defined in a document with an anonymous operation.
   --
-  -- https://facebook.github.io/graphql/#sec-Lone-Anonymous-Operation
+  -- <https://facebook.github.io/graphql/#sec-Lone-Anonymous-Operation>
   | MixedAnonymousOperations Int [AST.Name]
   deriving (Eq, Show)
 
@@ -150,7 +119,7 @@ data ValidationError
 --
 -- An empty list means no errors.
 --
--- https://facebook.github.io/graphql/#sec-Validation
+-- <https://facebook.github.io/graphql/#sec-Validation>
 getErrors :: AST.QueryDocument -> [ValidationError]
 getErrors doc =
   case validate doc of
@@ -178,6 +147,7 @@ makeMap entries =
   case NonEmpty.nonEmpty (findDuplicates (map fst entries)) of
     Nothing -> Right (Map.fromList entries)
     Just dups -> Left dups
+
 
 -- XXX: Copied from Execution
 -- | Make a non-empty list. This is just an alias for the symbolic constructor.
