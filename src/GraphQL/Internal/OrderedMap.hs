@@ -40,6 +40,7 @@ module GraphQL.Internal.OrderedMap
   , unions
   -- * Conversion
   , toList
+  , toMap
   , keys
   , values
   -- * Properties
@@ -48,9 +49,19 @@ module GraphQL.Internal.OrderedMap
 
 import Protolude hiding (empty, toList)
 
+import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), listOf)
 
-newtype OrderedMap key value = OrderedMap [(key, value)] deriving (Eq, Ord, Show)
+data OrderedMap key value
+  = OrderedMap
+    { -- | Get the list of keys from an ordered map, in order of appearance.
+      --
+      -- This list is guaranteed to have no duplicates.
+      keys :: [key]
+      -- | Convert an ordered map to a regular map, losing insertion order.
+    , toMap :: Map key value
+    }
+  deriving (Eq, Ord, Show)
 
 -- | An ordered map is guaranteed to have a set of keys which are unique.
 prop_orderedMap :: Ord key => OrderedMap key value -> Bool
@@ -60,53 +71,43 @@ prop_orderedMap om = ks == ordNub ks
 
 -- | Convert an ordered map to a list of keys and values. The list is
 -- guaranteed to be the same order as the order of insertion into the map.
-toList :: OrderedMap key value -> [(key, value)]
-toList (OrderedMap entries) = entries
+--
+-- /O(n log n)/
+toList :: Ord key => OrderedMap key value -> [(key, value)]
+toList (OrderedMap keys entries) = catMaybes (foreach keys $ \k -> (,) k <$> Map.lookup k entries)
 
 instance Foldable (OrderedMap key) where
-  foldr f z om = foldr (f . snd) z (toList om)
+  foldr f z (OrderedMap _ entries) = foldr f z entries
 
 instance Traversable (OrderedMap key) where
-  traverse f om = OrderedMap <$> traverse (\(k, v) -> (,) k <$> f v) (toList om)
+  traverse f (OrderedMap keys entries) = OrderedMap keys <$> traverse f entries
 
 instance Functor (OrderedMap key) where
-  fmap f = OrderedMap . map (second f) . toList
+  fmap f (OrderedMap keys entries) = OrderedMap keys (map f entries)
 
 instance (Arbitrary key, Arbitrary value, Ord key) => Arbitrary (OrderedMap key value) where
-  arbitrary = OrderedMap <$> entries
+  arbitrary = OrderedMap <$> ks <*> entries
     where
-      entries = zip <$> ks <*> vs
+      entries = Map.fromList <$> (zip <$> ks <*> vs)
       ks = ordNub <$> listOf arbitrary
       vs = listOf arbitrary
 
--- | The empty OrderedMap.
+-- | The empty OrderedMap. /O(1)/
 empty :: OrderedMap key value
-empty = OrderedMap []
+empty = OrderedMap [] Map.empty
+
+-- | Create an ordered map containing a single entry. /O(1)/
+singleton :: key -> value -> OrderedMap key value
+singleton key value = OrderedMap [key] (Map.singleton key value)
 
 -- | Find a value in an ordered map.
 --
--- /O(n)/
-lookup :: (Eq key, Show key, Show value) => key -> OrderedMap key value -> Maybe value
-lookup key om =
-  -- TODO: Add a Map structure to OrderedMap and use that for lookup, removing
-  -- the 'panic', the 'Show' constraints, and making this 'O(log n)'.
-  case [ v | (k, v) <- toList om, k == key ] of
-    [] -> Nothing
-    [v] -> Just v
-    _ -> panic ("Found multiple values of " <> show key <> " in " <> show om)
+-- /O(log n)/
+lookup :: Ord key => key -> OrderedMap key value -> Maybe value
+lookup key (OrderedMap _ entries) = Map.lookup key entries
 
--- | Create an ordered map containing a single entry.
-singleton :: key -> value -> OrderedMap key value
-singleton key value = OrderedMap [(key, value)]
-
--- | Get the list of keys from an ordered map, in order of appearance.
---
--- This list is guaranteed to have no duplicates.
-keys :: OrderedMap key value -> [key]
-keys = map fst . toList
-
--- | Get the values from an ordered map, in order of appearance.
-values :: OrderedMap key value -> [value]
+-- | Get the values from an ordered map, in order of appearance. /O(n log n)/
+values :: Ord key => OrderedMap key value -> [value]
 values = map snd . toList
 
 -- | The union of a list of ordered maps.
@@ -116,28 +117,21 @@ values = map snd . toList
 -- Otherwise, return a new map containing all of the keys from all of the
 -- maps. The keys from the first map will appear first, followed by the
 -- second, and so forth.
+--
+-- /O(m * n log (m * n))/ where /m/ is the number of maps, and /n/ is the size of
+-- the largest map.
 unions :: Ord key => [OrderedMap key value] -> Maybe (OrderedMap key value)
 unions orderedMaps = orderedMap (orderedMaps >>= toList)
 
 -- | Construct an ordered map from a list.
 --
--- If the list contains duplicate keys, then return 'Nothing'.
---
 -- /O(n log n)/.
 --
--- >>> orderedMap [("foo", 1), ("foo", 2)]
--- Nothing
---
--- Otherwise, return an 'OrderedMap', preserving the order.
---
--- >>> orderedMap [("foo",2),("bar",1)]
--- Just (OrderedMap [("foo",2),("bar",1)])
---
--- >>> orderedMap [("bar",1),("foo",2)]
--- Just (OrderedMap [("bar",1),("foo",2)])
+-- If the list contains duplicate keys, then return 'Nothing'. Otherwise,
+-- return an 'OrderedMap', preserving the order.
 orderedMap :: Ord key => [(key, value)] -> Maybe (OrderedMap key value)
 orderedMap entries
-  | ks == ordNub ks = Just (OrderedMap entries)
+  | ks == ordNub ks = Just (OrderedMap ks (Map.fromList entries))
   | otherwise = Nothing
   where
     ks = map fst entries
