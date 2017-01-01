@@ -91,13 +91,21 @@ validate (AST.QueryDocument defns) =
     splitOps m@(AST.Mutation (AST.Node name _ _ _)) = Right (name, m)
 
 -- | A validated fragment definition.
-type FragmentDefinition = AST.FragmentDefinition
+data FragmentDefinition
+  = FragmentDefinition Name AST.TypeCondition Directives [Selection]
+  deriving (Eq, Show)
 
 -- | A set of fragment definitions.
 type FragmentDefinitions = Map Name FragmentDefinition
 
 validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation ValidationError FragmentDefinitions
-validateFragmentDefinitions frags = mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(AST.FragmentDefinition name _ _ _) <- frags])
+validateFragmentDefinitions frags = do
+  defns <- traverse validateFragmentDefinition frags
+  mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
+  where
+    validateFragmentDefinition (AST.FragmentDefinition name cond directives ss) =
+      FragmentDefinition name cond <$> validateDirectives directives <*> traverse validateSelection ss
+
 
 -- | The set of arguments for a given field, directive, etc.
 --
@@ -122,27 +130,25 @@ data Field
   deriving (Eq, Show)
 
 data FragmentSpread
-  = FragmentSpread Name Directives FragmentDefinition
+  = FragmentSpread Name Directives
   deriving (Eq, Show)
 
 data InlineFragment
   = InlineFragment AST.TypeCondition Directives [Selection]
   deriving (Eq, Show)
 
-validateSelection :: FragmentDefinitions -> AST.Selection -> Validation ValidationError Selection
-validateSelection fragments selection =
+validateSelection :: AST.Selection -> Validation ValidationError Selection
+validateSelection selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
       SelectionField <$> (Field alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
     AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
-      case Map.lookup name fragments of
-        Nothing -> throwE (NoSuchFragment name)
-        Just defn -> SelectionFragmentSpread <$> (FragmentSpread name <$> validateDirectives directives <*> pure defn)
+      SelectionFragmentSpread <$> (FragmentSpread name <$> validateDirectives directives)
     AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
       SelectionInlineFragment <$> (InlineFragment typeCond <$> validateDirectives directives <*> childSegments ss)
 
   where
-    childSegments = traverse (validateSelection fragments)
+    childSegments = traverse validateSelection
 
 -- | A directive is a way of changing the run-time behaviour
 newtype Directives = Directives (Map Name ArgumentSet) deriving (Eq, Show)
