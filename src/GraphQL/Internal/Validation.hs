@@ -31,9 +31,9 @@ import GraphQL.Internal.AST (Name)
 -- Construct this using 'validate' on an 'AST.QueryDocument'.
 data QueryDocument
   -- | The query document contains a single anonymous operation.
-  = LoneAnonymousOperation AST.SelectionSet [AST.FragmentDefinition]
+  = LoneAnonymousOperation AST.SelectionSet FragmentDefinitions
   -- | The query document contains multiple uniquely-named operations.
-  | MultipleOperations (Map Name AST.OperationDefinition) [AST.FragmentDefinition]
+  | MultipleOperations (Map Name AST.OperationDefinition) FragmentDefinitions
   deriving (Eq, Show)
 
 -- | Get an operation from a GraphQL document
@@ -71,13 +71,20 @@ validate (AST.QueryDocument defns) =
   let
     (operations, fragments) = splitBy splitDefns defns
     (anonymous, named) = splitBy splitOps operations
+    frags = validateFragmentDefinitions fragments
   in
     case (anonymous, named) of
       ([], ops) ->
         case makeMap ops of
           Left dups -> Left (map DuplicateOperation dups)
-          Right ops' -> Right (MultipleOperations ops' fragments)
-      ([x], []) -> Right (LoneAnonymousOperation x fragments)
+          Right ops' ->
+            case frags of
+              Left err -> Left err
+              Right frags' -> Right (MultipleOperations ops' frags')
+      ([x], []) ->
+        case frags of
+          Left err -> Left err
+          Right frags' -> Right (LoneAnonymousOperation x frags')
       _ -> Left (singleton (MixedAnonymousOperations (length anonymous) (map fst named)))
 
   where
@@ -91,7 +98,15 @@ validate (AST.QueryDocument defns) =
     splitOps q@(AST.Query (AST.Node name _ _ _)) = Right (name, q)
     splitOps m@(AST.Mutation (AST.Node name _ _ _)) = Right (name, m)
 
+-- | A set of fragment definitions.
+type FragmentDefinitions = Map Name AST.FragmentDefinition
+
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Either (NonEmpty ValidationError) FragmentDefinitions
+validateFragmentDefinitions frags = first (map DuplicateFragmentDefinition) (makeMap [(name, value) | value@(AST.FragmentDefinition name _ _ _) <- frags])
+
 -- | The set of arguments for a given field, directive, etc.
+--
+-- Note that the 'value' can be a variable.
 type ArgumentSet = Map Name AST.Value
 
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
@@ -125,6 +140,9 @@ data ValidationError
   -- | 'DuplicateArgument' means that multiple copies of the same argument was
   -- given to the same field, directive, etc.
   | DuplicateArgument Name
+  -- | 'DuplicateFragmentDefinition' means that there were more than one
+  -- fragment defined with the same name.
+  | DuplicateFragmentDefinition Name
   deriving (Eq, Show)
 
 -- | Identify all of the validation errors in @doc@.
