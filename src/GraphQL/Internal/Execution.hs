@@ -5,6 +5,7 @@ import Protolude
 
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 import GraphQL.Value (Value(..), astToValue, objectFromOrderedMap)
 import qualified GraphQL.Internal.AST as AST
@@ -60,13 +61,50 @@ executeRequest document operationName variableValues initialValue =
 --     d. Let responseValue be ExecuteField(objectType, objectValue, fields, fieldType, variableValues).
 --     e. Set responseValue as the value for responseKey in resultMap.
 --   4. Return resultMap.
+--
+-- https://facebook.github.io/graphql/#sec-Executing-Selection-Sets
 executeSelectionSet :: AST.SelectionSet -> Value -> VariableValues -> OrderedMap Name Value
 executeSelectionSet selectionSet objectValue variableValues =
   let groupedFieldSet = collectFields selectionSet variableValues
   in map (executeFields objectValue variableValues) groupedFieldSet
 
+-- | Collect like-named fields of a selection set.
+--
+-- Before execution, the selection set is converted to a grouped field set by
+-- calling CollectFields(). Each entry in the grouped field set is a list of
+-- fields that share a response key. This ensures all fields with the same
+-- response key (alias or field name) included via referenced fragments are
+-- executed at the same time.
+--
+-- As an example, collecting the fields of this selection set would collect
+-- two instances of the field a and one of field b:
+--
+-- @
+-- {
+--   a {
+--     subfield1
+--   }
+--   ...ExampleFragment
+-- }
+--
+-- fragment ExampleFragment on Query {
+--   a {
+--     subfield2
+--   }
+--   b
+-- }
+-- @
+--
+-- The depth‐first‐search order of the field groups produced by
+-- CollectFields() is maintained through execution, ensuring that fields
+-- appear in the executed response in a stable and predictable order.
+--
+-- https://facebook.github.io/graphql/#sec-Field-Collection
 collectFields :: AST.SelectionSet -> VariableValues -> OrderedMap Name (NonEmpty AST.Field)
-collectFields = notImplemented
+collectFields selectionSet' variableValues' = go selectionSet' variableValues' Set.empty
+  where
+    go :: AST.SelectionSet -> VariableValues -> Set b -> OrderedMap Name (NonEmpty AST.Field)
+    go selectionSet variableValues visitedFragments = notImplemented
 
 executeFields :: Value -> VariableValues -> NonEmpty AST.Field  -> Value
 executeFields = notImplemented
@@ -123,10 +161,19 @@ formatError (MissingValue name) = "Missing value for " <> show name <> " and mus
 coerceVariableValues :: AST.OperationDefinition -> VariableValues -> Either ExecutionError VariableValues
 coerceVariableValues op = coerceVariableValues' (getVariableDefinitions op)
 
+-- | Get the list of variable definitions in an operation.
+-- TODO: Should probably be in AST, and should also probably be generic across anything with a list of variable definitions.
 getVariableDefinitions :: AST.OperationDefinition -> [AST.VariableDefinition]
 getVariableDefinitions (AST.Query (AST.Node _ defns _ _)) = defns
 getVariableDefinitions (AST.Mutation (AST.Node _ defns _ _)) = defns
 getVariableDefinitions (AST.AnonymousQuery _) = []
+
+-- | Get the list of directives associated with a selection.
+-- TODO: Should probably be in AST, and should also probably be generic across anything with directives.
+getDirectives :: AST.Selection -> [AST.Directive]
+getDirectives (AST.SelectionField (AST.Field _ _ _ directives _)) = directives
+getDirectives (AST.SelectionFragmentSpread (AST.FragmentSpread _ directives)) = directives
+getDirectives (AST.SelectionInlineFragment (AST.InlineFragment _ directives _)) = directives
 
 -- | Coerce variable values.
 --
