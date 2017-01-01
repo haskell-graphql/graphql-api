@@ -7,6 +7,7 @@ import Protolude hiding (Enum)
 import GraphQL.API
 import GraphQL.Server
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Value (Value)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import GraphQL.Internal.Parser (document)
 
@@ -50,7 +51,7 @@ root :: Handler IO Query
 root = do
   pure directory
 
-example :: IO Result
+example :: IO (Result Value)
 example = buildResolver @IO @Query root (query "{ root(path: \"/etc\") { entries { name } } }")
 
 query :: Text -> AST.SelectionSet

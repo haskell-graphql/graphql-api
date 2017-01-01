@@ -14,11 +14,12 @@ import GraphQL.API
   )
 import GraphQL.Server
   ( Handler
-  , QueryError(..)
+  , ResolverError(..)
   , buildResolver
   , (:<>)(..)
   , Result(..)
   )
+import GraphQL.Value (Value)
 import qualified GraphQL.Internal.AST as AST
 import Data.Aeson (encode)
 
@@ -43,7 +44,7 @@ getQuery query =
         parseOnly (document <* endOfInput) query
   in selectionSet
 
-runQuery :: AST.SelectionSet -> IO (Either Text Result)
+runQuery :: AST.SelectionSet -> IO (Either Text (Result Value))
 runQuery query = runExceptT (buildResolver @TMonad @T tHandler query)
 
 tests :: IO TestTree
@@ -61,8 +62,8 @@ tests = testSpec "TypeAPI" $ do
       Right (Result errs _) <- runQuery wrongQuery
       -- TODO: jml thinks this is a really bad error message. Real problem is
       -- that `not_a_field` was provided.
-      errs `shouldBe` [QueryError "Value missing: x"]
+      errs `shouldBe` [InvalidQueryError "Value missing: x"]
     it "complains about missing argument" $ do
       let wrongQuery = getQuery "{ t }"
       Right (Result errs _) <- runQuery wrongQuery
-      errs `shouldBe` [QueryError "Value missing: x"]
+      errs `shouldBe` [InvalidQueryError "Value missing: x"]

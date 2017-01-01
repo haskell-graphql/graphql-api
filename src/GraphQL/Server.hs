@@ -196,31 +196,24 @@ data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value)
 
 -- Iterate through handlers (zipped together with their type
 -- definition) and execute handler if the name matches.
---
--- TODO: tuple return not great (but either is wrong, too because it discards errors.
-type ResolveFieldResult = ([ResolverError], Maybe GValue.ObjectField)
+type ResolveFieldResult = Result (Maybe GValue.ObjectField)
+
 resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a
   => FieldHandler m a -> m ResolveFieldResult -> AST.Selection -> m ResolveFieldResult
 resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ queryFieldName _ _ _)) =
   case buildFieldResolver @m @a handler selection of
     -- TODO the fact that this doesn't fit together nicely makes me think that ObjectField is not a good idea)
-    Left err -> pure ([err], Just (GValue.ObjectField queryFieldName GValue.ValueNull))
+    Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
     Right (NamedValueResolver name' resolver) -> runResolver name' resolver
   where
     runResolver :: AST.Name -> m (Result GValue.Value) -> m ResolveFieldResult
     runResolver name' resolver
       | queryFieldName == name' = do
           Result errs value <- resolver
-          pure (errs, Just (GValue.ObjectField queryFieldName value))
+          pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
       | otherwise = nextHandler
 resolveField _ _ f =
-  -- TODO, I'm not sure whether this should be a panic instead? (If we
-  -- panic we can avoid the Maybe in the ResolveFieldResult type).
-  --
-  -- An alternative intepretation is that we can formulate
-  -- syntactically valid queries that are still semantically broken in
-  -- which case we should not panic.
-  pure ([InvalidQueryError ("Unexpected Selection value. Is the query normalized?: " <> show f)], Nothing)
+  pure (Result [InvalidQueryError ("Unexpected Selection value. Is the query normalized?: " <> show f)] Nothing)
 
 
 -- | Derive the handler type from the Field/Argument type in a closed
@@ -298,7 +291,7 @@ instance forall ks t m.
   runFields handler selection =
     resolveField @(Field ks t) @m handler nextHandler selection
     where
-      nextHandler = pure ([FieldNotFoundError ("Query for undefined selection: " <> show selection)], Nothing)
+      nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
@@ -307,7 +300,7 @@ instance forall m a b.
   runFields handler selection =
     resolveField @(a :> b) @m handler nextHandler selection
     where
-      nextHandler = pure ([FieldNotFoundError ("Query for undefined selection: " <> show selection)], Nothing)
+      nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
 
 
 instance forall typeName interfaces fields m.
@@ -322,7 +315,7 @@ instance forall typeName interfaces fields m.
     -- We're evaluating an Object so we're collecting ObjectFields from
     -- runFields and build a GValue.Map with them.
     r <- forM selectionSet (runFields @m @(RunFieldsType m fields) handler)
-    let (errs, fields) = foldr' (\(ea, fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
+    let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
 
     case GValue.makeObject (catMaybes fields) of
       Nothing -> pure (Result [InvalidQueryError ("Duplicate fields in set: " <> show r)] GValue.ValueNull)
