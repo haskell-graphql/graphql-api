@@ -91,6 +91,15 @@ validate (AST.QueryDocument defns) =
     splitOps q@(AST.Query (AST.Node name _ _ _)) = Right (name, q)
     splitOps m@(AST.Mutation (AST.Node name _ _ _)) = Right (name, m)
 
+-- | The set of arguments for a given field, directive, etc.
+type ArgumentSet = Map Name AST.Value
+
+-- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
+--
+-- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
+validateArguments :: [AST.Argument] -> Either (NonEmpty ValidationError) ArgumentSet
+validateArguments args = first (map DuplicateArgument) (makeMap [(name, value) | AST.Argument name value <- args])
+
 -- TODO: Might be nice to have something that goes from a validated document
 -- back to the AST. This would be especially useful for encoding, so we could
 -- debug by looking at GraphQL rather than data types.
@@ -107,12 +116,15 @@ data ValidationError
   -- with the given name.
   --
   -- <https://facebook.github.io/graphql/#sec-Operation-Name-Uniqueness>
-  = DuplicateOperation AST.Name
+  = DuplicateOperation Name
   -- | 'MixedAnonymousOperations' means there was more than one operation
   -- defined in a document with an anonymous operation.
   --
   -- <https://facebook.github.io/graphql/#sec-Lone-Anonymous-Operation>
-  | MixedAnonymousOperations Int [AST.Name]
+  | MixedAnonymousOperations Int [Name]
+  -- | 'DuplicateArgument' means that multiple copies of the same argument was
+  -- given to the same field, directive, etc.
+  | DuplicateArgument Name
   deriving (Eq, Show)
 
 -- | Identify all of the validation errors in @doc@.
