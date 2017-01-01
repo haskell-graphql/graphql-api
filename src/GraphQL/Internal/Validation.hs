@@ -260,7 +260,21 @@ throwE = throwErrors . singleton
 throwErrors :: NonEmpty e -> Validation e a
 throwErrors = Validation . Left
 
--- | Map the errors on a validation. Useful for composing validations.
+-- | Map over each individual error on a validation. Useful for composing
+-- validations.
+--
+-- This is /somewhat/ like 'first', but 'Validation' is not, and cannot be, a
+-- 'Bifunctor', because the left-hand side is specialized to @NonEmpty e@,
+-- rather than plain @e@. Also, whatever function were passed to 'first' would
+-- get the whole non-empty list, whereas 'mapErrors' works on one element at a
+-- time.
+--
+-- >>> mapErrors (+1) (pure "hello")
+-- Validation {runValidation = Right "hello"}
+-- >>> mapErrors (+1) (throwE 2)
+-- Validation {runValidation = Left (3 :| [])}
+-- >>> mapErrors (+1) (throwErrors (NonEmpty.fromList [3, 5]))
+-- Validation {runValidation = Left (4 :| [6])}
 mapErrors :: (e1 -> e2) -> Validation e1 a -> Validation e2 a
 mapErrors f (Validation (Left es)) = Validation (Left (map f es))
 mapErrors _ (Validation (Right x)) = Validation (Right x)
