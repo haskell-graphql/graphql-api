@@ -77,8 +77,15 @@ infixr 8 :<|>
 -- Result collects errors and values at the same time unless a handler
 -- tells us to bail out in which case we stop the processing
 -- immediately.
--- TODO: Make QueryError a Monoid and aggregate according to that.
 data Result a = Result [ResolverError] a deriving (Show, Functor)
+
+-- Aggregating results keeps all errors and creates a ValueList
+-- containing the individual values.
+aggregateResults :: [Result GValue.Value] -> Result GValue.Value
+aggregateResults r =
+  let (errs, valueList) = foldl' (\(eb, vb) (Result ea va) -> ((eb <> ea), va:vb)) ([], []) r
+  in Result errs (GValue.toValue valueList)
+
 
 instance Applicative Result where
   pure v = Result [] v
@@ -152,16 +159,9 @@ instance forall m. (Monad m) => HasGraph m Text where
 
 instance forall m hg. (Monad m, HasGraph m hg) => HasGraph m (List hg) where
   type Handler m (List hg) = [Handler m hg]
-  buildResolver handler selectionSet = map resultValues a
+  buildResolver handler selectionSet = map aggregateResults a
     where
       a = traverse (flip (buildResolver @m @hg) selectionSet) handler
-      -- Aggregate results. TODO: Result should probably be a monoid
-      -- so we can collect values but I'm not sure what the monoid of
-      -- Value itself is.
-      resultValues :: [Result GValue.Value] -> Result GValue.Value
-      resultValues r =
-        let (errs, valueList) = foldl' (\(eb, vb) (Result ea va) -> ((eb <> ea), va:vb)) ([], []) r
-        in Result errs (GValue.toValue valueList)
 
 instance forall m ks enum. (Monad m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
   type Handler m (Enum ks enum) = enum
