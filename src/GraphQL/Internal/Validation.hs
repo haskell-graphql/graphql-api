@@ -126,6 +126,12 @@ validate (AST.QueryDocument defns) =
 -- back to the AST. This would be especially useful for encoding, so we could
 -- debug by looking at GraphQL rather than data types.
 
+-- TODO: The next thing we want to do is get to valid selection sets, which
+-- starts by checking that fields in a set can merge
+-- (https://facebook.github.io/graphql/#sec-Field-Selection-Merging). However,
+-- this depends on flattening fragments, which I really don't want to do until
+-- after we've validated those.
+
 -- | Errors arising from validating a document.
 data ValidationError
   -- | 'DuplicateOperation' means there was more than one operation defined
