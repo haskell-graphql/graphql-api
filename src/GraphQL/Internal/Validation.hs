@@ -107,6 +107,37 @@ type ArgumentSet = Map Name AST.Value
 validateArguments :: [AST.Argument] -> Validation ValidationError ArgumentSet
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
+-- | A GraphQL selection, excluding fragment spreads (because they've been inlined).
+data Selection
+  = SelectionField Field
+  | SelectionInlineFragment InlineFragment
+  deriving (Eq, Show)
+
+data Field
+  = Field (Maybe AST.Alias) Name ArgumentSet [AST.Directive] [Selection]
+  deriving (Eq, Show)
+
+data InlineFragment
+  = InlineFragment AST.TypeCondition [AST.Directive] [Selection]
+  deriving (Eq, Show)
+
+validateSelection :: FragmentDefinitions -> AST.Selection -> Validation ValidationError Selection
+validateSelection fragments selection =
+  case selection of
+    AST.SelectionField (AST.Field alias name args directives ss) ->
+      SelectionField <$> (Field alias name <$> validateArguments args <*> pure directives <*> childSegments ss)
+    AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
+      -- TODO: Check that the fragment exists and store it in the selection somehow.
+      notImplemented
+    AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
+      SelectionInlineFragment <$> (InlineFragment typeCond directives <$> childSegments ss)
+
+  where
+    childSegments = traverse (validateSelection fragments)
+
+-- TODO: There's a chunk of duplication around "this collection of things has
+-- unique names". Fix that.
+
 -- TODO: Might be nice to have something that goes from a validated document
 -- back to the AST. This would be especially useful for encoding, so we could
 -- debug by looking at GraphQL rather than data types.
