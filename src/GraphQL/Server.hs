@@ -8,9 +8,10 @@
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
+{-# LANGUAGE DeriveFunctor #-}
 
 module GraphQL.Server
-  ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
+  ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
   , (:<|>)(..)
@@ -37,16 +38,13 @@ import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
 
-import Control.Monad.Catch (Exception)
 
-data QueryError =
-  QueryError Text
-  | InternalError Text
-  | InvalidFieldError Text
+-- TODO: add more structure to the various errors
+data ResolverError =
+    SchemaError Text
+  | FieldNotFoundError Text
+  | InvalidQueryError Text
   deriving (Show, Eq)
-
-instance Exception QueryError
-
 
 -- | Object field separation operator.
 --
@@ -80,16 +78,22 @@ infixr 8 :<|>
 -- tells us to bail out in which case we stop the processing
 -- immediately.
 -- TODO: Make QueryError a Monoid and aggregate according to that.
-data Result = Result [QueryError] GValue.Value
-ok :: GValue.Value -> Result
-ok v = Result [] v
+data Result a = Result [ResolverError] a deriving (Show, Functor)
+
+instance Applicative Result where
+  pure v = Result [] v
+  -- TODO it's not obvious to me that this is the right function...
+  (Result e f) <*> (Result ea ev) = Result (e <> ea) (f ev)
+
+ok :: GValue.Value -> Result GValue.Value
+ok = pure
 
 
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
-class (Monad m) => HasGraph m a where
+class HasGraph m a where
   type Handler m a
-  buildResolver :: Handler m a -> CanonicalQuery -> m Result
+  buildResolver :: Handler m a -> CanonicalQuery -> m (Result GValue.Value)
 
 
 -- | Specify a default value for a type in a GraphQL schema.
@@ -154,7 +158,7 @@ instance forall m hg. (Monad m, HasGraph m hg) => HasGraph m (List hg) where
       -- Aggregate results. TODO: Result should probably be a monoid
       -- so we can collect values but I'm not sure what the monoid of
       -- Value itself is.
-      resultValues :: [Result] -> Result
+      resultValues :: [Result GValue.Value] -> Result GValue.Value
       resultValues r =
         let (errs, valueList) = foldl' (\(eb, vb) (Result ea va) -> ((eb <> ea), va:vb)) ([], []) r
         in Result errs (GValue.toValue valueList)
@@ -186,7 +190,7 @@ lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) arg
 -- the name matches the query. Note that the name is *not* in monad m,
 -- but the value is. This is necessary so we can skip execution if the
 -- name doesn't match.
-data NamedValueResolver m = NamedValueResolver AST.Name (m Result)
+data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value))
 
 
 
@@ -194,7 +198,7 @@ data NamedValueResolver m = NamedValueResolver AST.Name (m Result)
 -- definition) and execute handler if the name matches.
 --
 -- TODO: tuple return not great (but either is wrong, too because it discards errors.
-type ResolveFieldResult = ([QueryError], Maybe GValue.ObjectField)
+type ResolveFieldResult = ([ResolverError], Maybe GValue.ObjectField)
 resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a
   => FieldHandler m a -> m ResolveFieldResult -> AST.Selection -> m ResolveFieldResult
 resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ queryFieldName _ _ _)) =
@@ -203,7 +207,7 @@ resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ quer
     Left err -> pure ([err], Just (GValue.ObjectField queryFieldName GValue.ValueNull))
     Right (NamedValueResolver name' resolver) -> runResolver name' resolver
   where
-    runResolver :: AST.Name -> m Result -> m ResolveFieldResult
+    runResolver :: AST.Name -> m (Result GValue.Value) -> m ResolveFieldResult
     runResolver name' resolver
       | queryFieldName == name' = do
           Result errs value <- resolver
@@ -216,7 +220,7 @@ resolveField _ _ f =
   -- An alternative intepretation is that we can formulate
   -- syntactically valid queries that are still semantically broken in
   -- which case we should not panic.
-  pure ([InternalError ("Unexpected Selection value. Is the query normalized?: " <> show f)], Nothing)
+  pure ([InvalidQueryError ("Unexpected Selection value. Is the query normalized?: " <> show f)], Nothing)
 
 
 -- | Derive the handler type from the Field/Argument type in a closed
@@ -226,16 +230,16 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
 
 class (Monad m) => BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedValueResolver m)
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either ResolverError (NamedValueResolver m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
     let resolver = buildResolver @m @t handler selectionSet
-    field <- first (QueryError. AST.formatNameError) (getFieldDefinition @(Field ks t))
+    field <- first (SchemaError . AST.formatNameError) (getFieldDefinition @(Field ks t))
     let name = getName field
     Right (NamedValueResolver name resolver)
   buildFieldResolver _ f =
-    Left (InternalError ("Unexpected query selection in buildFieldResolver: " <> show f))
+    Left (InvalidQueryError ("Unexpected query selection in buildFieldResolver: " <> show f))
 
 
 instance forall ks t f m.
@@ -246,12 +250,12 @@ instance forall ks t f m.
   , HasAnnotatedInputType t
   ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
-    argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
+    argument <- first (SchemaError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
     let argName = getName argument
-    value <- first QueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
+    value <- first InvalidQueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
-    Left (InternalError ("Unexpected query selection in buildFieldResolver: " <> show f))
+    Left (InvalidQueryError ("Unexpected query selection in buildFieldResolver: " <> show f))
 
 
 -- We only allow Field and Argument :> Field combinations:
@@ -294,7 +298,7 @@ instance forall ks t m.
   runFields handler selection =
     resolveField @(Field ks t) @m handler nextHandler selection
     where
-      nextHandler = pure ([InvalidFieldError ("Query for undefined selection: " <> show selection)], Nothing)
+      nextHandler = pure ([FieldNotFoundError ("Query for undefined selection: " <> show selection)], Nothing)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
@@ -303,7 +307,7 @@ instance forall m a b.
   runFields handler selection =
     resolveField @(a :> b) @m handler nextHandler selection
     where
-      nextHandler = pure ([InvalidFieldError ("Query for undefined selection: " <> show selection)], Nothing)
+      nextHandler = pure ([FieldNotFoundError ("Query for undefined selection: " <> show selection)], Nothing)
 
 
 instance forall typeName interfaces fields m.
@@ -321,5 +325,5 @@ instance forall typeName interfaces fields m.
     let (errs, fields) = foldr' (\(ea, fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
 
     case GValue.makeObject (catMaybes fields) of
-      Nothing -> pure (Result [QueryError ("Duplicate fields in set: " <> show r)] GValue.ValueNull)
+      Nothing -> pure (Result [InvalidQueryError ("Duplicate fields in set: " <> show r)] GValue.ValueNull)
       Just object -> pure (Result errs (GValue.ValueObject object))
