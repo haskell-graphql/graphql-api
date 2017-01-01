@@ -90,8 +90,11 @@ validate (AST.QueryDocument defns) =
     splitOps q@(AST.Query (AST.Node name _ _ _)) = Right (name, q)
     splitOps m@(AST.Mutation (AST.Node name _ _ _)) = Right (name, m)
 
+-- | A validated fragment definition.
+type FragmentDefinition = AST.FragmentDefinition
+
 -- | A set of fragment definitions.
-type FragmentDefinitions = Map Name AST.FragmentDefinition
+type FragmentDefinitions = Map Name FragmentDefinition
 
 validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation ValidationError FragmentDefinitions
 validateFragmentDefinitions frags = mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(AST.FragmentDefinition name _ _ _) <- frags])
@@ -107,14 +110,19 @@ type ArgumentSet = Map Name AST.Value
 validateArguments :: [AST.Argument] -> Validation ValidationError ArgumentSet
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
--- | A GraphQL selection, excluding fragment spreads (because they've been inlined).
+-- | A GraphQL selection.
 data Selection
   = SelectionField Field
+  | SelectionFragmentSpread FragmentSpread
   | SelectionInlineFragment InlineFragment
   deriving (Eq, Show)
 
 data Field
   = Field (Maybe AST.Alias) Name ArgumentSet [AST.Directive] [Selection]
+  deriving (Eq, Show)
+
+data FragmentSpread
+  = FragmentSpread Name [AST.Directive] FragmentDefinition
   deriving (Eq, Show)
 
 data InlineFragment
@@ -127,8 +135,9 @@ validateSelection fragments selection =
     AST.SelectionField (AST.Field alias name args directives ss) ->
       SelectionField <$> (Field alias name <$> validateArguments args <*> pure directives <*> childSegments ss)
     AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
-      -- TODO: Check that the fragment exists and store it in the selection somehow.
-      notImplemented
+      case Map.lookup name fragments of
+        Nothing -> throwE (NoSuchFragment name)
+        Just defn -> pure (SelectionFragmentSpread (FragmentSpread name directives defn))
     AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
       SelectionInlineFragment <$> (InlineFragment typeCond directives <$> childSegments ss)
 
@@ -166,6 +175,9 @@ data ValidationError
   -- | 'DuplicateFragmentDefinition' means that there were more than one
   -- fragment defined with the same name.
   | DuplicateFragmentDefinition Name
+  -- | 'NoSuchFragment' means there was a reference to a fragment in a
+  -- fragment spread but we couldn't find any fragment with that name.
+  | NoSuchFragment Name
   deriving (Eq, Show)
 
 -- | Identify all of the validation errors in @doc@.
