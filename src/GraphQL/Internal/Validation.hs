@@ -1,6 +1,6 @@
 module GraphQL.Internal.Validation
   ( ValidationError(..)
-  , ValidDocument
+  , QueryDocument
   , validate
   , getErrors
   , getOperationName
@@ -10,7 +10,11 @@ module GraphQL.Internal.Validation
 
 import Protolude
 
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Map as Map
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.AST (Name)
 
 {-
 enum DogCommand { SIT, DOWN, HEEL }
@@ -59,10 +63,41 @@ type QueryRoot {
 }
 -}
 
-newtype ValidDocument = Valid AST.QueryDocument deriving (Eq, Show)
+data QueryDocument
+  -- | The query document contains a single anonymous operation.
+  = LoneAnonymousOperation AST.SelectionSet [AST.FragmentDefinition]
+  -- | The query document contains multiple uniquely-named operations.
+  | MultipleOperations (Map Name AST.OperationDefinition) [AST.FragmentDefinition]
+  deriving (Eq, Show)
 
-validate :: Alternative m => AST.QueryDocument -> m ValidDocument
-validate = pure . Valid
+validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
+validate (AST.QueryDocument defns) =
+  let
+    (operations, fragments) = splitBy splitDefns defns
+    (anonymous, named) = splitBy splitOps operations
+  in
+    case (anonymous, named) of
+      ([], ops) ->
+        case makeMap ops of
+          Left dups -> Left (map DuplicateOperation dups)
+          Right ops' -> Right (MultipleOperations ops' fragments)
+      ([x], []) -> Right (LoneAnonymousOperation x fragments)
+      _ -> Left (singleton (MixedAnonymousOperations (length anonymous) (map fst named)))
+
+  where
+    splitBy :: (a -> Either b c) -> [a] -> ([b], [c])
+    splitBy f xs = partitionEithers (map f xs)
+
+    splitDefns (AST.DefinitionOperation op) = Left op
+    splitDefns (AST.DefinitionFragment frag) = Right frag
+
+    splitOps (AST.AnonymousQuery ss) = Left ss
+    splitOps q@(AST.Query (AST.Node name _ _ _)) = Right (name, q)
+    splitOps m@(AST.Mutation (AST.Node name _ _ _)) = Right (name, m)
+
+-- TODO: Might be nice to have something that goes from a validated document
+-- back to the AST. This would be especially useful for encoding, so we could
+-- debug by looking at GraphQL rather than data types.
 
 -- | Errors arising from validating a document.
 data ValidationError
@@ -71,11 +106,11 @@ data ValidationError
   --
   -- https://facebook.github.io/graphql/#sec-Operation-Name-Uniqueness
   = DuplicateOperation AST.Name
-  -- | 'MultipleAnonymousOperation' means there was more than one anonymous
-  -- operation defined.
+  -- | 'MixedAnonymousOperations' means there was more than one operation
+  -- defined in a document with an anonymous operation.
   --
   -- https://facebook.github.io/graphql/#sec-Lone-Anonymous-Operation
-  | MultipleAnonymousOperation Int
+  | MixedAnonymousOperations Int [AST.Name]
   deriving (Eq, Show)
 
 -- | Identify all of the validation errors in @doc@.
@@ -84,15 +119,10 @@ data ValidationError
 --
 -- https://facebook.github.io/graphql/#sec-Validation
 getErrors :: AST.QueryDocument -> [ValidationError]
-getErrors doc = duplicateOperations <> multipleAnonymousOps
-  where
-    duplicateOperations = map DuplicateOperation (findDuplicates (catMaybes nodeNames))
-    multipleAnonymousOps =
-      case length (filter (== Nothing) nodeNames) of
-        0 -> mempty
-        1 -> mempty
-        n -> [MultipleAnonymousOperation n]
-    nodeNames = [ getOperationName op | AST.DefinitionOperation op <- AST.getDefinitions doc ]
+getErrors doc =
+  case validate doc of
+    Left errors -> NonEmpty.toList errors
+    Right _ -> []
 
 -- | 'getOperationName' returns the name of the operatioen if there is any,
 -- 'Nothing' otherwise.
@@ -113,3 +143,17 @@ findDuplicates xs = findDups (sort xs)
     findDups (x:ys@(y:zs))
       | x == y = x:findDups (dropWhile (== x) zs)
       | otherwise = findDups ys
+
+-- | Create a map from a list of key-value pairs.
+--
+-- Returns a list of duplicates on 'Left' if there are duplicates.
+makeMap :: Ord key => [(key, value)] -> Either (NonEmpty key) (Map key value)
+makeMap entries =
+  case NonEmpty.nonEmpty (findDuplicates (map fst entries)) of
+    Nothing -> Right (Map.fromList entries)
+    Just dups -> Left dups
+
+-- XXX: Copied from Execution
+-- | Make a non-empty list. This is just an alias for the symbolic constructor.
+singleton :: a -> NonEmpty a
+singleton x = x :| []
