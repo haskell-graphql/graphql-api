@@ -6,7 +6,7 @@ import Protolude
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as Map
 
-import GraphQL.Value (Value(..), astToValue)
+import GraphQL.Value (Value(..), Object, astToValue, objectFromList)
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.AST (Name(..))
 import GraphQL.Internal.Schema (ObjectTypeDefinition)
@@ -41,7 +41,7 @@ executeRequest document operationName variableValues initialValue =
       case coerceVariableValues operation variableValues of
         Left err -> ExecutionFailure (singleton (Error (formatError err) []))
         Right coercedVariableValues ->
-          case operation of
+          Success $ case operation of
             AST.Query (AST.Node _ _ _ ss) -> executeSelectionSet ss initialValue coercedVariableValues
             AST.Mutation (AST.Node _ _ _ ss) -> executeSelectionSet ss initialValue coercedVariableValues
             AST.AnonymousQuery ss -> executeSelectionSet ss initialValue coercedVariableValues
@@ -59,8 +59,23 @@ executeRequest document operationName variableValues initialValue =
 --     d. Let responseValue be ExecuteField(objectType, objectValue, fields, fieldType, variableValues).
 --     e. Set responseValue as the value for responseKey in resultMap.
 --   4. Return resultMap.
-executeSelectionSet :: AST.SelectionSet -> Value -> VariableValues -> Response
-executeSelectionSet selectionSet objectValue variableValues = notImplemented
+executeSelectionSet :: AST.SelectionSet -> Value -> VariableValues -> Object
+executeSelectionSet selectionSet objectValue variableValues =
+  let groupedFieldSet = collectFields selectionSet variableValues
+      executedFields = map (second (executeFields objectValue variableValues)) groupedFieldSet
+  in
+    fromMaybe
+    (panic
+       ("Impossible case: got non-unique list of names from unique object: "
+          <> show executedFields
+          <> show groupedFieldSet))
+    (objectFromList executedFields)
+
+collectFields :: AST.SelectionSet -> VariableValues -> [(Name, NonEmpty AST.Field)]
+collectFields = notImplemented
+
+executeFields :: Value -> VariableValues -> NonEmpty AST.Field  -> Value
+executeFields = notImplemented
 
 -- | Get an operation from a GraphQL document
 --
