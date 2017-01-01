@@ -13,7 +13,7 @@ import GraphQL.Internal.AST (Name(..))
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import GraphQL.Internal.Schema (ObjectTypeDefinition)
 import GraphQL.Internal.Output (Response(..), Error(..))
-import GraphQL.Internal.Validation (getOperationName)
+import GraphQL.Internal.Validation (QueryDocument, getOperation)
 
 --data Request = Request Schema Document (Maybe Operation) (Maybe VariableValues) InitialValue
 
@@ -35,7 +35,7 @@ singleton x = x :| []
 --      a. Return ExecuteQuery(operation, schema, coercedVariableValues, initialValue).
 --   4. Otherwise if operation is a mutation operation:
 --      a. Return ExecuteMutation(operation, schema, coercedVariableValues, initialValue).
-executeRequest :: AST.QueryDocument -> Maybe Name -> VariableValues -> Value -> Response
+executeRequest :: QueryDocument -> Maybe Name -> VariableValues -> Value -> Response
 executeRequest document operationName variableValues initialValue =
   case getOperation document operationName of
     Nothing -> ExecutionFailure (singleton (Error "No such operation $operationName" []))
@@ -108,37 +108,6 @@ collectFields selectionSet' variableValues' = go selectionSet' variableValues' S
 
 executeFields :: Value -> VariableValues -> NonEmpty AST.Field  -> Value
 executeFields = notImplemented
-
--- | Get an operation from a GraphQL document
---
--- https://facebook.github.io/graphql/#sec-Executing-Requests
---
--- GetOperation(document, operationName):
---
---   * If {operationName} is {null}:
---     * If {document} contains exactly one operation.
---       * Return the Operation contained in the {document}.
---     * Otherwise produce a query error requiring {operationName}.
---   * Otherwise:
---     * Let {operation} be the Operation named {operationName} in {document}.
---     * If {operation} was not found, produce a query error.
---     * Return {operation}.
-getOperation :: AST.QueryDocument -> Maybe Name -> Maybe AST.OperationDefinition
-getOperation document = getOperation' (getOperations document)
-  where
-    -- XXX: By this point we should have validated that
-    -- a) list of operations is not empty
-    -- b) no name is duplicated
-    --
-    -- TODO: encode this assumption into types.
-    getOperation' :: [AST.OperationDefinition] -> Maybe Name -> Maybe AST.OperationDefinition
-    getOperation' operations name@(Just _) = find ((name ==) . getOperationName) operations
-    getOperation' [op] Nothing = pure op
-    getOperation' _ Nothing = empty
-
-    getOperations :: AST.QueryDocument -> [AST.OperationDefinition]
-    getOperations (AST.QueryDocument defns) = [ op | AST.DefinitionOperation op <- defns ]
-
 
 -- | Top-level definition of a server schema.
 type SchemaDefinition = ObjectTypeDefinition

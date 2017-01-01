@@ -3,7 +3,8 @@ module GraphQL.Internal.Validation
   , QueryDocument
   , validate
   , getErrors
-  , getOperationName
+  -- * Operating on validated documents
+  , getOperation
   -- * Exported for testing
   , findDuplicates
   ) where
@@ -70,6 +71,32 @@ data QueryDocument
   | MultipleOperations (Map Name AST.OperationDefinition) [AST.FragmentDefinition]
   deriving (Eq, Show)
 
+-- | Get an operation from a GraphQL document
+--
+-- Technically this is part of the "Execution" phase, but we're keeping it
+-- here for now to avoid exposing constructors for valid documents.
+--
+-- https://facebook.github.io/graphql/#sec-Executing-Requests
+--
+-- GetOperation(document, operationName):
+--
+--   * If {operationName} is {null}:
+--     * If {document} contains exactly one operation.
+--       * Return the Operation contained in the {document}.
+--     * Otherwise produce a query error requiring {operationName}.
+--   * Otherwise:
+--     * Let {operation} be the Operation named {operationName} in {document}.
+--     * If {operation} was not found, produce a query error.
+--     * Return {operation}.
+getOperation :: QueryDocument -> Maybe Name -> Maybe AST.OperationDefinition
+getOperation (LoneAnonymousOperation ss _) Nothing = pure (AST.AnonymousQuery ss)
+getOperation (MultipleOperations ops _) (Just name) = Map.lookup name ops
+getOperation (MultipleOperations ops _) Nothing =
+  case toList ops of
+    [op] -> pure op
+    _ -> empty
+getOperation _ _ = empty
+
 validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
 validate (AST.QueryDocument defns) =
   let
@@ -123,13 +150,6 @@ getErrors doc =
   case validate doc of
     Left errors -> NonEmpty.toList errors
     Right _ -> []
-
--- | 'getOperationName' returns the name of the operatioen if there is any,
--- 'Nothing' otherwise.
-getOperationName :: AST.OperationDefinition -> Maybe AST.Name
-getOperationName (AST.Query (AST.Node name _ _ _)) = pure name
-getOperationName (AST.Mutation (AST.Node name _ _ _)) = pure name
-getOperationName (AST.AnonymousQuery _) = empty
 
 -- | Return a list of all the elements with duplicates. The list of duplicates
 -- itself will not contain duplicates.
