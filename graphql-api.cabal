@@ -40,7 +40,9 @@ library
       GraphQL.Internal.Arbitrary
       GraphQL.Internal.AST
       GraphQL.Internal.Encoder
+      GraphQL.Internal.Execution
       GraphQL.Internal.Input
+      GraphQL.Internal.OrderedMap
       GraphQL.Internal.Output
       GraphQL.Internal.Parser
       GraphQL.Internal.Schema

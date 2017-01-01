@@ -25,10 +25,12 @@ module GraphQL.Value
     -- ** Constructing
   , makeObject
   , objectFromList
+  , objectFromOrderedMap
     -- ** Combining
   , unionObjects
     -- ** Querying
   , objectFields
+  , objectToOrderedMap
   ) where
 
 import Protolude
@@ -43,6 +45,8 @@ import Test.QuickCheck (Arbitrary(..), oneof, listOf)
 import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.AST (Name(..))
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.OrderedMap (OrderedMap)
+import qualified GraphQL.Internal.OrderedMap as OrderedMap
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -134,6 +138,20 @@ makeObject fields
 
 objectFromList :: [(Name, Value)] -> Maybe Object
 objectFromList = makeObject . map (uncurry ObjectField)
+
+objectFromOrderedMap :: OrderedMap Name Value -> Object
+objectFromOrderedMap om = Object [ObjectField name value | (name, value) <- OrderedMap.toList om]
+
+objectToOrderedMap :: Object -> OrderedMap Name Value
+objectToOrderedMap object =
+  fromMaybe
+  -- TODO: Make 'Object' a newtype for 'OrderedMap' so we don't need this
+  -- panic (which should never happen, as it would imply a bug in this
+  -- module). Would do it in this PR, but
+  -- https://github.com/jml/graphql-api/pull/43/files is in flight and does a
+  -- lot of messing with Object.
+  (panic ("Object not an ordered map: " <> show object))
+  (OrderedMap.orderedMap [(k, v) | ObjectField k v <- objectFields object ])
 
 unionObjects :: [Object] -> Maybe Object
 unionObjects objects = makeObject (objects >>= objectFields)

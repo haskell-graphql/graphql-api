@@ -6,9 +6,10 @@ import Protolude
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as Map
 
-import GraphQL.Value (Value(..), Object, astToValue, objectFromList)
+import GraphQL.Value (Value(..), astToValue, objectFromOrderedMap)
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.AST (Name(..))
+import GraphQL.Internal.OrderedMap (OrderedMap)
 import GraphQL.Internal.Schema (ObjectTypeDefinition)
 import GraphQL.Internal.Output (Response(..), Error(..))
 import GraphQL.Internal.Validation (getOperationName)
@@ -41,7 +42,7 @@ executeRequest document operationName variableValues initialValue =
       case coerceVariableValues operation variableValues of
         Left err -> ExecutionFailure (singleton (Error (formatError err) []))
         Right coercedVariableValues ->
-          Success $ case operation of
+          Success . objectFromOrderedMap $ case operation of
             AST.Query (AST.Node _ _ _ ss) -> executeSelectionSet ss initialValue coercedVariableValues
             AST.Mutation (AST.Node _ _ _ ss) -> executeSelectionSet ss initialValue coercedVariableValues
             AST.AnonymousQuery ss -> executeSelectionSet ss initialValue coercedVariableValues
@@ -59,19 +60,12 @@ executeRequest document operationName variableValues initialValue =
 --     d. Let responseValue be ExecuteField(objectType, objectValue, fields, fieldType, variableValues).
 --     e. Set responseValue as the value for responseKey in resultMap.
 --   4. Return resultMap.
-executeSelectionSet :: AST.SelectionSet -> Value -> VariableValues -> Object
+executeSelectionSet :: AST.SelectionSet -> Value -> VariableValues -> OrderedMap Name Value
 executeSelectionSet selectionSet objectValue variableValues =
   let groupedFieldSet = collectFields selectionSet variableValues
-      executedFields = map (second (executeFields objectValue variableValues)) groupedFieldSet
-  in
-    fromMaybe
-    (panic
-       ("Impossible case: got non-unique list of names from unique object: "
-          <> show executedFields
-          <> show groupedFieldSet))
-    (objectFromList executedFields)
+  in map (executeFields objectValue variableValues) groupedFieldSet
 
-collectFields :: AST.SelectionSet -> VariableValues -> [(Name, NonEmpty AST.Field)]
+collectFields :: AST.SelectionSet -> VariableValues -> OrderedMap Name (NonEmpty AST.Field)
 collectFields = notImplemented
 
 executeFields :: Value -> VariableValues -> NonEmpty AST.Field  -> Value
@@ -93,7 +87,6 @@ executeFields = notImplemented
 --     * Return {operation}.
 getOperation :: AST.QueryDocument -> Maybe Name -> Maybe AST.OperationDefinition
 getOperation document = getOperation' (getOperations document)
-
   where
     -- XXX: By this point we should have validated that
     -- a) list of operations is not empty
