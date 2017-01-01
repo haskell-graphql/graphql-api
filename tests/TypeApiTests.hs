@@ -22,7 +22,7 @@ import qualified GraphQL.Internal.AST as AST
 import GraphQL.Value (Value)
 import Data.Aeson (encode)
 
-import GraphQL.Internal.Parser (document)
+import GraphQL.Internal.Parser (queryDocument)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 
 -- Test a custom error monad
@@ -39,8 +39,8 @@ tHandler =
 
 getQuery :: Text -> AST.SelectionSet
 getQuery query =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-        parseOnly (document <* endOfInput) query
+  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.AnonymousQuery selectionSet)]) =
+        parseOnly (queryDocument <* endOfInput) query
   in selectionSet
 
 runQuery :: AST.SelectionSet -> IO (Either Text Value)

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 module GraphQL.Internal.Parser
-  ( document
+  ( queryDocument
+  , schemaDocument
   , value
   ) where
 
@@ -30,31 +31,27 @@ import GraphQL.Internal.Tokens (tok, whiteSpace)
 
 -- * Document
 
-document :: Parser AST.Document
-document = whiteSpace
-   *> (AST.Document <$> many1 definition)
-  -- Try SelectionSet when no definition
-  <|> (AST.Document . pure
-        . AST.DefinitionOperation
-        . AST.Query
-        . AST.Node empty empty empty
-        <$> selectionSet)
-  <?> "document error!"
+queryDocument :: Parser AST.QueryDocument
+queryDocument = whiteSpace *> (AST.QueryDocument <$> many1 definition) <?> "query document error!"
+
+-- | Parser for a schema document.
+schemaDocument :: Parser AST.SchemaDocument
+schemaDocument = whiteSpace *> (AST.SchemaDocument <$> many1 typeDefinition) <?> "type document error"
 
 definition :: Parser AST.Definition
 definition = AST.DefinitionOperation <$> operationDefinition
          <|> AST.DefinitionFragment  <$> fragmentDefinition
-         <|> AST.DefinitionType      <$> typeDefinition
          <?> "definition error!"
 
 operationDefinition :: Parser AST.OperationDefinition
 operationDefinition =
       AST.Query    <$ tok "query"    <*> node
   <|> AST.Mutation <$ tok "mutation" <*> node
+  <|> (AST.AnonymousQuery <$> selectionSet)
   <?> "operationDefinition error!"
 
 node :: Parser AST.Node
-node = AST.Node <$> (pure <$> AST.nameParser)
+node = AST.Node <$> AST.nameParser
                 <*> optempty variableDefinitions
                 <*> optempty directives
                 <*> selectionSet

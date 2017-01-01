@@ -58,22 +58,47 @@ type QueryRoot {
 }
 -}
 
-newtype ValidDocument = Valid AST.Document deriving (Eq, Show)
+newtype ValidDocument = Valid AST.QueryDocument deriving (Eq, Show)
 
-validate :: Alternative m => AST.Document -> m ValidDocument
+validate :: Alternative m => AST.QueryDocument -> m ValidDocument
 validate = pure . Valid
 
+-- | Errors arising from validating a document.
 data ValidationError
-  = DuplicateOperation (Maybe AST.Name)
+  -- | 'DuplicateOperation' means there was more than one operation defined
+  -- with the given name.
+  --
+  -- https://facebook.github.io/graphql/#sec-Operation-Name-Uniqueness
+  = DuplicateOperation AST.Name
+  -- | 'MultipleAnonymousOperation' means there was more than one anonymous
+  -- operation defined.
+  --
+  -- https://facebook.github.io/graphql/#sec-Lone-Anonymous-Operation
+  | MultipleAnonymousOperation Int
   deriving (Eq, Show)
 
-
-getErrors :: AST.Document -> [ValidationError]
-getErrors doc = duplicateOperations
+-- | Identify all of the validation errors in @doc@.
+--
+-- An empty list means no errors.
+--
+-- https://facebook.github.io/graphql/#sec-Validation
+getErrors :: AST.QueryDocument -> [ValidationError]
+getErrors doc = duplicateOperations <> multipleAnonymousOps
   where
-    duplicateOperations = DuplicateOperation <$> findDuplicates nodeNames
-    nodeNames = [ AST.getNodeName . AST.getNode $ op | AST.DefinitionOperation op <- AST.getDefinitions doc ]
+    duplicateOperations = map DuplicateOperation (findDuplicates (catMaybes nodeNames))
+    multipleAnonymousOps =
+      case length (filter (== Nothing) nodeNames) of
+        0 -> mempty
+        1 -> mempty
+        n -> [MultipleAnonymousOperation n]
+    nodeNames = [ getOperationName op | AST.DefinitionOperation op <- AST.getDefinitions doc ]
 
+-- | 'getOperationName' returns the name of the operatioen if there is any,
+-- 'Nothing' otherwise.
+getOperationName :: AST.OperationDefinition -> Maybe AST.Name
+getOperationName (AST.Query (AST.Node name _ _ _)) = pure name
+getOperationName (AST.Mutation (AST.Node name _ _ _)) = pure name
+getOperationName (AST.AnonymousQuery _) = empty
 
 -- | Return a list of all the elements with duplicates. The list of duplicates
 -- itself will not contain duplicates.

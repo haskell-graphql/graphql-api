@@ -1,5 +1,6 @@
 module GraphQL.Internal.Encoder
-  ( document
+  ( queryDocument
+  , schemaDocument
   , value
   ) where
 
@@ -12,22 +13,24 @@ import qualified GraphQL.Internal.AST as AST
 
 -- * Document
 
--- TODO: Use query shorthand
-document :: AST.Document -> Text
-document (AST.Document defs) = (`snoc` '\n') . mconcat $ definition <$> defs
+queryDocument :: AST.QueryDocument -> Text
+queryDocument (AST.QueryDocument defs) = (`snoc` '\n') . mconcat $ definition <$> defs
 
 definition :: AST.Definition -> Text
 definition (AST.DefinitionOperation x) = operationDefinition x
 definition (AST.DefinitionFragment  x) = fragmentDefinition x
-definition (AST.DefinitionType      x) = typeDefinition x
+
+schemaDocument :: AST.SchemaDocument -> Text
+schemaDocument (AST.SchemaDocument defs) = (`snoc` '\n') . mconcat $ typeDefinition <$> defs
 
 operationDefinition :: AST.OperationDefinition -> Text
 operationDefinition (AST.Query    n) = "query "    <> node n
 operationDefinition (AST.Mutation n) = "mutation " <> node n
+operationDefinition (AST.AnonymousQuery ss) = selectionSet ss
 
 node :: AST.Node -> Text
 node (AST.Node name vds ds ss) =
-     maybe mempty AST.getNameText name
+     AST.getNameText name
   <> optempty variableDefinitions vds
   <> optempty directives ds
   <> selectionSet ss

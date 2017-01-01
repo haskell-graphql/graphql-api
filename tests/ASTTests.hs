@@ -35,7 +35,7 @@ tests :: IO TestTree
 tests = testSpec "AST" $ do
   describe "Parser and encoder" $ do
     it "roundtrips on minified documents" $ do
-      let actual = Encoder.document <$> parseOnly Parser.document kitchenSink
+      let actual = Encoder.queryDocument <$> parseOnly Parser.queryDocument kitchenSink
       actual `shouldBe` Right kitchenSink
     describe "parsing numbers" $ do
       it "works for some integers" $ do
@@ -88,20 +88,19 @@ tests = testSpec "AST" $ do
                          name
                        }
                      }|]
-      let Right parsed = parseOnly Parser.document query
-      let expected = AST.Document
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
-                       (AST.Query
-                         (AST.Node Nothing [] []
-                           [ AST.SelectionField
-                               (AST.Field Nothing dog [] []
-                                 [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                                 ])
-                           ]))
+                       (AST.AnonymousQuery
+                         [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                             [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                             ])
+                         ])
                      ]
       parsed `shouldBe` expected
 
-    it "silently mis-parses invalid documents" $ do
+    it "parses invalid documents" $ do
       let query = [r|{
                        dog {
                          name
@@ -115,16 +114,26 @@ tests = testSpec "AST" $ do
                          }
                        }
                      }|]
-      let Right parsed = parseOnly Parser.document query
-      let expected = AST.Document
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
-                         (AST.Query
-                           (AST.Node Nothing [] []
+                       (AST.AnonymousQuery
+                         [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                             [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                             ])
+                         ])
+                     , AST.DefinitionOperation
+                       (AST.Query
+                        (AST.Node (AST.unsafeMakeName "getName") [] []
+                         [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
                             [ AST.SelectionField
-                                (AST.Field Nothing dog [] []
-                                  [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                                  ])
-                            ]))
+                              (AST.Field Nothing (AST.unsafeMakeName "owner") [] []
+                               [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                               ])
+                            ])
+                         ]))
                      ]
       parsed `shouldBe` expected
 
@@ -136,11 +145,11 @@ tests = testSpec "AST" $ do
                       }
                     }
                     |]
-      let Right parsed = parseOnly Parser.document query
-      let expected = AST.Document
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node (Just (AST.unsafeMakeName "houseTrainedQuery"))
+                           (AST.Node (AST.unsafeMakeName "houseTrainedQuery")
                             [ AST.VariableDefinition
                                 (AST.Variable (AST.unsafeMakeName "atOtherHomes"))
                                 (AST.TypeNamed (AST.NamedType (AST.unsafeMakeName "Boolean")))

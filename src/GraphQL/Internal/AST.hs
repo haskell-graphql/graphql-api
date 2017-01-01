@@ -7,7 +7,8 @@ module GraphQL.Internal.AST
   , nameParser
   , makeName
   , unsafeMakeName
-  , Document(..)
+  , QueryDocument(..)
+  , SchemaDocument(..)
   , Definition(..)
   , OperationDefinition(..)
   , Node(..)
@@ -117,25 +118,33 @@ unsafeMakeName name =
     Left e -> panic (formatNameError e)
     Right n -> n
 
--- * Document
+-- * Documents
 
-newtype Document = Document { getDefinitions :: [Definition] } deriving (Eq,Show)
+-- | A 'QueryDocument' is something a user might send us.
+--
+-- https://facebook.github.io/graphql/#sec-Language.Query-Document
+newtype QueryDocument = QueryDocument { getDefinitions :: [Definition] } deriving (Eq,Show)
 
 data Definition = DefinitionOperation OperationDefinition
                 | DefinitionFragment  FragmentDefinition
-                | DefinitionType      TypeDefinition
-                  deriving (Eq,Show)
+                deriving (Eq,Show)
 
-data OperationDefinition = Query    { getNode :: Node }
-                         | Mutation { getNode :: Node }
-                           deriving (Eq,Show)
+-- | A 'SchemaDocument' is a document that defines a GraphQL schema.
+--
+-- https://facebook.github.io/graphql/#sec-Type-System
+newtype SchemaDocument = SchemaDocument [TypeDefinition] deriving (Eq, Show)
 
-data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
+data OperationDefinition
+  = Query Node
+  | Mutation Node
+  | AnonymousQuery SelectionSet
+  deriving (Eq,Show)
+
+data Node = Node Name [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
--- XXX: Lots of things have names. Maybe we should define a typeclass for
--- getting the name?
-getNodeName :: Node -> Maybe Name
+-- TODO: Just make Node implement HasName.
+getNodeName :: Node -> Name
 getNodeName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
