@@ -118,31 +118,48 @@ data Selection
   deriving (Eq, Show)
 
 data Field
-  = Field (Maybe AST.Alias) Name ArgumentSet [AST.Directive] [Selection]
+  = Field (Maybe AST.Alias) Name ArgumentSet Directives [Selection]
   deriving (Eq, Show)
 
 data FragmentSpread
-  = FragmentSpread Name [AST.Directive] FragmentDefinition
+  = FragmentSpread Name Directives FragmentDefinition
   deriving (Eq, Show)
 
 data InlineFragment
-  = InlineFragment AST.TypeCondition [AST.Directive] [Selection]
+  = InlineFragment AST.TypeCondition Directives [Selection]
   deriving (Eq, Show)
 
 validateSelection :: FragmentDefinitions -> AST.Selection -> Validation ValidationError Selection
 validateSelection fragments selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
-      SelectionField <$> (Field alias name <$> validateArguments args <*> pure directives <*> childSegments ss)
+      SelectionField <$> (Field alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
     AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
       case Map.lookup name fragments of
         Nothing -> throwE (NoSuchFragment name)
-        Just defn -> pure (SelectionFragmentSpread (FragmentSpread name directives defn))
+        Just defn -> SelectionFragmentSpread <$> (FragmentSpread name <$> validateDirectives directives <*> pure defn)
     AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
-      SelectionInlineFragment <$> (InlineFragment typeCond directives <$> childSegments ss)
+      SelectionInlineFragment <$> (InlineFragment typeCond <$> validateDirectives directives <*> childSegments ss)
 
   where
     childSegments = traverse (validateSelection fragments)
+
+-- | A directive is a way of changing the run-time behaviour
+newtype Directives = Directives (Map Name ArgumentSet) deriving (Eq, Show)
+
+-- | Ensure that the directives in a given place are valid.
+--
+-- Doesn't check to see if directives are defined & doesn't check to see if
+-- they are in valid locations, because we don't have access to the schema at
+-- this point.
+--
+-- <https://facebook.github.io/graphql/#sec-Directives-Are-Unique-Per-Location>
+validateDirectives :: [AST.Directive] -> Validation ValidationError Directives
+validateDirectives directives = do
+  items <- traverse validateDirective directives
+  Directives <$> mapErrors DuplicateDirective (makeMap items)
+  where
+    validateDirective (AST.Directive name args) = (,) name <$> validateArguments args
 
 -- TODO: There's a chunk of duplication around "this collection of things has
 -- unique names". Fix that.
@@ -178,6 +195,11 @@ data ValidationError
   -- | 'NoSuchFragment' means there was a reference to a fragment in a
   -- fragment spread but we couldn't find any fragment with that name.
   | NoSuchFragment Name
+  -- | 'DuplicateDirective' means there were two copies of the same directive
+  -- given in the same place.
+  --
+  -- <https://facebook.github.io/graphql/#sec-Directives-Are-Unique-Per-Location>
+  | DuplicateDirective Name
   deriving (Eq, Show)
 
 -- | Identify all of the validation errors in @doc@.
@@ -245,3 +267,8 @@ instance Applicative (Validation e) where
   Validation (Left e) <*> _ = Validation (Left e)
   Validation _ <*> (Validation (Left e)) = Validation (Left e)
   Validation (Right f) <*> Validation (Right x) = Validation (Right (f x))
+
+-- | The monad on Validation stops processing once errors have been raised.
+instance Monad (Validation e) where
+  Validation (Left e) >>= _ = Validation (Left e)
+  Validation (Right r) >>= f = f r
