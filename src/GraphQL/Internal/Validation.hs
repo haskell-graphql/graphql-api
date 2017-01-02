@@ -193,6 +193,19 @@ traverseFragmentSpreads f selection =
   where
     childSegments = traverse (traverseFragmentSpreads f)
 
+-- | Resolve the fragment references in a selection, accumulating a set of
+-- visited fragment names.
+resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) (Selection FragmentSpread)
+resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSpread selection
+  where
+    resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) FragmentSpread
+    resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
+      case Map.lookup name fragments of
+        Nothing -> lift (throwE (NoSuchFragment name))
+        Just fragment -> do
+          modify (Set.insert name)
+          pure (FragmentSpread name directive fragment)
+
 -- | A validated fragment definition.
 --
 -- @spread@ indicates whether references to other fragment definitions have
