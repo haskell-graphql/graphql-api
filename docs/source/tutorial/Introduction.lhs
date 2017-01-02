@@ -11,7 +11,7 @@ module Introduction where
 import Protolude
 
 import GraphQL.API (Object, Field, Argument, (:>))
-import GraphQL.Server (Handler, (:<>)(..))
+import GraphQL.Resolver (Handler, (:<>)(..))
 ```
 
 The core idea for this library is that we define a composite type that

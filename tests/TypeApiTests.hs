@@ -12,7 +12,7 @@ import GraphQL.API
   , Argument
   , (:>)
   )
-import GraphQL.Server
+import GraphQL.Resolver
   ( Handler
   , ResolverError(..)
   , buildResolver
