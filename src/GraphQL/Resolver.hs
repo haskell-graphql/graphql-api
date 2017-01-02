@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 {-# LANGUAGE DeriveFunctor #-}
 
-module GraphQL.Server
+module GraphQL.Resolver
   ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
