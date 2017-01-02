@@ -82,9 +82,7 @@ data Result a = Result [ResolverError] a deriving (Show, Functor, Eq)
 -- Aggregating results keeps all errors and creates a ValueList
 -- containing the individual values.
 aggregateResults :: [Result GValue.Value] -> Result GValue.Value
-aggregateResults r =
-  let (errs, valueList) = foldl' (\(eb, vb) (Result ea va) -> ((eb <> ea), va:vb)) ([], []) r
-  in Result errs (GValue.toValue valueList)
+aggregateResults r = GValue.toValue <$> sequenceA r
 
 instance Applicative Result where
   pure v = Result [] v
@@ -315,8 +313,8 @@ instance forall typeName interfaces fields m.
     -- We're evaluating an Object so we're collecting ObjectFields from
     -- runFields and build a GValue.Map with them.
     r <- forM selectionSet (runFields @m @(RunFieldsType m fields) handler)
-    let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
-
-    case GValue.makeObject (catMaybes fields) of
+    -- let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
+    let (Result errs obj)  = GValue.makeObject . catMaybes <$> sequenceA r
+    case obj of
       Nothing -> pure (Result [InvalidQueryError ("Duplicate fields in set: " <> show r)] GValue.ValueNull)
       Just object -> pure (Result errs (GValue.ValueObject object))
