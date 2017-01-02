@@ -84,10 +84,16 @@ validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
 validate (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
-  frags <- fst <$> (resolveFragmentDefinitions =<< validateFragmentDefinitions fragments)
+  (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions fragments
   case (anonymous, named) of
-    ([], ops) -> MultipleOperations <$> validateOperations frags ops <*> pure frags
-    ([x], []) -> LoneAnonymousOperation . Query [] emptyDirectives <$> validateSelectionSet frags x <*> pure frags
+    ([], ops) -> do
+      (validOps, usedFrags) <- runStateT (validateOperations frags ops) mempty
+      assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
+      pure (MultipleOperations validOps frags)
+    ([x], []) -> do
+      (ss, usedFrags) <- runStateT (validateSelectionSet frags x) mempty
+      assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
+      pure (LoneAnonymousOperation (Query [] emptyDirectives ss) frags)
     _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
@@ -101,16 +107,21 @@ validate (AST.QueryDocument defns) = runValidator $ do
     splitOps (AST.Query node@(AST.Node name _ _ _)) = Right (name, (Query, node))
     splitOps (AST.Mutation node@(AST.Node name _ _ _)) = Right (name, (Mutation, node))
 
+    assertAllFragmentsUsed :: Fragments -> Set Name -> Validation ()
+    assertAllFragmentsUsed fragments used =
+      let unused = Map.keysSet fragments `Set.difference` used
+      in unless (Set.null unused) (throwE (UnusedFragments unused))
+
 -- * Operations
 
-validateOperations :: Fragments -> [(Name, (OperationType, AST.Node))] -> Validation Operations
+validateOperations :: Fragments -> [(Name, (OperationType, AST.Node))] -> StateT (Set Name) Validation Operations
 validateOperations fragments ops = do
-  deduped <- mapErrors DuplicateOperation (makeMap ops)
+  deduped <- lift (mapErrors DuplicateOperation (makeMap ops))
   Operations <$> traverse validateNode deduped
   where
-    validateNode :: (OperationType, AST.Node) -> Validation Operation
+    validateNode :: (OperationType, AST.Node) -> StateT (Set Name) Validation Operation
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType vars <$> validateDirectives directives <*> validateSelectionSet fragments ss
+      operationType vars <$> lift (validateDirectives directives) <*> validateSelectionSet fragments ss
 
 -- * Arguments
 
@@ -223,11 +234,10 @@ resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
           modify (Set.insert name)
           pure (FragmentSpread name directive fragment)
 
-validateSelectionSet :: Fragments -> [AST.Selection] -> Validation [Selection FragmentSpread]
+validateSelectionSet :: Fragments -> [AST.Selection] -> StateT (Set Name) Validation [Selection FragmentSpread]
 validateSelectionSet fragments selections = do
-  unresolved <- traverse validateSelection selections
-  -- TODO: Do something with the used fragment names
-  resolved <- evalStateT (traverse (resolveSelection fragments) unresolved) mempty
+  unresolved <- lift (traverse validateSelection selections)
+  resolved <- traverse (resolveSelection fragments) unresolved
   -- TODO: Check that the fields are mergable.
   pure resolved
 
@@ -358,6 +368,9 @@ data ValidationError
   -- fragment spread that itself is a fragment definition that contains a
   -- fragment spread referring to the /first/ fragment spread.
   | CircularFragmentSpread Name
+  -- | 'UnusedFragments' means that fragments were defined that weren't used.
+  -- <https://facebook.github.io/graphql/#sec-Fragments-Must-Be-Used>
+  | UnusedFragments (Set Name)
   deriving (Eq, Show)
 
 -- | Type alias for our most common kind of validator.
