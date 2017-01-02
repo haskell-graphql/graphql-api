@@ -20,11 +20,6 @@ import qualified GraphQL.Internal.Encoder as Encoder
 kitchenSink :: Text
 kitchenSink = "query queryName($foo:ComplexType,$site:Site=MOBILE){whoever123is:node(id:[123,456]){id,... on User@defer{field2{id,alias:field1(first:10,after:$foo)@include(if:$foo){id,...frag}}}}}mutation likeStory{like(story:123)@defer{story{id}}}fragment frag on Friend{foo(size:$size,bar:$b,obj:{key:\"value\"})}\n"
 
-genASTValue :: Gen AST.Value
-genASTValue = do
-  v <- valueToAST <$> arbitrary
-  maybe discard pure v
-
 dog :: AST.Name
 dog = AST.unsafeMakeName "dog"
 
@@ -62,7 +57,7 @@ tests = testSpec "AST" $ do
         parseOnly Parser.value output `shouldBe` Right input
     describe "parsing values" $ do
       prop "works for all literal values" $ do
-        forAll genASTValue $ \x -> parseOnly Parser.value (Encoder.value x) `shouldBe` Right x
+        \x -> parseOnly Parser.value (Encoder.value x) `shouldBe` Right x
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue

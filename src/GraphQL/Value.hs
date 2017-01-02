@@ -248,6 +248,7 @@ astToValue (AST.ValueObject (AST.ObjectValue fields)) = do
   pure (ValueObject object)
   where
     toObjectField (AST.ObjectField name value) = ObjectField name <$> astToValue value
+astToValue AST.ValueNull = pure ValueNull
 astToValue (AST.ValueVariable _) = empty
 
 -- | A value from the AST can be converted to a literal value and back, unless it's a variable.
@@ -255,10 +256,7 @@ prop_roundtripFromAST :: AST.Value -> Bool
 prop_roundtripFromAST ast =
   case astToValue ast of
     Nothing -> True
-    Just value ->
-      case valueToAST value of
-        Nothing -> False
-        Just ast' -> ast == ast'
+    Just value -> ast == valueToAST value
 
 -- | Convert a literal value into an AST value.
 --
@@ -266,24 +264,21 @@ prop_roundtripFromAST ast =
 --
 -- This function probably isn't particularly useful, but it functions as a
 -- stop-gap until we have QuickCheck generators for the AST.
-valueToAST :: Value -> Maybe AST.Value
-valueToAST (ValueInt x) = pure $ AST.ValueInt x
-valueToAST (ValueFloat x) = pure $ AST.ValueFloat x
-valueToAST (ValueBoolean x) = pure $ AST.ValueBoolean x
-valueToAST (ValueString (String x)) = pure $ AST.ValueString (AST.StringValue x)
-valueToAST (ValueEnum x) = pure $ AST.ValueEnum x
-valueToAST (ValueList (List xs)) = AST.ValueList . AST.ListValue <$> traverse valueToAST xs
-valueToAST (ValueObject (Object fields)) = AST.ValueObject . AST.ObjectValue <$> traverse toObjectField fields
+valueToAST :: Value -> AST.Value
+valueToAST (ValueInt x) = AST.ValueInt x
+valueToAST (ValueFloat x) = AST.ValueFloat x
+valueToAST (ValueBoolean x) = AST.ValueBoolean x
+valueToAST (ValueString (String x)) = AST.ValueString (AST.StringValue x)
+valueToAST (ValueEnum x) = AST.ValueEnum x
+valueToAST (ValueList (List xs)) = AST.ValueList (AST.ListValue (map valueToAST xs))
+valueToAST (ValueObject (Object fields)) = AST.ValueObject (AST.ObjectValue (map toObjectField fields))
   where
-    toObjectField (ObjectField name value) = AST.ObjectField name <$> valueToAST value
-valueToAST ValueNull = empty
+    toObjectField (ObjectField name value) = AST.ObjectField name (valueToAST value)
+valueToAST ValueNull = AST.ValueNull
 
--- | A literal value can be converted to the AST and back, unless it's a null.
+-- | A literal value can be converted to the AST and back.
 prop_roundtripFromValue :: Value -> Bool
 prop_roundtripFromValue value =
-  case valueToAST value of
-    Nothing -> True
-    Just ast ->
-      case astToValue ast of
-        Nothing -> False
-        Just value' -> value == value'
+  case astToValue (valueToAST value) of
+    Nothing -> False
+    Just value' -> value == value'
