@@ -117,13 +117,12 @@ validateOperations fragments ops = do
 -- | The set of arguments for a given field, directive, etc.
 --
 -- Note that the 'value' can be a variable.
--- TODO: Rename to 'Arguments'
-type ArgumentSet = Map Name AST.Value
+type Arguments = Map Name AST.Value
 
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
 -- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
-validateArguments :: [AST.Argument] -> Validation ArgumentSet
+validateArguments :: [AST.Argument] -> Validation Arguments
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
 -- * Selections
@@ -156,13 +155,10 @@ data Selection spread
   | SelectionInlineFragment (InlineFragment spread)
   deriving (Eq, Show)
 
--- TODO: I'm pretty sure we want to change all of these [Selection spread]
--- lists to Maps.
-
 -- | A field in a selection set, which itself might have children which might
 -- have fragment spreads.
 data Field spread
-  = Field (Maybe Alias) Name ArgumentSet Directives [Selection spread]
+  = Field (Maybe Alias) Name Arguments Directives [Selection spread]
   deriving (Eq, Show)
 
 -- | A fragment spread that has a valid set of directives, but may or may not
@@ -186,9 +182,10 @@ data InlineFragment spread
 -- The given function @f@ is applied to each fragment spread. The rest of the
 -- selection remains unchanged.
 --
--- TODO: This is basically a definition of 'Traversable' for 'Selection'.
--- Change it to be so once we've proven that this crazy type variable thing
--- works out.
+-- Note that this is essentially a definition of 'Traversable' for
+-- 'Selection'. However, we probably also want to have other kinds of
+-- traversals (e.g. for transforming values), so best not to bless one kind
+-- with a type class.
 traverseFragmentSpreads :: Applicative f => (a -> f b) -> Selection a -> f (Selection b)
 traverseFragmentSpreads f selection =
   case selection of
@@ -303,7 +300,7 @@ resolveFragmentDefinitions allFragments =
 -- * Directives
 
 -- | A directive is a way of changing the run-time behaviour
-newtype Directives = Directives (Map Name ArgumentSet) deriving (Eq, Show)
+newtype Directives = Directives (Map Name Arguments) deriving (Eq, Show)
 
 emptyDirectives :: Directives
 emptyDirectives = Directives Map.empty
@@ -328,12 +325,6 @@ validateDirectives directives = do
 -- TODO: Might be nice to have something that goes from a validated document
 -- back to the AST. This would be especially useful for encoding, so we could
 -- debug by looking at GraphQL rather than data types.
-
--- TODO: The next thing we want to do is get to valid selection sets, which
--- starts by checking that fields in a set can merge
--- (https://facebook.github.io/graphql/#sec-Field-Selection-Merging). However,
--- this depends on flattening fragments, which I really don't want to do until
--- after we've validated those.
 
 -- * Validation errors
 
