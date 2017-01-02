@@ -8,13 +8,15 @@
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
+{-# LANGUAGE DeriveFunctor #-}
 
 module GraphQL.Server
-  ( QueryError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
+  ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
   , (:<|>)(..)
   , BuildFieldResolver(..)
+  , Result(..)
   ) where
 
 -- TODO (probably incomplete, the spec is large)
@@ -36,18 +38,13 @@ import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
 
-import Control.Monad.Catch (MonadThrow, throwM, Exception)
 
--- | MonadThrow requires an instance of Exception so we create a
--- newtype for GraphQL errors.
-newtype QueryError = QueryError Text deriving (Show, Eq)
-instance Exception QueryError
-
--- TODO: throwM throws in the base monad, and that's often IO. If we
--- want to support PartialSuccess we need a different error model to
--- throwM.
-queryError :: forall m a. MonadThrow m => Text -> m a
-queryError = throwM . QueryError
+-- TODO: add more structure to the various errors
+data ResolverError =
+    SchemaError Text
+  | FieldNotFoundError Text
+  | InvalidQueryError Text
+  deriving (Show, Eq)
 
 -- | Object field separation operator.
 --
@@ -76,11 +73,31 @@ infixr 8 :<>
 data a :<|> b = a :<|> b
 infixr 8 :<|>
 
+
+-- Result collects errors and values at the same time unless a handler
+-- tells us to bail out in which case we stop the processing
+-- immediately.
+data Result a = Result [ResolverError] a deriving (Show, Functor, Eq)
+
+-- Aggregating results keeps all errors and creates a ValueList
+-- containing the individual values.
+aggregateResults :: [Result GValue.Value] -> Result GValue.Value
+aggregateResults r = GValue.toValue <$> sequenceA r
+
+instance Applicative Result where
+  pure v = Result [] v
+  -- TODO it's not obvious to me that this is the right function...
+  (Result e1 f) <*> (Result e2 x) = Result (e1 <> e2) (f x)
+
+ok :: GValue.Value -> Result GValue.Value
+ok = pure
+
+
 -- TODO instead of SelectionSet we want something like
 -- NormalizedSelectionSet which has query fragments etc. resolved.
-class (MonadThrow m, MonadIO m) => HasGraph m a where
+class HasGraph m a where
   type Handler m a
-  buildResolver :: Handler m a -> CanonicalQuery -> m GValue.Value
+  buildResolver :: Handler m a -> CanonicalQuery -> m (Result GValue.Value)
 
 
 -- | Specify a default value for a type in a GraphQL schema.
@@ -112,34 +129,40 @@ instance Defaultable Bool
 
 instance Defaultable Text
 
+instance Defaultable (Maybe a) where
+  -- | The default for @Maybe a@ is @Nothing@.
+  defaultFor _ = pure Nothing
+
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
-instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Int32 where
+instance forall m. (Functor m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map GValue.toValue handler
+  buildResolver handler _ =  do
+    map (ok . GValue.toValue) handler
 
-instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Double where
+
+instance forall m. (Functor m) => HasGraph m Double where
   type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map GValue.toValue handler
+  buildResolver handler _ =  map (ok . GValue.toValue) handler
 
-instance forall m. (MonadThrow m, MonadIO m) => HasGraph m Text where
+instance forall m. (Functor m) => HasGraph m Text where
   type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map GValue.toValue handler
+  buildResolver handler _ =  map (ok . GValue.toValue) handler
 
 
-instance forall m hg. (MonadThrow m, MonadIO m, HasGraph m hg) => HasGraph m (List hg) where
+instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (List hg) where
   type Handler m (List hg) = [Handler m hg]
-  buildResolver handler selectionSet =
-    let a = traverse (flip (buildResolver @m @hg) selectionSet) handler
-    in map GValue.toValue a
+  buildResolver handler selectionSet = map aggregateResults a
+    where
+      a = traverse (flip (buildResolver @m @hg) selectionSet) handler
 
-instance forall m ks enum. (MonadThrow m, MonadIO m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
+instance forall m ks enum. (Applicative m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
   type Handler m (Enum ks enum) = enum
-  buildResolver handler _ = pure (enumToValue handler)
+  buildResolver handler _ = (pure . ok . enumToValue) handler
 
 
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
@@ -164,27 +187,30 @@ lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) arg
 -- the name matches the query. Note that the name is *not* in monad m,
 -- but the value is. This is necessary so we can skip execution if the
 -- name doesn't match.
-data NamedFieldExecutor m = NamedFieldExecutor AST.Name (m GValue.Value)
+data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value))
 
-executeNamedField :: Monad m => AST.Field -> NamedFieldExecutor m -> m (Maybe GValue.ObjectField)
-executeNamedField (AST.Field alias name _ _ _) (NamedFieldExecutor k mValue)
-  | name == k = do
-      value <- mValue
-      let name' = fromMaybe name alias
-      pure (Just (GValue.ObjectField name' value))
-  | otherwise = pure Nothing
 
--- Deconstruct object type signature and handler value at the same
--- time and run type-directed code for each field.
-resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a => m GValue.ObjectField -> FieldHandler m a -> AST.Selection -> m GValue.ObjectField
-resolveField fallback lh selection@(AST.SelectionField field) = do
-  let fieldExecutor = buildFieldResolver @m @a lh selection
-  case fieldExecutor of
-    Left err -> throwM err
-    Right executor -> do
-      objectField <- executeNamedField field executor
-      maybe fallback pure objectField
-resolveField _ _ f = queryError ("Unexpected Selection value. Is the query normalized?: " <> show f)
+
+-- Iterate through handlers (zipped together with their type
+-- definition) and execute handler if the name matches.
+type ResolveFieldResult = Result (Maybe GValue.ObjectField)
+
+resolveField :: forall a (m :: Type -> Type). (BuildFieldResolver m a, Monad m)
+  => FieldHandler m a -> m ResolveFieldResult -> AST.Selection -> m ResolveFieldResult
+resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ queryFieldName _ _ _)) =
+  case buildFieldResolver @m @a handler selection of
+    -- TODO the fact that this doesn't fit together nicely makes me think that ObjectField is not a good idea)
+    Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
+    Right (NamedValueResolver name' resolver) -> runResolver name' resolver
+  where
+    runResolver :: AST.Name -> m (Result GValue.Value) -> m ResolveFieldResult
+    runResolver name' resolver
+      | queryFieldName == name' = do
+          Result errs value <- resolver
+          pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
+      | otherwise = nextHandler
+resolveField _ _ f =
+  pure (Result [InvalidQueryError ("Unexpected Selection value. Is the query normalized?: " <> show f)] Nothing)
 
 
 -- | Derive the handler type from the Field/Argument type in a closed
@@ -193,34 +219,34 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Field ks t) = Handler m t
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
 
-class (MonadThrow m, MonadIO m) => BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either QueryError (NamedFieldExecutor m)
+class BuildFieldResolver m a where
+  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either ResolverError (NamedValueResolver m)
 
-instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, MonadThrow m, MonadIO m) => BuildFieldResolver m (Field ks t) where
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
-    let childResolver = buildResolver @m @t handler selectionSet
-    field <- first (QueryError. AST.formatNameError) (getFieldDefinition @(Field ks t))
+    let resolver = buildResolver @m @t handler selectionSet
+    field <- first (SchemaError . AST.formatNameError) (getFieldDefinition @(Field ks t))
     let name = getName field
-    pure (NamedFieldExecutor name childResolver)
+    Right (NamedValueResolver name resolver)
   buildFieldResolver _ f =
-    Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    Left (InvalidQueryError ("Unexpected query selection in buildFieldResolver: " <> show f))
 
 
 instance forall ks t f m.
-         ( MonadThrow m
-         , KnownSymbol ks
-         , BuildFieldResolver m f
-         , GValue.FromValue t
-         , Defaultable t
-         , HasAnnotatedInputType t
-         ) => BuildFieldResolver m (Argument ks t :> f) where
+  ( KnownSymbol ks
+  , BuildFieldResolver m f
+  , GValue.FromValue t
+  , Defaultable t
+  , HasAnnotatedInputType t
+  , Monad m
+  ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
-    argument <- first (QueryError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
+    argument <- first (SchemaError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
     let argName = getName argument
-    value <- first QueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
+    value <- first InvalidQueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
   buildFieldResolver _ f =
-    Left (QueryError ("buildFieldResolver got non AST.Field" <> show f <> ", query probably not normalized"))
+    Left (InvalidQueryError ("Unexpected query selection in buildFieldResolver: " <> show f))
 
 
 -- We only allow Field and Argument :> Field combinations:
@@ -232,53 +258,52 @@ type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
   RunFieldsType m a = TypeLits.TypeError (
     'TypeLits.Text "All field entries in an Object must be Field or Argument :> Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
 
+-- Match the three possible cases for Fields (see also RunFieldsType)
+type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
+  RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
+  RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
+  RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
+  RunFieldsHandler m a = TypeLits.TypeError (
+    'TypeLits.Text "Unexpected RunFieldsHandler types: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+
 
 class RunFields m a where
-  type RunFieldsHandler m a :: Type
-  -- runFields is run on a single QueryTerm so it can only ever return
-  -- one ObjectField.
-  runFields :: RunFieldsHandler m a -> AST.Selection -> m GValue.ObjectField
-
+  -- runFields is run on a single AST.Selection so it can only ever
+  -- return one ObjectField.
+  runFields :: RunFieldsHandler m a -> AST.Selection -> m ResolveFieldResult
 
 instance forall f fs m.
          ( BuildFieldResolver m f
          , RunFields m fs
-         , MonadThrow m
-         , MonadIO m
+         , Monad m
          ) => RunFields m (f :<> fs) where
-  type RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
-  runFields (lh :<> rh) selection =
-    resolveField @f @m fallback lh selection
+  runFields (handler :<> nextHandlers) selection =
+    resolveField @f @m handler nextHandler selection
     where
-      fallback = runFields @m @fs rh selection
+      nextHandler = runFields @m @fs nextHandlers selection
 
 instance forall ks t m.
          ( BuildFieldResolver m (Field ks t)
-         , MonadThrow m
-         , MonadIO m
+         , Monad m
          ) => RunFields m (Field ks t) where
-  type RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
-  runFields lh selection =
-    resolveField @(Field ks t) @m fallback lh selection
+  runFields handler selection =
+    resolveField @(Field ks t) @m handler nextHandler selection
     where
-      fallback = queryError ("Query for undefined selection: " <> show selection)
+      nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
-         , MonadThrow m
-         , MonadIO m
+         , Monad m
          ) => RunFields m (a :> b) where
-  type RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
-  runFields lh selection =
-    resolveField @(a :> b) @m fallback lh selection
+  runFields handler selection =
+    resolveField @(a :> b) @m handler nextHandler selection
     where
-      fallback = queryError ("Query for undefined selection: " <> show selection)
+      nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
 
 
 instance forall typeName interfaces fields m.
          ( RunFields m (RunFieldsType m fields)
-         , MonadThrow m
-         , MonadIO m
+         , Monad m
          ) => HasGraph m (Object typeName interfaces fields) where
   type Handler m (Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
@@ -287,94 +312,9 @@ instance forall typeName interfaces fields m.
     handler <- mHandler
     -- We're evaluating an Object so we're collecting ObjectFields from
     -- runFields and build a GValue.Map with them.
-    r <- forM selectionSet $ runFields @m @(RunFieldsType m fields) handler
-    case GValue.makeObject r of
-      Nothing -> queryError $ "Duplicate fields in set: " <> show r
-      Just object -> pure $ GValue.ValueObject object
-
-
--- | Closed type family to enforce the invariant that Union types
--- contain only Objects.
-type family RunUnionType m (a :: [Type]) :: Type where
-  RunUnionType m '[Object typeName interfaces fields] = Object typeName interfaces fields
-  RunUnionType m (Object typeName interfaces fields:rest) = Object typeName interfaces fields :<|> RunUnionType m rest
-  RunUnionType m a = TypeLits.TypeError ('TypeLits.Text "All types in a union must be Object. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
-
-type family RunUnionHandlerType m (a :: Type) :: Type where
-  RunUnionHandlerType m (o :<|> rest) =
-    Handler m o :<|> RunUnionHandlerType m rest
-  RunUnionHandlerType m o =
-    Handler m o
-
--- Type class to execute union type queries.
-class RunUnion m a where
-  runUnion :: RunUnionHandlerType m a -> AST.Selection -> m GValue.Object
-
-instance forall m object rest.
-         ( RunUnion m rest
-         , MonadIO m
-         , MonadThrow m
-         , HasGraph m object
-         , HasObjectDefinition object
-         ) => RunUnion m (object :<|> rest) where
-  runUnion (lh :<|> rh) fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection)) =
-    case getDefinition @object of
-      Left err -> queryError (AST.formatNameError err)
-      Right object ->
-        if getName object == queryTypeName
-        then do
-          result <- buildResolver @m @object lh subSelection
-          -- TODO: See if we can prevent this from happening at compile time.
-          --
-          -- We should definitely not be panicking in our library code because
-          -- the user returned a Bool from their union type.
-          case GValue.toObject result of
-            Nothing -> panic $ "Expected object as result of union query: " <> show result
-            Just obj -> pure obj
-        else
-          runUnion @m @rest rh fragment
-  runUnion _ _ =
-    queryError "Non-InlineFragment used for a union type query."
-
--- TODO(jml): I don't understand why I can't extract (Object typeName interfaces fields)
--- from this instance as I did for the above instance.
-instance forall m typeName interfaces fields.
-         ( MonadIO m
-         , MonadThrow m
-         , RunFields m (RunFieldsType m fields)
-         , KnownSymbol typeName
-         , HasObjectDefinition (Object typeName interfaces fields)
-         ) => RunUnion m (Object typeName interfaces fields) where
-  runUnion lh fragment@(AST.SelectionInlineFragment (AST.InlineFragment (AST.NamedType queryTypeName) [] subSelection)) =
-    case getDefinition @(Object typeName interfaces fields) of
-      Left err -> queryError (AST.formatNameError err)
-      Right object ->
-        if getName object == queryTypeName
-        then do
-          result <- buildResolver @m @(Object typeName interfaces fields) lh subSelection
-          -- TODO: See if we can prevent this from happening at compile time.
-          case GValue.toObject result of
-            Nothing -> panic $ "Expected object as result of union query: " <> show result
-            Just obj -> pure obj
-        else
-          queryError ("Union type could not be resolved:" <> show fragment)
-  runUnion _ _ =
-    queryError "Non-InlineFragment used for a union type query."
-
-instance forall m ks ru.
-         ( MonadThrow m
-         , MonadIO m
-         , RunUnion m (RunUnionType m ru)
-         ) => HasGraph m (Union ks ru) where
-  type Handler m (Union ks ru) = RunUnionHandlerType m (RunUnionType m ru)
-  -- TODO: check sanity of query before executing it. E.g. we can't
-  -- have the same field name in two different fragment branches
-  -- (needs to take aliases into account).
-
-  -- query "{ ... on Human { name } }"
-  -- [SelectionInlineFragment (InlineFragment (NamedType "Human") [] [SelectionField (Field "" "name" [] [] [])])]
-  buildResolver handler selection = do
-    -- GraphQL invariant is that all items in a Union must be objects
-    -- which means 1) they have fields 2) They are ValueMap
-    values <- map GValue.unionObjects (traverse (runUnion @m @(RunUnionType m ru) handler) selection)
-    maybe (panic $ "Duplicate fields in values: " <> show values) (pure . GValue.ValueObject) values
+    r <- forM selectionSet (runFields @m @(RunFieldsType m fields) handler)
+    -- let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
+    let (Result errs obj)  = GValue.makeObject . catMaybes <$> sequenceA r
+    case obj of
+      Nothing -> pure (Result [InvalidQueryError ("Duplicate fields in set: " <> show r)] GValue.ValueNull)
+      Just object -> pure (Result errs (GValue.ValueObject object))

@@ -14,12 +14,13 @@ import GraphQL.API
   )
 import GraphQL.Server
   ( Handler
-  , QueryError(..)
+  , ResolverError(..)
   , buildResolver
   , (:<>)(..)
+  , Result(..)
   )
-import qualified GraphQL.Internal.AST as AST
 import GraphQL.Value (Value)
+import qualified GraphQL.Internal.AST as AST
 import Data.Aeson (encode)
 
 import GraphQL.Internal.Parser (queryDocument)
@@ -43,7 +44,7 @@ getQuery query =
         parseOnly (queryDocument <* endOfInput) query
   in selectionSet
 
-runQuery :: AST.SelectionSet -> IO (Either Text Value)
+runQuery :: AST.SelectionSet -> IO (Either Text (Result Value))
 runQuery query = runExceptT (buildResolver @TMonad @T tHandler query)
 
 tests :: IO TestTree
@@ -51,18 +52,18 @@ tests = testSpec "TypeAPI" $ do
   describe "tTest" $ do
     it "works in a simple case" $ do
       let query = getQuery "{ t(x: 12) }"
-      Right r <- runQuery query
+      Right (Result _ r) <- runQuery query
       encode r `shouldBe` "{\"t\":12}"
     it "complains about missing field" $ do
       -- TODO: Apparently MonadThrow throws in the *base monad*,
       -- i.e. usually IO. If we want to throw in the wrapper monad I
       -- think we may need to use MonadFail??
       let wrongQuery = getQuery "{ not_a_field }"
-      caught <- (runQuery wrongQuery >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
+      Right (Result errs _) <- runQuery wrongQuery
       -- TODO: jml thinks this is a really bad error message. Real problem is
       -- that `not_a_field` was provided.
-      caught `shouldBe` Just (QueryError "Value missing: x")
+      errs `shouldBe` [InvalidQueryError "Value missing: x"]
     it "complains about missing argument" $ do
       let wrongQuery = getQuery "{ t }"
-      caught <- (runQuery wrongQuery >> pure Nothing) `catch` \(e :: QueryError) -> pure (Just e)
-      caught `shouldBe` Just (QueryError "Value missing: x")
+      Right (Result errs _) <- runQuery wrongQuery
+      errs `shouldBe` [InvalidQueryError "Value missing: x"]
