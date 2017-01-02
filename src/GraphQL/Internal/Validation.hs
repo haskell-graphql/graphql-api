@@ -8,6 +8,29 @@
 -- One core difference is that this module doesn't attempt to do any
 -- type-level validation, as we attempt to defer all of that to the Haskell
 -- type checker.
+--
+-- Still missing:
+--
+--   * variable validation <https://facebook.github.io/graphql/#sec-Validation.Variables>
+--   * field selection merging <https://facebook.github.io/graphql/#sec-Field-Selection-Merging>
+--   * input object field uniqueness <https://facebook.github.io/graphql/#sec-Values>
+--
+-- Deliberately not going to do:
+--
+--   * field selections on compound types <https://facebook.github.io/graphql/#sec-Field-Selections-on-Objects-Interfaces-and-Unions-Types>
+--   * leaf field selections <https://facebook.github.io/graphql/#sec-Leaf-Field-Selections>
+--   * argument names <https://facebook.github.io/graphql/#sec-Argument-Names>
+--   * argument value type correctness <https://facebook.github.io/graphql/#sec-Argument-Values-Type-Correctness>
+--   * fragment spread type existence <https://facebook.github.io/graphql/#sec-Fragment-Spread-Type-Existence>
+--   * fragments on compound types <https://facebook.github.io/graphql/#sec-Fragments-On-Composite-Types>
+--   * fragment spread is possible <https://facebook.github.io/graphql/#sec-Fragment-spread-is-possible>
+--   * directives are defined <https://facebook.github.io/graphql/#sec-Directives-Are-Defined>
+--   * directives are in valid locations <https://facebook.github.io/graphql/#sec-Directives-Are-In-Valid-Locations>
+--   * variable default values are correctly typed <https://facebook.github.io/graphql/#sec-Variable-Default-Values-Are-Correctly-Typed>
+--   * variables are input types <https://facebook.github.io/graphql/#sec-Variables-Are-Input-Types>
+--   * all variable usages are allowed <https://facebook.github.io/graphql/#sec-All-Variable-Usages-are-Allowed>
+--
+-- Because all of the above rely on type checking.
 module GraphQL.Internal.Validation
   ( ValidationError(..)
   , QueryDocument
