@@ -13,6 +13,9 @@
 -- Still missing:
 --
 --   * variable validation <https://facebook.github.io/graphql/#sec-Validation.Variables>
+--     * variable uniqueness <https://facebook.github.io/graphql/#sec-Variable-Uniqueness>
+--     * all variable uses defined <https://facebook.github.io/graphql/#sec-All-Variable-Uses-Defined>
+--     * all variables used <https://facebook.github.io/graphql/#sec-All-Variables-Used>
 --   * field selection merging <https://facebook.github.io/graphql/#sec-Field-Selection-Merging>
 --   * input object field uniqueness <https://facebook.github.io/graphql/#sec-Values>
 --
