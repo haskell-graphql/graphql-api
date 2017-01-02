@@ -35,10 +35,21 @@ import GraphQL.Internal.AST (Name)
 -- Construct this using 'validate' on an 'AST.QueryDocument'.
 data QueryDocument
   -- | The query document contains a single anonymous operation.
-  = LoneAnonymousOperation AST.SelectionSet (Map Name (FragmentDefinition FragmentSpread))
+  = LoneAnonymousOperation Operation (Map Name (FragmentDefinition FragmentSpread))
   -- | The query document contains multiple uniquely-named operations.
-  | MultipleOperations (Map Name AST.OperationDefinition) (Map Name (FragmentDefinition FragmentSpread))
+  | MultipleOperations Operations (Map Name (FragmentDefinition FragmentSpread))
   deriving (Eq, Show)
+
+data Operation
+  = Query [AST.VariableDefinition] Directives [AST.Selection]
+  | Mutation  [AST.VariableDefinition] Directives [AST.Selection]
+  deriving (Eq, Show)
+
+type OperationType = [AST.VariableDefinition] -> Directives -> [AST.Selection] -> Operation
+
+newtype Operations = Operations (Map Name Operation) deriving (Eq, Show)
+
+-- TODO: Sometimes we say "Foos" and other times "FooSet". Be consistent.
 
 -- | Get an operation from a GraphQL document
 --
@@ -57,10 +68,10 @@ data QueryDocument
 --     * Let {operation} be the Operation named {operationName} in {document}.
 --     * If {operation} was not found, produce a query error.
 --     * Return {operation}.
-getOperation :: QueryDocument -> Maybe Name -> Maybe AST.OperationDefinition
-getOperation (LoneAnonymousOperation ss _) Nothing = pure (AST.AnonymousQuery ss)
-getOperation (MultipleOperations ops _) (Just name) = Map.lookup name ops
-getOperation (MultipleOperations ops _) Nothing =
+getOperation :: QueryDocument -> Maybe Name -> Maybe Operation
+getOperation (LoneAnonymousOperation op _) Nothing = pure op
+getOperation (MultipleOperations (Operations ops) _) (Just name) = Map.lookup name ops
+getOperation (MultipleOperations (Operations ops) _) Nothing =
   case toList ops of
     [op] -> pure op
     _ -> empty
@@ -78,8 +89,8 @@ validate (AST.QueryDocument defns) = runValidation $ do
   -- get all the errors.
   let frags = fst <$> (resolveFragmentDefinitions =<< validateFragmentDefinitions fragments)
   case (anonymous, named) of
-    ([], ops) -> MultipleOperations <$> mapErrors DuplicateOperation (makeMap ops) <*> frags
-    ([x], []) -> LoneAnonymousOperation <$> pure x <*> frags
+    ([], ops) -> MultipleOperations <$> validateOperations ops <*> frags
+    ([x], []) -> LoneAnonymousOperation <$> pure (Query [] emptyDirectives x) <*> frags
     _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
@@ -90,8 +101,19 @@ validate (AST.QueryDocument defns) = runValidation $ do
     splitDefns (AST.DefinitionFragment frag) = Right frag
 
     splitOps (AST.AnonymousQuery ss) = Left ss
-    splitOps q@(AST.Query (AST.Node name _ _ _)) = Right (name, q)
-    splitOps m@(AST.Mutation (AST.Node name _ _ _)) = Right (name, m)
+    splitOps (AST.Query node@(AST.Node name _ _ _)) = Right (name, (Query, node))
+    splitOps (AST.Mutation node@(AST.Node name _ _ _)) = Right (name, (Mutation, node))
+
+-- * Operations
+
+validateOperations :: [(Name, (OperationType, AST.Node))] -> Validation ValidationError Operations
+validateOperations ops = do
+  deduped <- mapErrors DuplicateOperation (makeMap ops)
+  Operations <$> traverse validateNode deduped
+  where
+    validateNode :: (OperationType, AST.Node) -> Validation ValidationError Operation
+    validateNode (operationType, AST.Node _ vars directives ss) =
+      operationType vars <$> validateDirectives directives <*> pure ss
 
 -- * Arguments
 
@@ -274,6 +296,9 @@ resolveFragmentDefinitions allFragments =
 
 -- | A directive is a way of changing the run-time behaviour
 newtype Directives = Directives (Map Name ArgumentSet) deriving (Eq, Show)
+
+emptyDirectives :: Directives
+emptyDirectives = Directives Map.empty
 
 -- | Ensure that the directives in a given place are valid.
 --
