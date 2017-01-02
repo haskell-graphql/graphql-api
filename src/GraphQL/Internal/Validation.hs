@@ -216,7 +216,7 @@ validateSelection selection =
 -- | Resolve the fragment references in a selection, accumulating a set of
 -- visited fragment names.
 resolveSelection :: Fragments -> Selection UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection FragmentSpread)
-resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSpread selection
+resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
     resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
