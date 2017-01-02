@@ -35,9 +35,9 @@ import GraphQL.Internal.AST (Name)
 -- Construct this using 'validate' on an 'AST.QueryDocument'.
 data QueryDocument
   -- | The query document contains a single anonymous operation.
-  = LoneAnonymousOperation AST.SelectionSet FragmentDefinitions
+  = LoneAnonymousOperation AST.SelectionSet (Map Name (FragmentDefinition FragmentSpread))
   -- | The query document contains multiple uniquely-named operations.
-  | MultipleOperations (Map Name AST.OperationDefinition) FragmentDefinitions
+  | MultipleOperations (Map Name AST.OperationDefinition) (Map Name (FragmentDefinition FragmentSpread))
   deriving (Eq, Show)
 
 -- | Get an operation from a GraphQL document
@@ -71,16 +71,16 @@ getOperation _ _ = empty
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
 validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
-validate (AST.QueryDocument defns) =
-  let
-    (operations, fragments) = splitBy splitDefns defns
-    (anonymous, named) = splitBy splitOps operations
-    frags = validateFragmentDefinitions fragments
-  in runValidation $
-    case (anonymous, named) of
-      ([], ops) -> MultipleOperations <$> mapErrors DuplicateOperation (makeMap ops) <*> frags
-      ([x], []) -> LoneAnonymousOperation <$> pure x <*> frags
-      _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
+validate (AST.QueryDocument defns) = runValidation $ do
+  let (operations, fragments) = splitBy splitDefns defns
+  let (anonymous, named) = splitBy splitOps operations
+  -- Deliberately don't unpack this monadically so we continue processing and
+  -- get all the errors.
+  let frags = fst <$> (resolveFragmentDefinitions =<< validateFragmentDefinitions fragments)
+  case (anonymous, named) of
+    ([], ops) -> MultipleOperations <$> mapErrors DuplicateOperation (makeMap ops) <*> frags
+    ([x], []) -> LoneAnonymousOperation <$> pure x <*> frags
+    _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
     splitBy :: (a -> Either b c) -> [a] -> ([b], [c])
@@ -213,9 +213,6 @@ resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSp
 data FragmentDefinition spread
   = FragmentDefinition Name AST.TypeCondition Directives [Selection spread]
   deriving (Eq, Show)
-
--- | A set of fragment definitions.
-type FragmentDefinitions = Map Name (FragmentDefinition UnresolvedFragmentSpread)
 
 -- | Ensure fragment definitions are uniquely named, and that their arguments
 -- and directives are sane.
