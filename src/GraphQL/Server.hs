@@ -42,12 +42,20 @@ import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Input (CanonicalQuery)
 
-
--- TODO: add more structure to the various errors
-data ResolverError =
-    SchemaError Text
-  | FieldNotFoundError Text
-  | InvalidQueryError Text
+data ResolverError
+  -- | There was a problem in the schema. Server-side problem.
+  = SchemaError AST.NameError
+  -- | Couldn't find the requested field in the object. A client-side problem.
+  | FieldNotFoundError AST.Selection
+  -- | No value provided for name, and no default specified. Client-side problem.
+  | ValueMissing AST.Name
+  -- | Could not translate value into Haskell. Probably a client-side problem.
+  | InvalidValue AST.Name Text
+  -- | Found duplicate fields in set.
+  | DuplicateFields [ResolveFieldResult]
+  -- | We tried to resolve something that wasn't a field. Once our validation
+  -- stuff is sorted out this error should go away.
+  | ResolveNonField AST.Selection
   deriving (Show, Eq)
 
 -- | Object field separation operator.
@@ -122,8 +130,8 @@ class Defaultable a where
 
 -- | Called when the schema expects an input argument @name@ of type @a@ but
 -- @name@ has not been provided.
-valueMissing :: Defaultable a => AST.Name -> Either Text a
-valueMissing name = maybe (Left ("Value missing: " <> AST.getNameText name)) Right (defaultFor name)
+valueMissing :: Defaultable a => AST.Name -> Either ResolverError a
+valueMissing name = maybe (Left (ValueMissing name)) Right (defaultFor name)
 
 instance Defaultable Int32
 
@@ -214,7 +222,7 @@ resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ quer
           pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
       | otherwise = nextHandler
 resolveField _ _ f =
-  pure (Result [InvalidQueryError ("Unexpected Selection value. Is the query normalized?: " <> show f)] Nothing)
+  pure (Result [ResolveNonField f] Nothing)
 
 
 -- | Derive the handler type from the Field/Argument type in a closed
@@ -229,11 +237,10 @@ class BuildFieldResolver m a where
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (API.Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
     let resolver = buildResolver @m @t handler selectionSet
-    field <- first (SchemaError . AST.formatNameError) (API.getFieldDefinition @(API.Field ks t))
+    field <- first SchemaError (API.getFieldDefinition @(API.Field ks t))
     let name = getName field
     Right (NamedValueResolver name resolver)
-  buildFieldResolver _ f =
-    Left (InvalidQueryError ("Unexpected query selection in buildFieldResolver: " <> show f))
+  buildFieldResolver _ f = Left (ResolveNonField f)
 
 
 instance forall ks t f m.
@@ -245,12 +252,13 @@ instance forall ks t f m.
   , Monad m
   ) => BuildFieldResolver m (API.Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
-    argument <- first (SchemaError . AST.formatNameError) (API.getArgumentDefinition @(API.Argument ks t))
+    argument <- first SchemaError (API.getArgumentDefinition @(API.Argument ks t))
     let argName = getName argument
-    value <- first InvalidQueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
+    value <- case lookupValue argName arguments of
+      Nothing -> valueMissing @t argName
+      Just v -> first (InvalidValue argName) (GValue.fromValue @t v)
     buildFieldResolver @m @f (handler value) selection
-  buildFieldResolver _ f =
-    Left (InvalidQueryError ("Unexpected query selection in buildFieldResolver: " <> show f))
+  buildFieldResolver _ f = Left (ResolveNonField f)
 
 
 -- We only allow Field and Argument :> Field combinations:
@@ -293,7 +301,7 @@ instance forall ks t m.
   runFields handler selection =
     resolveField @(API.Field ks t) @m handler nextHandler selection
     where
-      nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
+      nextHandler = pure (Result [FieldNotFoundError selection] Nothing)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
@@ -302,7 +310,7 @@ instance forall m a b.
   runFields handler selection =
     resolveField @(a :> b) @m handler nextHandler selection
     where
-      nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
+      nextHandler = pure (Result [FieldNotFoundError selection] Nothing)
 
 
 instance forall typeName interfaces fields m.
@@ -320,5 +328,5 @@ instance forall typeName interfaces fields m.
     -- let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
     let (Result errs obj)  = GValue.makeObject . catMaybes <$> sequenceA r
     case obj of
-      Nothing -> pure (Result [InvalidQueryError ("Duplicate fields in set: " <> show r)] GValue.ValueNull)
+      Nothing -> pure (Result [DuplicateFields r] GValue.ValueNull)
       Just object -> pure (Result errs (GValue.ValueObject object))
