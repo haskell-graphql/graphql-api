@@ -106,12 +106,12 @@ validate (AST.QueryDocument defns) = runValidator $ do
 
 -- * Operations
 
-validateOperations :: [(Name, (OperationType, AST.Node))] -> Validator ValidationError Operations
+validateOperations :: [(Name, (OperationType, AST.Node))] -> Validation Operations
 validateOperations ops = do
   deduped <- mapErrors DuplicateOperation (makeMap ops)
   Operations <$> traverse validateNode deduped
   where
-    validateNode :: (OperationType, AST.Node) -> Validator ValidationError Operation
+    validateNode :: (OperationType, AST.Node) -> Validation Operation
     validateNode (operationType, AST.Node _ vars directives ss) =
       operationType vars <$> validateDirectives directives <*> pure ss
 
@@ -125,7 +125,7 @@ type ArgumentSet = Map Name AST.Value
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
 -- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
-validateArguments :: [AST.Argument] -> Validator ValidationError ArgumentSet
+validateArguments :: [AST.Argument] -> Validation ArgumentSet
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
 -- * Selections
@@ -203,7 +203,7 @@ traverseFragmentSpreads f selection =
     childSegments = traverse (traverseFragmentSpreads f)
 
 -- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validator ValidationError (Selection UnresolvedFragmentSpread)
+validateSelection :: AST.Selection -> Validation (Selection UnresolvedFragmentSpread)
 validateSelection selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
@@ -217,10 +217,10 @@ validateSelection selection =
 
 -- | Resolve the fragment references in a selection, accumulating a set of
 -- visited fragment names.
-resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) (Selection FragmentSpread)
+resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection FragmentSpread)
 resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSpread selection
   where
-    resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) FragmentSpread
+    resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
       case Map.lookup name fragments of
         Nothing -> lift (throwE (NoSuchFragment name))
@@ -242,7 +242,7 @@ data FragmentDefinition spread
 -- and directives are sane.
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-Name-Uniqueness>
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validator ValidationError (Map Name (FragmentDefinition UnresolvedFragmentSpread))
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition UnresolvedFragmentSpread))
 validateFragmentDefinitions frags = do
   defns <- traverse validateFragmentDefinition frags
   mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
@@ -262,7 +262,7 @@ validateFragmentDefinitions frags = do
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-spread-target-defined>
 -- <https://facebook.github.io/graphql/#sec-Fragment-spreads-must-not-form-cycles>
-resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validator ValidationError (Map Name (FragmentDefinition FragmentSpread), Set Name)
+resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validation (Map Name (FragmentDefinition FragmentSpread), Set Name)
 resolveFragmentDefinitions allFragments =
   splitResult <$> traverse resolveFragment allFragments
   where
@@ -275,14 +275,14 @@ resolveFragmentDefinitions allFragments =
 
     -- | Resolves all references to fragments in a fragment definition,
     -- returning the resolved fragment and a set of visited names.
-    resolveFragment :: FragmentDefinition UnresolvedFragmentSpread -> Validator ValidationError (FragmentDefinition FragmentSpread, Set Name)
+    resolveFragment :: FragmentDefinition UnresolvedFragmentSpread -> Validation (FragmentDefinition FragmentSpread, Set Name)
     resolveFragment frag = runStateT (resolveFragment' frag) mempty
 
-    resolveFragment' :: FragmentDefinition UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) (FragmentDefinition FragmentSpread)
+    resolveFragment' :: FragmentDefinition UnresolvedFragmentSpread -> StateT (Set Name) Validation (FragmentDefinition FragmentSpread)
     resolveFragment' (FragmentDefinition name cond directives ss) =
       FragmentDefinition name cond directives <$> traverse (traverseFragmentSpreads resolveSpread) ss
 
-    resolveSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) FragmentSpread
+    resolveSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
     resolveSpread (UnresolvedFragmentSpread name directives) = do
       visited <- Set.member name <$> get
       when visited (lift (throwE (CircularFragmentSpread name)))
@@ -307,7 +307,7 @@ emptyDirectives = Directives Map.empty
 -- this point.
 --
 -- <https://facebook.github.io/graphql/#sec-Directives-Are-Unique-Per-Location>
-validateDirectives :: [AST.Directive] -> Validator ValidationError Directives
+validateDirectives :: [AST.Directive] -> Validation Directives
 validateDirectives directives = do
   items <- traverse validateDirective directives
   Directives <$> mapErrors DuplicateDirective (makeMap items)
@@ -360,6 +360,9 @@ data ValidationError
   -- fragment spread referring to the /first/ fragment spread.
   | CircularFragmentSpread Name
   deriving (Eq, Show)
+
+-- | Type alias for our most common kind of validator.
+type Validation = Validator ValidationError
 
 -- | Identify all of the validation errors in @doc@.
 --
