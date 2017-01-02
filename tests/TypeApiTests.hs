@@ -62,8 +62,8 @@ tests = testSpec "TypeAPI" $ do
       Right (Result errs _) <- runQuery wrongQuery
       -- TODO: jml thinks this is a really bad error message. Real problem is
       -- that `not_a_field` was provided.
-      errs `shouldBe` [InvalidQueryError "Value missing: x"]
+      errs `shouldBe` [ValueMissing (AST.unsafeMakeName "x")]
     it "complains about missing argument" $ do
       let wrongQuery = getQuery "{ t }"
       Right (Result errs _) <- runQuery wrongQuery
-      errs `shouldBe` [InvalidQueryError "Value missing: x"]
+      errs `shouldBe` [ValueMissing (AST.unsafeMakeName "x")]
