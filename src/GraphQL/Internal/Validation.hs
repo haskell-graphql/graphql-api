@@ -13,7 +13,6 @@
 -- Still missing:
 --
 --   * variable validation <https://facebook.github.io/graphql/#sec-Validation.Variables>
---     * variable uniqueness <https://facebook.github.io/graphql/#sec-Variable-Uniqueness>
 --     * all variable uses defined <https://facebook.github.io/graphql/#sec-All-Variable-Uses-Defined>
 --     * all variables used <https://facebook.github.io/graphql/#sec-All-Variables-Used>
 --   * field selection merging <https://facebook.github.io/graphql/#sec-Field-Selection-Merging>
@@ -68,7 +67,7 @@ import qualified Data.Set as Set
 import qualified GraphQL.Internal.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
-import GraphQL.Internal.AST (Name, Alias, TypeCondition)
+import GraphQL.Internal.AST (Name, Alias, TypeCondition, Variable)
 import GraphQL.Internal.Schema (HasName(..))
 
 -- | A valid query document.
@@ -82,8 +81,8 @@ data QueryDocument
   deriving (Eq, Show)
 
 data Operation
-  = Query [AST.VariableDefinition] Directives SelectionSet
-  | Mutation  [AST.VariableDefinition] Directives SelectionSet
+  = Query VariableDefinitions Directives SelectionSet
+  | Mutation VariableDefinitions Directives SelectionSet
   deriving (Eq, Show)
 
 -- | Get the selection set for an operation.
@@ -95,7 +94,7 @@ getSelectionSet (Query _ _ ss) = ss
 getSelectionSet (Mutation _ _ ss) = ss
 
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
-type OperationType = [AST.VariableDefinition] -> Directives -> SelectionSet -> Operation
+type OperationType = VariableDefinitions -> Directives -> SelectionSet -> Operation
 
 newtype Operations = Operations (Map Name Operation) deriving (Eq, Show)
 
@@ -146,7 +145,7 @@ validate (AST.QueryDocument defns) = runValidator $ do
     ([x], []) -> do
       (ss, usedFrags) <- runStateT (validateSelectionSet frags x) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
-      pure (LoneAnonymousOperation (Query [] emptyDirectives ss) frags)
+      pure (LoneAnonymousOperation (Query emptyVariableDefinitions emptyDirectives ss) frags)
     _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
@@ -174,7 +173,7 @@ validateOperations fragments ops = do
   where
     validateNode :: (OperationType, AST.Node) -> StateT (Set Name) Validation Operation
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType vars <$> lift (validateDirectives directives) <*> validateSelectionSet fragments ss
+      operationType <$> lift (validateVariables vars) <*> lift (validateDirectives directives) <*> validateSelectionSet fragments ss
 
 -- * Arguments
 
@@ -389,6 +388,18 @@ resolveFragmentDefinitions allFragments =
           modify (Set.insert name)
           FragmentSpread name directives <$> resolveFragment' definition
 
+-- * Variables
+
+newtype VariableDefinitions = VariableDefinitions (Map Variable AST.VariableDefinition) deriving (Eq, Show)
+
+emptyVariableDefinitions :: VariableDefinitions
+emptyVariableDefinitions = VariableDefinitions mempty
+
+validateVariables :: [AST.VariableDefinition] -> Validation VariableDefinitions
+validateVariables vars = VariableDefinitions <$> mapErrors DuplicateVariableDefinition (makeMap items)
+  where
+    items = [(name, defn) | defn@(AST.VariableDefinition name _ _) <- vars]
+
 -- * Directives
 
 -- | A directive is a way of changing the run-time behaviour
@@ -446,6 +457,8 @@ data ValidationError
   --
   -- <https://facebook.github.io/graphql/#sec-Directives-Are-Unique-Per-Location>
   | DuplicateDirective Name
+  -- | There were multiple variables defined with the same name.
+  | DuplicateVariableDefinition Variable
   -- | 'CircularFragmentSpread' means that a fragment definition contains a
   -- fragment spread that itself is a fragment definition that contains a
   -- fragment spread referring to the /first/ fragment spread.

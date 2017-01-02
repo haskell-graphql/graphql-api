@@ -160,7 +160,7 @@ nameFromSymbol = makeName (toS (symbolVal @n Proxy))
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
 
-newtype Variable = Variable Name deriving (Eq,Show)
+newtype Variable = Variable Name deriving (Eq, Ord, Show)
 
 instance Arbitrary Variable where
   arbitrary = Variable <$> arbitrary
