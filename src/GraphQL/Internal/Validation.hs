@@ -28,7 +28,7 @@ import qualified Data.Set as Set
 import qualified GraphQL.Internal.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
-import GraphQL.Internal.AST (Name)
+import GraphQL.Internal.AST (Name, Alias, TypeCondition)
 
 -- | A valid query document.
 --
@@ -164,7 +164,7 @@ data Selection spread
 -- | A field in a selection set, which itself might have children which might
 -- have fragment spreads.
 data Field spread
-  = Field (Maybe AST.Alias) Name ArgumentSet Directives [Selection spread]
+  = Field (Maybe Alias) Name ArgumentSet Directives [Selection spread]
   deriving (Eq, Show)
 
 -- | A fragment spread that has a valid set of directives, but may or may not
@@ -180,7 +180,7 @@ data FragmentSpread
 
 -- | An inline fragment, which itself can contain fragment spreads.
 data InlineFragment spread
-  = InlineFragment AST.TypeCondition Directives [Selection spread]
+  = InlineFragment TypeCondition Directives [Selection spread]
   deriving (Eq, Show)
 
 -- | Traverse through every fragment spread in a selection.
@@ -235,7 +235,7 @@ resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSp
 -- @spread@ indicates whether references to other fragment definitions have
 -- been resolved.
 data FragmentDefinition spread
-  = FragmentDefinition Name AST.TypeCondition Directives [Selection spread]
+  = FragmentDefinition Name TypeCondition Directives [Selection spread]
   deriving (Eq, Show)
 
 -- | Ensure fragment definitions are uniquely named, and that their arguments
