@@ -9,7 +9,7 @@ import GraphQL.Server
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Value (Value)
 import Data.Attoparsec.Text (parseOnly, endOfInput)
-import GraphQL.Internal.Parser (document)
+import GraphQL.Internal.Parser (queryDocument)
 
 import qualified System.Directory as SD
 
@@ -56,6 +56,6 @@ example = buildResolver @IO @Query root (query "{ root(path: \"/etc\") { entries
 
 query :: Text -> AST.SelectionSet
 query q =
-  let Right (AST.Document [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-       parseOnly (document <* endOfInput) q
+  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
+       parseOnly (queryDocument <* endOfInput) q
   in selectionSet
