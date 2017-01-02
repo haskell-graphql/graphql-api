@@ -106,7 +106,7 @@ type ArgumentSet = Map Name AST.Value
 validateArguments :: [AST.Argument] -> Validation ValidationError ArgumentSet
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
--- * Selections and Fragments
+-- * Selections
 
 -- $fragmentSpread
 --
@@ -161,19 +161,6 @@ data InlineFragment spread
   = InlineFragment AST.TypeCondition Directives [Selection spread]
   deriving (Eq, Show)
 
--- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validation ValidationError (Selection UnresolvedFragmentSpread)
-validateSelection selection =
-  case selection of
-    AST.SelectionField (AST.Field alias name args directives ss) ->
-      SelectionField <$> (Field alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
-    AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
-      SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)
-    AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
-      SelectionInlineFragment <$> (InlineFragment typeCond <$> validateDirectives directives <*> childSegments ss)
-  where
-    childSegments = traverse validateSelection
-
 -- | Traverse through every fragment spread in a selection.
 --
 -- The given function @f@ is applied to each fragment spread. The rest of the
@@ -193,6 +180,19 @@ traverseFragmentSpreads f selection =
   where
     childSegments = traverse (traverseFragmentSpreads f)
 
+-- | Ensure a selection has valid arguments and directives.
+validateSelection :: AST.Selection -> Validation ValidationError (Selection UnresolvedFragmentSpread)
+validateSelection selection =
+  case selection of
+    AST.SelectionField (AST.Field alias name args directives ss) ->
+      SelectionField <$> (Field alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
+    AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
+      SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)
+    AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
+      SelectionInlineFragment <$> (InlineFragment typeCond <$> validateDirectives directives <*> childSegments ss)
+  where
+    childSegments = traverse validateSelection
+
 -- | Resolve the fragment references in a selection, accumulating a set of
 -- visited fragment names.
 resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) (Selection FragmentSpread)
@@ -205,6 +205,8 @@ resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSp
         Just fragment -> do
           modify (Set.insert name)
           pure (FragmentSpread name directive fragment)
+
+-- * Fragment definitions
 
 -- | A validated fragment definition.
 --
