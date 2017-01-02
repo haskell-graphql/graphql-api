@@ -82,7 +82,7 @@ getOperation _ _ = empty
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
 validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
-validate (AST.QueryDocument defns) = runValidation $ do
+validate (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
   -- Deliberately don't unpack this monadically so we continue processing and
@@ -106,12 +106,12 @@ validate (AST.QueryDocument defns) = runValidation $ do
 
 -- * Operations
 
-validateOperations :: [(Name, (OperationType, AST.Node))] -> Validation ValidationError Operations
+validateOperations :: [(Name, (OperationType, AST.Node))] -> Validator ValidationError Operations
 validateOperations ops = do
   deduped <- mapErrors DuplicateOperation (makeMap ops)
   Operations <$> traverse validateNode deduped
   where
-    validateNode :: (OperationType, AST.Node) -> Validation ValidationError Operation
+    validateNode :: (OperationType, AST.Node) -> Validator ValidationError Operation
     validateNode (operationType, AST.Node _ vars directives ss) =
       operationType vars <$> validateDirectives directives <*> pure ss
 
@@ -125,7 +125,7 @@ type ArgumentSet = Map Name AST.Value
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
 -- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
-validateArguments :: [AST.Argument] -> Validation ValidationError ArgumentSet
+validateArguments :: [AST.Argument] -> Validator ValidationError ArgumentSet
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
 -- * Selections
@@ -203,7 +203,7 @@ traverseFragmentSpreads f selection =
     childSegments = traverse (traverseFragmentSpreads f)
 
 -- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validation ValidationError (Selection UnresolvedFragmentSpread)
+validateSelection :: AST.Selection -> Validator ValidationError (Selection UnresolvedFragmentSpread)
 validateSelection selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
@@ -217,10 +217,10 @@ validateSelection selection =
 
 -- | Resolve the fragment references in a selection, accumulating a set of
 -- visited fragment names.
-resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) (Selection FragmentSpread)
+resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) (Selection FragmentSpread)
 resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSpread selection
   where
-    resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) FragmentSpread
+    resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) FragmentSpread
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
       case Map.lookup name fragments of
         Nothing -> lift (throwE (NoSuchFragment name))
@@ -242,7 +242,7 @@ data FragmentDefinition spread
 -- and directives are sane.
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-Name-Uniqueness>
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation ValidationError (Map Name (FragmentDefinition UnresolvedFragmentSpread))
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validator ValidationError (Map Name (FragmentDefinition UnresolvedFragmentSpread))
 validateFragmentDefinitions frags = do
   defns <- traverse validateFragmentDefinition frags
   mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
@@ -262,7 +262,7 @@ validateFragmentDefinitions frags = do
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-spread-target-defined>
 -- <https://facebook.github.io/graphql/#sec-Fragment-spreads-must-not-form-cycles>
-resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validation ValidationError (Map Name (FragmentDefinition FragmentSpread), Set Name)
+resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validator ValidationError (Map Name (FragmentDefinition FragmentSpread), Set Name)
 resolveFragmentDefinitions allFragments =
   splitResult <$> traverse resolveFragment allFragments
   where
@@ -275,14 +275,14 @@ resolveFragmentDefinitions allFragments =
 
     -- | Resolves all references to fragments in a fragment definition,
     -- returning the resolved fragment and a set of visited names.
-    resolveFragment :: FragmentDefinition UnresolvedFragmentSpread -> Validation ValidationError (FragmentDefinition FragmentSpread, Set Name)
+    resolveFragment :: FragmentDefinition UnresolvedFragmentSpread -> Validator ValidationError (FragmentDefinition FragmentSpread, Set Name)
     resolveFragment frag = runStateT (resolveFragment' frag) mempty
 
-    resolveFragment' :: FragmentDefinition UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) (FragmentDefinition FragmentSpread)
+    resolveFragment' :: FragmentDefinition UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) (FragmentDefinition FragmentSpread)
     resolveFragment' (FragmentDefinition name cond directives ss) =
       FragmentDefinition name cond directives <$> traverse (traverseFragmentSpreads resolveSpread) ss
 
-    resolveSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validation ValidationError) FragmentSpread
+    resolveSpread :: UnresolvedFragmentSpread -> StateT (Set Name) (Validator ValidationError) FragmentSpread
     resolveSpread (UnresolvedFragmentSpread name directives) = do
       visited <- Set.member name <$> get
       when visited (lift (throwE (CircularFragmentSpread name)))
@@ -307,7 +307,7 @@ emptyDirectives = Directives Map.empty
 -- this point.
 --
 -- <https://facebook.github.io/graphql/#sec-Directives-Are-Unique-Per-Location>
-validateDirectives :: [AST.Directive] -> Validation ValidationError Directives
+validateDirectives :: [AST.Directive] -> Validator ValidationError Directives
 validateDirectives directives = do
   items <- traverse validateDirective directives
   Directives <$> mapErrors DuplicateDirective (makeMap items)
@@ -390,7 +390,7 @@ findDuplicates xs = findDups (sort xs)
 -- | Create a map from a list of key-value pairs.
 --
 -- Returns a list of duplicates on 'Left' if there are duplicates.
-makeMap :: Ord key => [(key, value)] -> Validation key (Map key value)
+makeMap :: Ord key => [(key, value)] -> Validator key (Map key value)
 makeMap entries =
   case NonEmpty.nonEmpty (findDuplicates (map fst entries)) of
     Nothing -> pure (Map.fromList entries)
@@ -398,47 +398,47 @@ makeMap entries =
 
 -- * Error handling
 
--- | A 'Validation' is a value that can either be valid or have a non-empty
+-- | A 'Validator' is a value that can either be valid or have a non-empty
 -- list of errors.
-newtype Validation e a = Validation { runValidation :: Either (NonEmpty e) a } deriving (Eq, Show, Functor)
+newtype Validator e a = Validator { runValidator :: Either (NonEmpty e) a } deriving (Eq, Show, Functor)
 
 -- | Throw a single validation error.
-throwE :: e -> Validation e a
+throwE :: e -> Validator e a
 throwE e = throwErrors (e :| [])
 
 -- | Throw multiple validation errors. There must be at least one.
-throwErrors :: NonEmpty e -> Validation e a
-throwErrors = Validation . Left
+throwErrors :: NonEmpty e -> Validator e a
+throwErrors = Validator . Left
 
 -- | Map over each individual error on a validation. Useful for composing
 -- validations.
 --
--- This is /somewhat/ like 'first', but 'Validation' is not, and cannot be, a
+-- This is /somewhat/ like 'first', but 'Validator' is not, and cannot be, a
 -- 'Bifunctor', because the left-hand side is specialized to @NonEmpty e@,
 -- rather than plain @e@. Also, whatever function were passed to 'first' would
 -- get the whole non-empty list, whereas 'mapErrors' works on one element at a
 -- time.
 --
 -- >>> mapErrors (+1) (pure "hello")
--- Validation {runValidation = Right "hello"}
+-- Validator {runValidator = Right "hello"}
 -- >>> mapErrors (+1) (throwE 2)
--- Validation {runValidation = Left (3 :| [])}
+-- Validator {runValidator = Left (3 :| [])}
 -- >>> mapErrors (+1) (throwErrors (NonEmpty.fromList [3, 5]))
--- Validation {runValidation = Left (4 :| [6])}
-mapErrors :: (e1 -> e2) -> Validation e1 a -> Validation e2 a
-mapErrors f (Validation (Left es)) = Validation (Left (map f es))
-mapErrors _ (Validation (Right x)) = Validation (Right x)
+-- Validator {runValidator = Left (4 :| [6])}
+mapErrors :: (e1 -> e2) -> Validator e1 a -> Validator e2 a
+mapErrors f (Validator (Left es)) = Validator (Left (map f es))
+mapErrors _ (Validator (Right x)) = Validator (Right x)
 
--- | The applicative on Validation allows multiple potentially-valid values to
+-- | The applicative on Validator allows multiple potentially-valid values to
 -- be composed, and ensures that *all* validation errors bubble up.
-instance Applicative (Validation e) where
-  pure x = Validation (Right x)
-  Validation (Left e1) <*> (Validation (Left e2)) = Validation (Left (e1 <> e2))
-  Validation (Left e) <*> _ = Validation (Left e)
-  Validation _ <*> (Validation (Left e)) = Validation (Left e)
-  Validation (Right f) <*> Validation (Right x) = Validation (Right (f x))
+instance Applicative (Validator e) where
+  pure x = Validator (Right x)
+  Validator (Left e1) <*> (Validator (Left e2)) = Validator (Left (e1 <> e2))
+  Validator (Left e) <*> _ = Validator (Left e)
+  Validator _ <*> (Validator (Left e)) = Validator (Left e)
+  Validator (Right f) <*> Validator (Right x) = Validator (Right (f x))
 
--- | The monad on Validation stops processing once errors have been raised.
-instance Monad (Validation e) where
-  Validation (Left e) >>= _ = Validation (Left e)
-  Validation (Right r) >>= f = f r
+-- | The monad on Validator stops processing once errors have been raised.
+instance Monad (Validator e) where
+  Validator (Left e) >>= _ = Validator (Left e)
+  Validator (Right r) >>= f = f r
