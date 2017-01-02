@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.14.1.
+-- This file has been generated from package.yaml by hpack version 0.15.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -23,7 +23,7 @@ library
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -56,7 +56,7 @@ test-suite graphql-api-doctests
   hs-source-dirs:
       tests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -threaded
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror -threaded
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -81,7 +81,7 @@ test-suite graphql-api-tests
   hs-source-dirs:
       tests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -114,7 +114,7 @@ benchmark criterion
   hs-source-dirs:
       benchmarks
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
   build-depends:
       base >= 4.9 && < 5
     , protolude
