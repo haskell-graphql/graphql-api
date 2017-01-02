@@ -8,7 +8,7 @@ import Protolude
 import Data.Attoparsec.Text (parseOnly)
 import Text.RawString.QQ (r)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Gen, arbitrary, discard, forAll, resize)
+import Test.QuickCheck (arbitrary, forAll, resize)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
