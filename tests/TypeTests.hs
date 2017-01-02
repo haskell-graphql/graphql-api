@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds, TypeOperators #-}
 module TypeTests (tests) where
 
-import Protolude hiding (Enum)
+import Protolude hiding (Down, Enum)
 
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
@@ -22,7 +22,7 @@ import GraphQL.API
   , getFieldDefinition
   , getInterfaceDefinition
   )
-import GraphQL.Internal.AST (unsafeMakeName)
+import GraphQL.Internal.AST (getNameText, unsafeMakeName)
 import GraphQL.Internal.Schema
   ( EnumTypeDefinition(..)
   , EnumValueDefinition(..)
@@ -39,6 +39,7 @@ import GraphQL.Internal.Schema
   , Builtin(..)
   , InputType(..)
   )
+import GraphQL.Value (Value(..))
 
 -- Examples taken from the spec
 
@@ -47,7 +48,14 @@ data DogCommandEnum = Sit | Down | Heel
 instance GraphQLEnum DogCommandEnum where
   enumValues = map unsafeMakeName ["SIT", "DOWN", "HEEL"]
   enumToValue _ = undefined
-  enumFromValue _ = undefined
+  enumFromValue (ValueEnum x) =
+    case getNameText x of
+      "SIT" -> pure Sit
+      "DOWN" -> pure Down
+      "HEEL" -> pure Heel
+      _ -> throwError ("Unrecognized enum: " <> show x)
+  enumFromValue x = throwError ("Not an enum: " <> show x)
+
 
 -- Alternative might be a sum type with deriving Generic and 0-arity constructors?
 type DogCommand = Enum "DogCommand" DogCommandEnum
@@ -65,15 +73,17 @@ type Dog = Object "Dog" '[Pet]
 type Sentient = Interface "Sentient" '[Field "name" Text]
 type Pet = Interface "Pet" '[Field "name" Text]
 
-type Alien = Object "Alien" '[Sentient] [Field "name" Text, Field "homePlanet" Text]
-
 type Human = Object "Human" '[Sentient] '[Field "name" Text]
 
 data CatCommandEnum = Jump
+
 instance GraphQLEnum CatCommandEnum where
   enumValues = [unsafeMakeName "JUMP"]
   enumToValue = undefined
-  enumFromValue = undefined
+  enumFromValue (ValueEnum x)
+    | getNameText x == "JUMP" = pure Jump
+    | otherwise = throwError ("Unrecognized enum: " <> show x)
+  enumFromValue x = throwError ("Not an enum: " <> show x)
 
 type CatCommand = Enum "CatCommand" CatCommandEnum
 
@@ -85,10 +95,6 @@ type Cat = Object "Cat" '[Pet]
    ]
 
 type CatOrDog = Union "CatOrDog" '[Cat, Dog]
-type DogOrHuman = Union "DogOrHuman" '[Dog, Human]
-type HumanOrAlien = Union "HumanOrAlien" '[Human, Alien]
-
-type QueryRoot = Object "QueryRoot" '[Field "dog" Dog]
 
 
 tests :: IO TestTree
