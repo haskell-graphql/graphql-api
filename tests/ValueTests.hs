@@ -3,7 +3,7 @@ module ValueTests (tests) where
 import Protolude
 
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (forAll)
+import Test.QuickCheck (arbitrary, forAll, resize)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
@@ -59,7 +59,7 @@ tests = testSpec "Value" $ do
     prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
   describe "AST" $ do
     prop "Values can be converted to AST and back" $ do
-      prop_roundtripFromValue
+      forAll (resize 5 arbitrary) prop_roundtripFromValue
     prop "Values can be converted from AST and back" $ do
       prop_roundtripFromAST
     it "Objects converted from AST have unique fields" $ do

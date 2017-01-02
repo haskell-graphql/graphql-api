@@ -8,11 +8,11 @@ import Protolude
 import Data.Attoparsec.Text (parseOnly)
 import Text.RawString.QQ (r)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (Gen, arbitrary, discard, forAll)
+import Test.QuickCheck (Gen, arbitrary, discard, forAll, resize)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.Value (String(..), valueToAST)
+import GraphQL.Value (String(..))
 import qualified GraphQL.Internal.AST as AST
 import qualified GraphQL.Internal.Parser as Parser
 import qualified GraphQL.Internal.Encoder as Encoder
@@ -57,7 +57,7 @@ tests = testSpec "AST" $ do
         parseOnly Parser.value output `shouldBe` Right input
     describe "parsing values" $ do
       prop "works for all literal values" $ do
-        \x -> parseOnly Parser.value (Encoder.value x) `shouldBe` Right x
+        forAll (resize 3 arbitrary) $ \x -> parseOnly Parser.value (Encoder.value x) `shouldBe` Right x
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue

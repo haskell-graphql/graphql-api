@@ -38,7 +38,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
-import Test.QuickCheck (Arbitrary(..), oneof, listOf)
+import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.AST (Name(..))
@@ -73,15 +73,28 @@ instance ToJSON GraphQL.Value.Value where
   toJSON ValueNull = Aeson.Null
 
 instance Arbitrary Value where
-  arbitrary = oneof [ ValueInt <$> arbitrary
-                    , ValueFloat <$> arbitrary
-                    , ValueBoolean <$> arbitrary
-                    , ValueString <$> arbitrary
-                    , ValueEnum <$> arbitrary
-                    , ValueList <$> arbitrary
-                    , ValueObject <$> arbitrary
-                    , pure ValueNull
-                    ]
+  -- | Generate an arbitrary value. Uses the generator's \"size\" property to
+  -- determine maximum object depth.
+  arbitrary = sized genValue
+
+-- | Generate an arbitrary scalar value.
+genScalarValue :: Gen Value
+genScalarValue = oneof [ ValueInt <$> arbitrary
+                       , ValueFloat <$> arbitrary
+                       , ValueBoolean <$> arbitrary
+                       , ValueString <$> arbitrary
+                       , ValueEnum <$> arbitrary
+                       , pure ValueNull
+                       ]
+
+-- | Generate an arbitrary value, with objects at most @n@ levels deep.
+genValue :: Int -> Gen Value
+genValue n
+  | n <= 0 = genScalarValue
+  | otherwise = oneof [ genScalarValue
+                      , ValueObject <$> genObject (n - 1)
+                      , ValueList . List <$> listOf (genValue (n - 1))
+                      ]
 
 newtype String = String Text deriving (Eq, Ord, Show)
 
@@ -113,12 +126,15 @@ instance ToJSON List where
 newtype Object = Object { objectFields :: [ObjectField] } deriving (Eq, Ord, Show)
 
 instance Arbitrary Object where
-  arbitrary = Object <$> fields
-    where
-      fields = zipWith ObjectField <$> names <*> values
-      names = ordNub <$> listOf arbitrary
-      values = listOf arbitrary
+  arbitrary = sized genObject
 
+-- | Generate an arbitrary object to the given maximum depth.
+genObject :: Int -> Gen Object
+genObject n = Object <$> fields
+  where
+    fields = zipWith ObjectField <$> names <*> values
+    names = ordNub <$> listOf arbitrary
+    values = listOf (genValue n)
 
 data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
