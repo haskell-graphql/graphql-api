@@ -77,7 +77,7 @@ infixr 8 :<|>
 -- Result collects errors and values at the same time unless a handler
 -- tells us to bail out in which case we stop the processing
 -- immediately.
-data Result a = Result [ResolverError] a deriving (Show, Functor)
+data Result a = Result [ResolverError] a deriving (Show, Functor, Eq)
 
 -- Aggregating results keeps all errors and creates a ValueList
 -- containing the individual values.
@@ -86,11 +86,10 @@ aggregateResults r =
   let (errs, valueList) = foldl' (\(eb, vb) (Result ea va) -> ((eb <> ea), va:vb)) ([], []) r
   in Result errs (GValue.toValue valueList)
 
-
 instance Applicative Result where
   pure v = Result [] v
   -- TODO it's not obvious to me that this is the right function...
-  (Result e f) <*> (Result ea ev) = Result (e <> ea) (f ev)
+  (Result e1 f) <*> (Result e2 x) = Result (e1 <> e2) (f x)
 
 ok :: GValue.Value -> Result GValue.Value
 ok = pure
@@ -139,31 +138,31 @@ instance Defaultable (Maybe a) where
 -- TODO not super hot on individual values having to be instances of
 -- HasGraph but not sure how else we can nest either types or
 -- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
-instance forall m. (Monad m) => HasGraph m Int32 where
+instance forall m. (Functor m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  do
     map (ok . GValue.toValue) handler
 
 
-instance forall m. (Monad m) => HasGraph m Double where
+instance forall m. (Functor m) => HasGraph m Double where
   type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map (ok . GValue.toValue) handler
 
-instance forall m. (Monad m) => HasGraph m Text where
+instance forall m. (Functor m) => HasGraph m Text where
   type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map (ok . GValue.toValue) handler
 
 
-instance forall m hg. (Monad m, HasGraph m hg) => HasGraph m (List hg) where
+instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (List hg) where
   type Handler m (List hg) = [Handler m hg]
   buildResolver handler selectionSet = map aggregateResults a
     where
       a = traverse (flip (buildResolver @m @hg) selectionSet) handler
 
-instance forall m ks enum. (Monad m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
+instance forall m ks enum. (Applicative m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
   type Handler m (Enum ks enum) = enum
   buildResolver handler _ = (pure . ok . enumToValue) handler
 
@@ -198,7 +197,7 @@ data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value)
 -- definition) and execute handler if the name matches.
 type ResolveFieldResult = Result (Maybe GValue.ObjectField)
 
-resolveField :: forall a (m :: Type -> Type). BuildFieldResolver m a
+resolveField :: forall a (m :: Type -> Type). (BuildFieldResolver m a, Monad m)
   => FieldHandler m a -> m ResolveFieldResult -> AST.Selection -> m ResolveFieldResult
 resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ queryFieldName _ _ _)) =
   case buildFieldResolver @m @a handler selection of
@@ -222,7 +221,7 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (Field ks t) = Handler m t
   FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
 
-class (Monad m) => BuildFieldResolver m a where
+class BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either ResolverError (NamedValueResolver m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (Field ks t) where
@@ -241,6 +240,7 @@ instance forall ks t f m.
   , GValue.FromValue t
   , Defaultable t
   , HasAnnotatedInputType t
+  , Monad m
   ) => BuildFieldResolver m (Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
     argument <- first (SchemaError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
