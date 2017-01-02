@@ -178,7 +178,7 @@ validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | A
 --
 -- This is encoded as a type variable because we want to provide evidence that
 -- references in fragment spreads can be resolved, and what better way to do
--- so than including the resolved fragment in the type. Thus, @spread will be
+-- so than including the resolved fragment in the type. Thus, @spread@ will be
 -- 'FragmentSpread', following this module's convention that unadorned names
 -- imply that everything is valid.
 
@@ -225,7 +225,8 @@ traverseFragmentSpreads f selection =
   case selection of
     SelectionField (Field alias name args directives ss) ->
       SelectionField <$> (Field alias name args directives <$> childSegments ss)
-    SelectionFragmentSpread x -> SelectionFragmentSpread <$> f x
+    SelectionFragmentSpread x ->
+      SelectionFragmentSpread <$> f x
     SelectionInlineFragment (InlineFragment typeCond directives ss) ->
       SelectionInlineFragment <$> (InlineFragment typeCond directives <$> childSegments ss)
   where
@@ -245,7 +246,11 @@ validateSelection selection =
     childSegments = traverse validateSelection
 
 -- | Resolve the fragment references in a selection, accumulating a set of
--- visited fragment names.
+-- the fragment names that we have resolved.
+--
+-- We're doing a standard depth-first traversal of fragment references, where
+-- references are by name, so the set of names can be thought of as a record
+-- of visited references.
 resolveSelection :: Fragments -> Selection UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection FragmentSpread)
 resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
@@ -438,7 +443,7 @@ makeMap entries =
 
 -- | A 'Validator' is a value that can either be valid or have a non-empty
 -- list of errors.
-newtype Validator e a = Validator { runValidator :: Either (NonEmpty e) a } deriving (Eq, Show, Functor)
+newtype Validator e a = Validator { runValidator :: Either (NonEmpty e) a } deriving (Eq, Show, Functor, Monad)
 
 -- | Throw a single validation error.
 throwE :: e -> Validator e a
@@ -475,8 +480,3 @@ instance Applicative (Validator e) where
   Validator (Left e) <*> _ = Validator (Left e)
   Validator _ <*> (Validator (Left e)) = Validator (Left e)
   Validator (Right f) <*> Validator (Right x) = Validator (Right (f x))
-
--- | The monad on Validator stops processing once errors have been raised.
-instance Monad (Validator e) where
-  Validator (Left e) >>= _ = Validator (Left e)
-  Validator (Right r) >>= f = f r
