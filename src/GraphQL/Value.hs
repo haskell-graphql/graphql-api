@@ -38,7 +38,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Aeson (ToJSON(..), (.=), pairs)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
-import Test.QuickCheck (Arbitrary(..), oneof, listOf)
+import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.AST (Name(..))
@@ -73,15 +73,28 @@ instance ToJSON GraphQL.Value.Value where
   toJSON ValueNull = Aeson.Null
 
 instance Arbitrary Value where
-  arbitrary = oneof [ ValueInt <$> arbitrary
-                    , ValueFloat <$> arbitrary
-                    , ValueBoolean <$> arbitrary
-                    , ValueString <$> arbitrary
-                    , ValueEnum <$> arbitrary
-                    , ValueList <$> arbitrary
-                    , ValueObject <$> arbitrary
-                    , pure ValueNull
-                    ]
+  -- | Generate an arbitrary value. Uses the generator's \"size\" property to
+  -- determine maximum object depth.
+  arbitrary = sized genValue
+
+-- | Generate an arbitrary scalar value.
+genScalarValue :: Gen Value
+genScalarValue = oneof [ ValueInt <$> arbitrary
+                       , ValueFloat <$> arbitrary
+                       , ValueBoolean <$> arbitrary
+                       , ValueString <$> arbitrary
+                       , ValueEnum <$> arbitrary
+                       , pure ValueNull
+                       ]
+
+-- | Generate an arbitrary value, with objects at most @n@ levels deep.
+genValue :: Int -> Gen Value
+genValue n
+  | n <= 0 = genScalarValue
+  | otherwise = oneof [ genScalarValue
+                      , ValueObject <$> genObject (n - 1)
+                      , ValueList . List <$> listOf (genValue (n - 1))
+                      ]
 
 newtype String = String Text deriving (Eq, Ord, Show)
 
@@ -113,12 +126,15 @@ instance ToJSON List where
 newtype Object = Object { objectFields :: [ObjectField] } deriving (Eq, Ord, Show)
 
 instance Arbitrary Object where
-  arbitrary = Object <$> fields
-    where
-      fields = zipWith ObjectField <$> names <*> values
-      names = ordNub <$> listOf arbitrary
-      values = listOf arbitrary
+  arbitrary = sized genObject
 
+-- | Generate an arbitrary object to the given maximum depth.
+genObject :: Int -> Gen Object
+genObject n = Object <$> fields
+  where
+    fields = zipWith ObjectField <$> names <*> values
+    names = ordNub <$> listOf arbitrary
+    values = listOf (genValue n)
 
 data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
@@ -248,6 +264,7 @@ astToValue (AST.ValueObject (AST.ObjectValue fields)) = do
   pure (ValueObject object)
   where
     toObjectField (AST.ObjectField name value) = ObjectField name <$> astToValue value
+astToValue AST.ValueNull = pure ValueNull
 astToValue (AST.ValueVariable _) = empty
 
 -- | A value from the AST can be converted to a literal value and back, unless it's a variable.
@@ -255,10 +272,7 @@ prop_roundtripFromAST :: AST.Value -> Bool
 prop_roundtripFromAST ast =
   case astToValue ast of
     Nothing -> True
-    Just value ->
-      case valueToAST value of
-        Nothing -> False
-        Just ast' -> ast == ast'
+    Just value -> ast == valueToAST value
 
 -- | Convert a literal value into an AST value.
 --
@@ -266,24 +280,21 @@ prop_roundtripFromAST ast =
 --
 -- This function probably isn't particularly useful, but it functions as a
 -- stop-gap until we have QuickCheck generators for the AST.
-valueToAST :: Value -> Maybe AST.Value
-valueToAST (ValueInt x) = pure $ AST.ValueInt x
-valueToAST (ValueFloat x) = pure $ AST.ValueFloat x
-valueToAST (ValueBoolean x) = pure $ AST.ValueBoolean x
-valueToAST (ValueString (String x)) = pure $ AST.ValueString (AST.StringValue x)
-valueToAST (ValueEnum x) = pure $ AST.ValueEnum x
-valueToAST (ValueList (List xs)) = AST.ValueList . AST.ListValue <$> traverse valueToAST xs
-valueToAST (ValueObject (Object fields)) = AST.ValueObject . AST.ObjectValue <$> traverse toObjectField fields
+valueToAST :: Value -> AST.Value
+valueToAST (ValueInt x) = AST.ValueInt x
+valueToAST (ValueFloat x) = AST.ValueFloat x
+valueToAST (ValueBoolean x) = AST.ValueBoolean x
+valueToAST (ValueString (String x)) = AST.ValueString (AST.StringValue x)
+valueToAST (ValueEnum x) = AST.ValueEnum x
+valueToAST (ValueList (List xs)) = AST.ValueList (AST.ListValue (map valueToAST xs))
+valueToAST (ValueObject (Object fields)) = AST.ValueObject (AST.ObjectValue (map toObjectField fields))
   where
-    toObjectField (ObjectField name value) = AST.ObjectField name <$> valueToAST value
-valueToAST ValueNull = empty
+    toObjectField (ObjectField name value) = AST.ObjectField name (valueToAST value)
+valueToAST ValueNull = AST.ValueNull
 
--- | A literal value can be converted to the AST and back, unless it's a null.
+-- | A literal value can be converted to the AST and back.
 prop_roundtripFromValue :: Value -> Bool
 prop_roundtripFromValue value =
-  case valueToAST value of
-    Nothing -> True
-    Just ast ->
-      case astToValue ast of
-        Nothing -> False
-        Just value' -> value == value'
+  case astToValue (valueToAST value) of
+    Nothing -> False
+    Just value' -> value == value'

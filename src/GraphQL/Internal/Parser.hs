@@ -136,6 +136,7 @@ typeCondition = namedType
 value :: Parser AST.Value
 value = tok (AST.ValueVariable <$> (variable <?> "variable")
   <|> (number <?> "number")
+  <|> AST.ValueNull     <$  tok "null"
   <|> AST.ValueBoolean  <$> (booleanValue <?> "booleanValue")
   <|> AST.ValueString   <$> (stringValue <?> "stringValue")
   -- `true` and `false` have been tried before

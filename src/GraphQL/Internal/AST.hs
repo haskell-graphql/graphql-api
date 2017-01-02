@@ -195,7 +195,8 @@ data Value = ValueVariable Variable
            | ValueEnum Name
            | ValueList ListValue
            | ValueObject ObjectValue
-             deriving (Eq,Show)
+           | ValueNull
+           deriving (Eq, Show)
 
 instance Arbitrary Value where
   arbitrary = oneof [ ValueVariable <$> arbitrary
@@ -206,6 +207,7 @@ instance Arbitrary Value where
                     , ValueEnum <$> arbitrary
                     , ValueList <$> arbitrary
                     , ValueObject <$> arbitrary
+                    , pure ValueNull
                     ]
 
 newtype StringValue = StringValue Text deriving (Eq,Show)

@@ -101,6 +101,7 @@ value (AST.ValueString   x) = stringValue x
 value (AST.ValueEnum     x) = AST.getNameText x
 value (AST.ValueList     x) = listValue x
 value (AST.ValueObject   x) = objectValue x
+value AST.ValueNull = "null"
 
 booleanValue :: Bool -> Text
 booleanValue True  = "true"
