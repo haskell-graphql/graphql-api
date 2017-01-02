@@ -369,11 +369,6 @@ makeMap entries =
     Nothing -> pure (Map.fromList entries)
     Just dups -> throwErrors dups
 
--- XXX: Copied from Execution
--- | Make a non-empty list. This is just an alias for the symbolic constructor.
-singleton :: a -> NonEmpty a
-singleton x = x :| []
-
 -- * Error handling
 
 -- | A 'Validation' is a value that can either be valid or have a non-empty
@@ -382,7 +377,7 @@ newtype Validation e a = Validation { runValidation :: Either (NonEmpty e) a } d
 
 -- | Throw a single validation error.
 throwE :: e -> Validation e a
-throwE = throwErrors . singleton
+throwE e = throwErrors (e :| [])
 
 -- | Throw multiple validation errors. There must be at least one.
 throwErrors :: NonEmpty e -> Validation e a
