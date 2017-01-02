@@ -31,11 +31,15 @@ import Protolude hiding (Enum)
 import GHC.TypeLits (KnownSymbol)
 import qualified GHC.TypeLits as TypeLits
 
+import GraphQL.API
+  ( (:>)
+  , HasAnnotatedType(..)
+  , HasAnnotatedInputType(..)
+  )
+import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Schema (HasName(..))
--- TODO: Explicit import
-import GraphQL.API
 import GraphQL.Internal.Input (CanonicalQuery)
 
 
@@ -154,15 +158,15 @@ instance forall m. (Functor m) => HasGraph m Text where
   buildResolver handler _ =  map (ok . GValue.toValue) handler
 
 
-instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (List hg) where
-  type Handler m (List hg) = [Handler m hg]
+instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
+  type Handler m (API.List hg) = [Handler m hg]
   buildResolver handler selectionSet = map aggregateResults a
     where
       a = traverse (flip (buildResolver @m @hg) selectionSet) handler
 
-instance forall m ks enum. (Applicative m, GraphQLEnum enum) => HasGraph m (Enum ks enum) where
-  type Handler m (Enum ks enum) = enum
-  buildResolver handler _ = (pure . ok . enumToValue) handler
+instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (API.Enum ks enum) where
+  type Handler m (API.Enum ks enum) = enum
+  buildResolver handler _ = (pure . ok . API.enumToValue) handler
 
 
 -- TODO: lookup is O(N^2) in number of arguments (we linearly search
@@ -216,16 +220,16 @@ resolveField _ _ f =
 -- | Derive the handler type from the Field/Argument type in a closed
 -- type family: We don't want anyone else to extend this ever.
 type family FieldHandler m (a :: Type) :: Type where
-  FieldHandler m (Field ks t) = Handler m t
-  FieldHandler m (Argument ks t :> f) = t -> FieldHandler m f
+  FieldHandler m (API.Field ks t) = Handler m t
+  FieldHandler m (API.Argument ks t :> f) = t -> FieldHandler m f
 
 class BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either ResolverError (NamedValueResolver m)
 
-instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (Field ks t) where
+instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (API.Field ks t) where
   buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
     let resolver = buildResolver @m @t handler selectionSet
-    field <- first (SchemaError . AST.formatNameError) (getFieldDefinition @(Field ks t))
+    field <- first (SchemaError . AST.formatNameError) (API.getFieldDefinition @(API.Field ks t))
     let name = getName field
     Right (NamedValueResolver name resolver)
   buildFieldResolver _ f =
@@ -239,9 +243,9 @@ instance forall ks t f m.
   , Defaultable t
   , HasAnnotatedInputType t
   , Monad m
-  ) => BuildFieldResolver m (Argument ks t :> f) where
+  ) => BuildFieldResolver m (API.Argument ks t :> f) where
   buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
-    argument <- first (SchemaError . AST.formatNameError) (getArgumentDefinition @(Argument ks t))
+    argument <- first (SchemaError . AST.formatNameError) (API.getArgumentDefinition @(API.Argument ks t))
     let argName = getName argument
     value <- first InvalidQueryError (maybe (valueMissing @t argName) (GValue.fromValue @t) (lookupValue argName arguments))
     buildFieldResolver @m @f (handler value) selection
@@ -251,9 +255,9 @@ instance forall ks t f m.
 
 -- We only allow Field and Argument :> Field combinations:
 type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
-  RunFieldsType m '[Field ks t] = Field ks t
+  RunFieldsType m '[API.Field ks t] = API.Field ks t
   RunFieldsType m '[a :> b] = a :> b
-  RunFieldsType m ((Field ks t) ': rest) = Field ks t :<> RunFieldsType m rest
+  RunFieldsType m ((API.Field ks t) ': rest) = API.Field ks t :<> RunFieldsType m rest
   RunFieldsType m ((a :> b) ': rest) = (a :> b) :<> RunFieldsType m rest
   RunFieldsType m a = TypeLits.TypeError (
     'TypeLits.Text "All field entries in an Object must be Field or Argument :> Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
@@ -261,7 +265,7 @@ type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
 -- Match the three possible cases for Fields (see also RunFieldsType)
 type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
   RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
-  RunFieldsHandler m (Field ks t) = FieldHandler m (Field ks t)
+  RunFieldsHandler m (API.Field ks t) = FieldHandler m (API.Field ks t)
   RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
   RunFieldsHandler m a = TypeLits.TypeError (
     'TypeLits.Text "Unexpected RunFieldsHandler types: " 'TypeLits.:<>: 'TypeLits.ShowType a)
@@ -283,11 +287,11 @@ instance forall f fs m.
       nextHandler = runFields @m @fs nextHandlers selection
 
 instance forall ks t m.
-         ( BuildFieldResolver m (Field ks t)
+         ( BuildFieldResolver m (API.Field ks t)
          , Monad m
-         ) => RunFields m (Field ks t) where
+         ) => RunFields m (API.Field ks t) where
   runFields handler selection =
-    resolveField @(Field ks t) @m handler nextHandler selection
+    resolveField @(API.Field ks t) @m handler nextHandler selection
     where
       nextHandler = pure (Result [FieldNotFoundError ("Query for undefined selection: " <> show selection)] Nothing)
 
@@ -304,8 +308,8 @@ instance forall m a b.
 instance forall typeName interfaces fields m.
          ( RunFields m (RunFieldsType m fields)
          , Monad m
-         ) => HasGraph m (Object typeName interfaces fields) where
-  type Handler m (Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
+         ) => HasGraph m (API.Object typeName interfaces fields) where
+  type Handler m (API.Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
