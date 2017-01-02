@@ -35,21 +35,20 @@ import GraphQL.Internal.AST (Name, Alias, TypeCondition)
 -- Construct this using 'validate' on an 'AST.QueryDocument'.
 data QueryDocument
   -- | The query document contains a single anonymous operation.
-  = LoneAnonymousOperation Operation (Map Name (FragmentDefinition FragmentSpread))
+  = LoneAnonymousOperation Operation Fragments
   -- | The query document contains multiple uniquely-named operations.
-  | MultipleOperations Operations (Map Name (FragmentDefinition FragmentSpread))
+  | MultipleOperations Operations Fragments
   deriving (Eq, Show)
 
 data Operation
-  = Query [AST.VariableDefinition] Directives [AST.Selection]
-  | Mutation  [AST.VariableDefinition] Directives [AST.Selection]
+  = Query [AST.VariableDefinition] Directives [Selection FragmentSpread]
+  | Mutation  [AST.VariableDefinition] Directives [Selection FragmentSpread]
   deriving (Eq, Show)
 
-type OperationType = [AST.VariableDefinition] -> Directives -> [AST.Selection] -> Operation
+-- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
+type OperationType = [AST.VariableDefinition] -> Directives -> [Selection FragmentSpread] -> Operation
 
 newtype Operations = Operations (Map Name Operation) deriving (Eq, Show)
-
--- TODO: Sometimes we say "Foos" and other times "FooSet". Be consistent.
 
 -- | Get an operation from a GraphQL document
 --
@@ -85,12 +84,10 @@ validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
 validate (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
-  -- Deliberately don't unpack this monadically so we continue processing and
-  -- get all the errors.
-  let frags = fst <$> (resolveFragmentDefinitions =<< validateFragmentDefinitions fragments)
+  frags <- fst <$> (resolveFragmentDefinitions =<< validateFragmentDefinitions fragments)
   case (anonymous, named) of
-    ([], ops) -> MultipleOperations <$> validateOperations ops <*> frags
-    ([x], []) -> LoneAnonymousOperation <$> pure (Query [] emptyDirectives x) <*> frags
+    ([], ops) -> MultipleOperations <$> validateOperations frags ops <*> pure frags
+    ([x], []) -> LoneAnonymousOperation . Query [] emptyDirectives <$> validateSelectionSet frags x <*> pure frags
     _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
@@ -106,20 +103,21 @@ validate (AST.QueryDocument defns) = runValidator $ do
 
 -- * Operations
 
-validateOperations :: [(Name, (OperationType, AST.Node))] -> Validation Operations
-validateOperations ops = do
+validateOperations :: Fragments -> [(Name, (OperationType, AST.Node))] -> Validation Operations
+validateOperations fragments ops = do
   deduped <- mapErrors DuplicateOperation (makeMap ops)
   Operations <$> traverse validateNode deduped
   where
     validateNode :: (OperationType, AST.Node) -> Validation Operation
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType vars <$> validateDirectives directives <*> pure ss
+      operationType vars <$> validateDirectives directives <*> validateSelectionSet fragments ss
 
 -- * Arguments
 
 -- | The set of arguments for a given field, directive, etc.
 --
 -- Note that the 'value' can be a variable.
+-- TODO: Rename to 'Arguments'
 type ArgumentSet = Map Name AST.Value
 
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
@@ -217,7 +215,7 @@ validateSelection selection =
 
 -- | Resolve the fragment references in a selection, accumulating a set of
 -- visited fragment names.
-resolveSelection :: Map Name (FragmentDefinition FragmentSpread) -> Selection UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection FragmentSpread)
+resolveSelection :: Fragments -> Selection UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection FragmentSpread)
 resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSpread selection
   where
     resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
@@ -228,6 +226,14 @@ resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSp
           modify (Set.insert name)
           pure (FragmentSpread name directive fragment)
 
+validateSelectionSet :: Fragments -> [AST.Selection] -> Validation [Selection FragmentSpread]
+validateSelectionSet fragments selections = do
+  unresolved <- traverse validateSelection selections
+  -- TODO: Do something with the used fragment names
+  resolved <- evalStateT (traverse (resolveSelection fragments) unresolved) mempty
+  -- TODO: Check that the fields are mergable.
+  pure resolved
+
 -- * Fragment definitions
 
 -- | A validated fragment definition.
@@ -237,6 +243,8 @@ resolveSelection fragments selection = traverseFragmentSpreads resolveFragmentSp
 data FragmentDefinition spread
   = FragmentDefinition Name TypeCondition Directives [Selection spread]
   deriving (Eq, Show)
+
+type Fragments = Map Name (FragmentDefinition FragmentSpread)
 
 -- | Ensure fragment definitions are uniquely named, and that their arguments
 -- and directives are sane.
@@ -262,7 +270,7 @@ validateFragmentDefinitions frags = do
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-spread-target-defined>
 -- <https://facebook.github.io/graphql/#sec-Fragment-spreads-must-not-form-cycles>
-resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validation (Map Name (FragmentDefinition FragmentSpread), Set Name)
+resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validation (Fragments, Set Name)
 resolveFragmentDefinitions allFragments =
   splitResult <$> traverse resolveFragment allFragments
   where
@@ -270,7 +278,7 @@ resolveFragmentDefinitions allFragments =
     -- definitions to the resolved fragment and visited names. We want to
     -- split out the visited names and combine them so that later we can
     -- report on the _un_visited names.
-    splitResult :: Map Name (FragmentDefinition FragmentSpread, Set Name) -> (Map Name (FragmentDefinition FragmentSpread), Set Name)
+    splitResult :: Map Name (FragmentDefinition FragmentSpread, Set Name) -> (Fragments, Set Name)
     splitResult mapWithVisited = (map fst mapWithVisited, foldMap snd mapWithVisited)
 
     -- | Resolves all references to fragments in a fragment definition,
