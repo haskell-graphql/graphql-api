@@ -31,6 +31,7 @@ import Protolude hiding (Enum)
 import GHC.TypeLits (KnownSymbol)
 import qualified GHC.TypeLits as TypeLits
 
+import qualified Data.Map as Map
 import GraphQL.API
   ( (:>)
   , HasAnnotatedType(..)
@@ -40,13 +41,20 @@ import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Schema (HasName(..))
-import GraphQL.Internal.Input (CanonicalQuery)
+import GraphQL.Internal.Validation
+  ( SelectionSet
+  , Field
+  , HasArguments(..)
+  , Arguments
+  , getFields
+  , getFieldSelectionSet
+  )
 
 data ResolverError
   -- | There was a problem in the schema. Server-side problem.
   = SchemaError AST.NameError
   -- | Couldn't find the requested field in the object. A client-side problem.
-  | FieldNotFoundError AST.Selection
+  | FieldNotFoundError Field
   -- | No value provided for name, and no default specified. Client-side problem.
   | ValueMissing AST.Name
   -- | Could not translate value into Haskell. Probably a client-side problem.
@@ -56,6 +64,7 @@ data ResolverError
   -- | We tried to resolve something that wasn't a field. Once our validation
   -- stuff is sorted out this error should go away.
   | ResolveNonField AST.Selection
+  | UnresolvedVariable AST.Name AST.Value
   deriving (Show, Eq)
 
 -- | Object field separation operator.
@@ -105,11 +114,11 @@ ok :: GValue.Value -> Result GValue.Value
 ok = pure
 
 
--- TODO instead of SelectionSet we want something like
--- NormalizedSelectionSet which has query fragments etc. resolved.
+-- TODO: It's not crystal clear that "SelectionSet" should be the entry point.
+-- "Operation" would probably be more appropriate.
 class HasGraph m a where
   type Handler m a
-  buildResolver :: Handler m a -> CanonicalQuery -> m (Result GValue.Value)
+  buildResolver :: Handler m a -> SelectionSet -> m (Result GValue.Value)
 
 
 -- | Specify a default value for a type in a GraphQL schema.
@@ -177,13 +186,11 @@ instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (
   buildResolver handler _ = (pure . ok . API.enumToValue) handler
 
 
--- TODO: lookup is O(N^2) in number of arguments (we linearly search
--- each argument in the list) but considering the graphql use case
--- where N usually < 10 this is probably OK.
-lookupValue :: AST.Name -> [AST.Argument] -> Maybe GValue.Value
-lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) args of
-  Nothing -> Nothing
-  Just (AST.Argument _ value) -> GValue.astToValue value
+-- TODO: lookup is O(N log N) in number of arguments (we linearly search each
+-- argument in the list) but considering the graphql use case where N usually
+-- < 10 this is probably OK.
+lookupValue :: AST.Name -> Arguments -> Maybe GValue.Value
+lookupValue name args = GValue.astToValue =<< Map.lookup name args
 
 
 -- TODO: variables should error, they should have been resolved already.
@@ -201,16 +208,14 @@ lookupValue name args = case find (\(AST.Argument name' _) -> name' == name) arg
 -- name doesn't match.
 data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value))
 
-
-
 -- Iterate through handlers (zipped together with their type
 -- definition) and execute handler if the name matches.
 type ResolveFieldResult = Result (Maybe GValue.ObjectField)
 
 resolveField :: forall a (m :: Type -> Type). (BuildFieldResolver m a, Monad m)
-  => FieldHandler m a -> m ResolveFieldResult -> AST.Selection -> m ResolveFieldResult
-resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ queryFieldName _ _ _)) =
-  case buildFieldResolver @m @a handler selection of
+  => FieldHandler m a -> m ResolveFieldResult -> Field -> m ResolveFieldResult
+resolveField handler nextHandler field =
+  case buildFieldResolver @m @a handler field of
     -- TODO the fact that this doesn't fit together nicely makes me think that ObjectField is not a good idea)
     Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
     Right (NamedValueResolver name' resolver) -> runResolver name' resolver
@@ -221,9 +226,7 @@ resolveField handler nextHandler selection@(AST.SelectionField (AST.Field _ quer
           Result errs value <- resolver
           pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
       | otherwise = nextHandler
-resolveField _ _ f =
-  pure (Result [ResolveNonField f] Nothing)
-
+    queryFieldName = getName field
 
 -- | Derive the handler type from the Field/Argument type in a closed
 -- type family: We don't want anyone else to extend this ever.
@@ -232,15 +235,14 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (API.Argument ks t :> f) = t -> FieldHandler m f
 
 class BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> AST.Selection -> Either ResolverError (NamedValueResolver m)
+  buildFieldResolver :: FieldHandler m a -> Field -> Either ResolverError (NamedValueResolver m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (API.Field ks t) where
-  buildFieldResolver handler (AST.SelectionField (AST.Field _ _ _ _ selectionSet)) = do
-    let resolver = buildResolver @m @t handler selectionSet
-    field <- first SchemaError (API.getFieldDefinition @(API.Field ks t))
-    let name = getName field
+  buildFieldResolver handler field = do
+    let resolver = buildResolver @m @t handler (getFieldSelectionSet field)
+    field' <- first SchemaError (API.getFieldDefinition @(API.Field ks t))
+    let name = getName field'
     Right (NamedValueResolver name resolver)
-  buildFieldResolver _ f = Left (ResolveNonField f)
 
 
 instance forall ks t f m.
@@ -251,14 +253,14 @@ instance forall ks t f m.
   , HasAnnotatedInputType t
   , Monad m
   ) => BuildFieldResolver m (API.Argument ks t :> f) where
-  buildFieldResolver handler selection@(AST.SelectionField (AST.Field _ _ arguments _ _)) = do
+  buildFieldResolver handler field = do
     argument <- first SchemaError (API.getArgumentDefinition @(API.Argument ks t))
     let argName = getName argument
+    let arguments = getArguments field
     value <- case lookupValue argName arguments of
       Nothing -> valueMissing @t argName
       Just v -> first (InvalidValue argName) (GValue.fromValue @t v)
-    buildFieldResolver @m @f (handler value) selection
-  buildFieldResolver _ f = Left (ResolveNonField f)
+    buildFieldResolver @m @f (handler value) field
 
 
 -- We only allow Field and Argument :> Field combinations:
@@ -282,7 +284,7 @@ type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
 class RunFields m a where
   -- runFields is run on a single AST.Selection so it can only ever
   -- return one ObjectField.
-  runFields :: RunFieldsHandler m a -> AST.Selection -> m ResolveFieldResult
+  runFields :: RunFieldsHandler m a -> Field -> m ResolveFieldResult
 
 instance forall f fs m.
          ( BuildFieldResolver m f
@@ -298,19 +300,19 @@ instance forall ks t m.
          ( BuildFieldResolver m (API.Field ks t)
          , Monad m
          ) => RunFields m (API.Field ks t) where
-  runFields handler selection =
-    resolveField @(API.Field ks t) @m handler nextHandler selection
+  runFields handler field =
+    resolveField @(API.Field ks t) @m handler nextHandler field
     where
-      nextHandler = pure (Result [FieldNotFoundError selection] Nothing)
+      nextHandler = pure (Result [FieldNotFoundError field] Nothing)
 
 instance forall m a b.
          ( BuildFieldResolver m (a :> b)
          , Monad m
          ) => RunFields m (a :> b) where
-  runFields handler selection =
-    resolveField @(a :> b) @m handler nextHandler selection
+  runFields handler field =
+    resolveField @(a :> b) @m handler nextHandler field
     where
-      nextHandler = pure (Result [FieldNotFoundError selection] Nothing)
+      nextHandler = pure (Result [FieldNotFoundError field] Nothing)
 
 
 instance forall typeName interfaces fields m.
@@ -322,9 +324,10 @@ instance forall typeName interfaces fields m.
   buildResolver mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- mHandler
+    let fields = getFields selectionSet
     -- We're evaluating an Object so we're collecting ObjectFields from
     -- runFields and build a GValue.Map with them.
-    r <- forM selectionSet (runFields @m @(RunFieldsType m fields) handler)
+    r <- forM fields (runFields @m @(RunFieldsType m fields) handler)
     -- let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
     let (Result errs obj)  = GValue.makeObject . catMaybes <$> sequenceA r
     case obj of

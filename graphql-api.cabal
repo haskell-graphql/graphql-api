@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.14.1.
+-- This file has been generated from package.yaml by hpack version 0.15.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -36,11 +36,11 @@ library
     , QuickCheck
     , text
   exposed-modules:
+      GraphQL
       GraphQL.API
       GraphQL.Internal.Arbitrary
       GraphQL.Internal.AST
       GraphQL.Internal.Encoder
-      GraphQL.Internal.Input
       GraphQL.Internal.Output
       GraphQL.Internal.Parser
       GraphQL.Internal.Schema

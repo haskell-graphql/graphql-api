@@ -33,11 +33,20 @@
 -- Because all of the above rely on type checking.
 module GraphQL.Internal.Validation
   ( ValidationError(..)
+  , ValidationErrors
   , QueryDocument
   , validate
   , getErrors
   -- * Operating on validated documents
+  , HasArguments(..)
+  , Arguments
+  , Operation
   , getOperation
+  , getSelectionSet
+  , SelectionSet
+  , getFields
+  , Field
+  , getFieldSelectionSet
   -- * Exported for testing
   , findDuplicates
   ) where
@@ -52,6 +61,7 @@ import qualified GraphQL.Internal.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
 import GraphQL.Internal.AST (Name, Alias, TypeCondition)
+import GraphQL.Internal.Schema (HasName(..))
 
 -- | A valid query document.
 --
@@ -64,14 +74,26 @@ data QueryDocument
   deriving (Eq, Show)
 
 data Operation
-  = Query [AST.VariableDefinition] Directives [Selection FragmentSpread]
-  | Mutation  [AST.VariableDefinition] Directives [Selection FragmentSpread]
+  = Query [AST.VariableDefinition] Directives SelectionSet
+  | Mutation  [AST.VariableDefinition] Directives SelectionSet
   deriving (Eq, Show)
 
+-- | Get the selection set for an operation.
+--
+-- TODO: This doesn't return the *actual* selection set we need, because it
+-- hasn't substituted variables or applied directives.
+getSelectionSet :: Operation -> SelectionSet
+getSelectionSet (Query _ _ ss) = ss
+getSelectionSet (Mutation _ _ ss) = ss
+
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
-type OperationType = [AST.VariableDefinition] -> Directives -> [Selection FragmentSpread] -> Operation
+type OperationType = [AST.VariableDefinition] -> Directives -> SelectionSet -> Operation
 
 newtype Operations = Operations (Map Name Operation) deriving (Eq, Show)
+
+type SelectionSet = [Selection]
+
+type Selection = Selection' FragmentSpread
 
 -- | Get an operation from a GraphQL document
 --
@@ -159,6 +181,10 @@ type Arguments = Map Name AST.Value
 validateArguments :: [AST.Argument] -> Validation Arguments
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
+class HasArguments a where
+  -- | Get the arguments.
+  getArguments :: a -> Arguments
+
 -- * Selections
 
 -- $fragmentSpread
@@ -183,17 +209,39 @@ validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | A
 -- imply that everything is valid.
 
 -- | A GraphQL selection.
-data Selection spread
-  = SelectionField (Field spread)
+data Selection' spread
+  = SelectionField (Field' spread)
   | SelectionFragmentSpread spread
   | SelectionInlineFragment (InlineFragment spread)
   deriving (Eq, Show)
 
+-- | Get all of the fields directly inside the given selection set.
+--
+-- TODO: This ignores fragments, whereas it should actually do something with
+-- them.
+--
+-- TODO: At this point, we ought to know that field names are unique. As such,
+-- we should return an ordered map of Name to Fields, rather than a bland
+-- list.
+getFields :: SelectionSet -> [Field]
+getFields ss = [field | SelectionField field <- ss]
+
 -- | A field in a selection set, which itself might have children which might
 -- have fragment spreads.
-data Field spread
-  = Field (Maybe Alias) Name Arguments Directives [Selection spread]
+data Field' spread
+  = Field' (Maybe Alias) Name Arguments Directives [Selection' spread]
   deriving (Eq, Show)
+
+instance HasName (Field' spread) where
+  getName (Field' _ name _ _ _) = name
+
+instance HasArguments (Field' spread) where
+  getArguments (Field' _ _ args _ _) = args
+
+type Field = Field' FragmentSpread
+
+getFieldSelectionSet :: Field' spread -> [Selection' spread]
+getFieldSelectionSet (Field' _ _ _ _ ss) = ss
 
 -- | A fragment spread that has a valid set of directives, but may or may not
 -- refer to a fragment that actually exists.
@@ -208,7 +256,7 @@ data FragmentSpread
 
 -- | An inline fragment, which itself can contain fragment spreads.
 data InlineFragment spread
-  = InlineFragment TypeCondition Directives [Selection spread]
+  = InlineFragment TypeCondition Directives [Selection' spread]
   deriving (Eq, Show)
 
 -- | Traverse through every fragment spread in a selection.
@@ -220,11 +268,11 @@ data InlineFragment spread
 -- 'Selection'. However, we probably also want to have other kinds of
 -- traversals (e.g. for transforming values), so best not to bless one kind
 -- with a type class.
-traverseFragmentSpreads :: Applicative f => (a -> f b) -> Selection a -> f (Selection b)
+traverseFragmentSpreads :: Applicative f => (a -> f b) -> Selection' a -> f (Selection' b)
 traverseFragmentSpreads f selection =
   case selection of
-    SelectionField (Field alias name args directives ss) ->
-      SelectionField <$> (Field alias name args directives <$> childSegments ss)
+    SelectionField (Field' alias name args directives ss) ->
+      SelectionField <$> (Field' alias name args directives <$> childSegments ss)
     SelectionFragmentSpread x ->
       SelectionFragmentSpread <$> f x
     SelectionInlineFragment (InlineFragment typeCond directives ss) ->
@@ -233,11 +281,11 @@ traverseFragmentSpreads f selection =
     childSegments = traverse (traverseFragmentSpreads f)
 
 -- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validation (Selection UnresolvedFragmentSpread)
+validateSelection :: AST.Selection -> Validation (Selection' UnresolvedFragmentSpread)
 validateSelection selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
-      SelectionField <$> (Field alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
+      SelectionField <$> (Field' alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
     AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
       SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)
     AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
@@ -251,7 +299,7 @@ validateSelection selection =
 -- We're doing a standard depth-first traversal of fragment references, where
 -- references are by name, so the set of names can be thought of as a record
 -- of visited references.
-resolveSelection :: Fragments -> Selection UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection FragmentSpread)
+resolveSelection :: Fragments -> Selection' UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection' FragmentSpread)
 resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
     resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
@@ -262,7 +310,7 @@ resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
           modify (Set.insert name)
           pure (FragmentSpread name directive fragment)
 
-validateSelectionSet :: Fragments -> [AST.Selection] -> StateT (Set Name) Validation [Selection FragmentSpread]
+validateSelectionSet :: Fragments -> [AST.Selection] -> StateT (Set Name) Validation SelectionSet
 validateSelectionSet fragments selections = do
   unresolved <- lift (traverse validateSelection selections)
   resolved <- traverse (resolveSelection fragments) unresolved
@@ -276,7 +324,7 @@ validateSelectionSet fragments selections = do
 -- @spread@ indicates whether references to other fragment definitions have
 -- been resolved.
 data FragmentDefinition spread
-  = FragmentDefinition Name TypeCondition Directives [Selection spread]
+  = FragmentDefinition Name TypeCondition Directives [Selection' spread]
   deriving (Eq, Show)
 
 type Fragments = Map Name (FragmentDefinition FragmentSpread)
@@ -400,6 +448,8 @@ data ValidationError
   -- <https://facebook.github.io/graphql/#sec-Fragments-Must-Be-Used>
   | UnusedFragments (Set Name)
   deriving (Eq, Show)
+
+type ValidationErrors = NonEmpty ValidationError
 
 -- | Type alias for our most common kind of validator.
 type Validation = Validator ValidationError
