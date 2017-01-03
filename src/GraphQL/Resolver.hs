@@ -44,8 +44,8 @@ import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Validation
   ( SelectionSet
   , Field
-  , HasArguments(..)
   , Arguments
+  , getArguments
   , getFields
   , getFieldSelectionSet
   )

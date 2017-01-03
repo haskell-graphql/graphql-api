@@ -38,8 +38,6 @@ module GraphQL.Internal.Validation
   , validate
   , getErrors
   -- * Operating on validated documents
-  , HasArguments(..)
-  , Arguments
   , Operation
   , getOperation
   , getSelectionSet
@@ -47,6 +45,8 @@ module GraphQL.Internal.Validation
   , getFields
   , Field
   , getFieldSelectionSet
+  , Arguments
+  , getArguments
   -- * Exported for testing
   , findDuplicates
   ) where
@@ -181,10 +181,6 @@ type Arguments = Map Name AST.Value
 validateArguments :: [AST.Argument] -> Validation Arguments
 validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
-class HasArguments a where
-  -- | Get the arguments.
-  getArguments :: a -> Arguments
-
 -- * Selections
 
 -- $fragmentSpread
@@ -235,11 +231,13 @@ data Field' spread
 instance HasName (Field' spread) where
   getName (Field' _ name _ _ _) = name
 
-instance HasArguments (Field' spread) where
-  getArguments (Field' _ _ args _ _) = args
-
 type Field = Field' FragmentSpread
 
+-- | Get the arguments of a field.
+getArguments :: Field -> Arguments
+getArguments (Field' _ _ args _ _) = args
+
+-- | Get the selection set within a field.
 getFieldSelectionSet :: Field' spread -> [Selection' spread]
 getFieldSelectionSet (Field' _ _ _ _ ss) = ss
 
