@@ -61,9 +61,8 @@ data ResolverError
   | InvalidValue AST.Name Text
   -- | Found duplicate fields in set.
   | DuplicateFields [ResolveFieldResult]
-  -- | We tried to resolve something that wasn't a field. Once our validation
-  -- stuff is sorted out this error should go away.
-  | ResolveNonField AST.Selection
+  -- | We found a variable in an input value. We should only have constants at
+  -- this point.
   | UnresolvedVariable AST.Name AST.Value
   deriving (Show, Eq)
 
