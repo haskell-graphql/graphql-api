@@ -106,15 +106,12 @@ aggregateResults r = GValue.toValue <$> sequenceA r
 
 instance Applicative Result where
   pure v = Result [] v
-  -- TODO it's not obvious to me that this is the right function...
   (Result e1 f) <*> (Result e2 x) = Result (e1 <> e2) (f x)
 
 ok :: GValue.Value -> Result GValue.Value
 ok = pure
 
 
--- TODO: It's not crystal clear that "SelectionSet" should be the entry point.
--- "Operation" would probably be more appropriate.
 class HasGraph m a where
   type Handler m a
   buildResolver :: Handler m a -> SelectionSet -> m (Result GValue.Value)
@@ -153,9 +150,6 @@ instance Defaultable (Maybe a) where
   -- | The default for @Maybe a@ is @Nothing@.
   defaultFor _ = pure Nothing
 
--- TODO not super hot on individual values having to be instances of
--- HasGraph but not sure how else we can nest either types or
--- (Object _ _ fields). Maybe instead of field we need a "SubObject"?
 instance forall m. (Functor m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)

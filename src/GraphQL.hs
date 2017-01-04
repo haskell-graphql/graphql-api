@@ -6,7 +6,7 @@ module GraphQL
   ( QueryError
   , SelectionSet
   , getOperation
-  , processQuery
+  , compileQuery
   ) where
 
 import Protolude
@@ -35,10 +35,8 @@ data QueryError
   deriving (Eq, Show)
 
 -- | Turn some text into a valid query document.
---
--- TODO: jml hates the name of this function, \"process\" is so meaningless.
-processQuery :: Text -> Either QueryError QueryDocument
-processQuery query = do
+compileQuery :: Text -> Either QueryError QueryDocument
+compileQuery query = do
   parsed <- first ParseError (parseQuery query)
   first ValidationError (validate parsed)
 

@@ -55,5 +55,5 @@ example = buildResolver @IO @Query root (query "{ root(path: \"/etc\") { entries
 
 query :: Text -> SelectionSet
 query q = either panic identity $ do
-  document <- first show (processQuery q)
+  document <- first show (compileQuery q)
   note "Multiple operations defined" (getOperation document Nothing)

@@ -8,7 +8,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL
   ( SelectionSet
-  , processQuery
+  , compileQuery
   , getOperation
   )
 import GraphQL.API
@@ -42,7 +42,7 @@ tHandler =
 
 getQuery :: Text -> SelectionSet
 getQuery query = either panic identity $ do
-  validated <- first show (processQuery query)
+  validated <- first show (compileQuery query)
   note "Multiple operations found. Must specify name." (getOperation validated Nothing)
 
 runQuery :: SelectionSet -> IO (Either Text (Result Value))
