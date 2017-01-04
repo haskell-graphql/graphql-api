@@ -72,6 +72,9 @@ data ResolverError
   -- | We tried to resolve something that wasn't a field. Once our validation
   -- stuff is sorted out this error should go away.
   | ResolveNonField AST.Selection
+  -- | We tried to resolve something that wasn't a union type despite
+  -- expecting one.
+  | ResolveNonUnionType
   -- | We tried to use an inline fragment with a name that the union
   -- type does not support.
   | UnionTypeNotFound
@@ -352,7 +355,7 @@ type family TypeIndex (m :: Type -> Type) (o :: Type) (union :: Type) = (r :: Ty
 
 -- types are just to tag the type, and to represent the valid types
 type role DynamicUnionValue representational representational
-data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { label :: Text, value :: GHC.Exts.Any }
+data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 -- For each Object in the union we check if the name matches the
 -- DynamicUnionValue, and if it does we execute the handler
@@ -361,21 +364,22 @@ data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue {
 --  * Current Object of union looked at
 --  * DynamicUnionValue
 class RunUnion m union objects where
-  runUnion :: DynamicUnionValue union m -> Selection -> m (Result GValue.Value) -- TODO return Result
+  runUnion :: DynamicUnionValue union m -> Selection -> m (Maybe (Result GValue.Value)) -- TODO return Result
 
-instance forall m union os n i f uName objs.
+instance forall m union os n i f.
   ( Monad m
   , KnownSymbol n
   , TypeIndex m (API.Object n i f) union ~ Handler m (API.Object n i f)
   , RunFields m (RunFieldsType m f)
   , RunUnion m union os
   ) => RunUnion m union ((API.Object n i f):os) where
-  runUnion duv@(DynamicUnionValue label _) fragment@(SelectionInlineFragmentPattern (AST.NamedType name') selection) =
-    if label == AST.getNameText name'
+  runUnion duv@(DynamicUnionValue _label _) fragment@(SelectionInlineFragmentPattern (AST.NamedType name') selection) =
+    if _label == AST.getNameText name'
     then case extractUnionValue @(API.Object n i f) @union @m duv of
            Nothing -> runUnion @m @union @os duv fragment
-           Just handler -> buildResolver @m @(API.Object n i f) handler selection
+           Just handler -> Just <$> (buildResolver @m @(API.Object n i f) handler selection)
     else runUnion @m @union @os duv fragment -- TODO is this the error condition?
+  runUnion _ _ = pure Nothing
 
 instance forall m union. RunUnion m union '[] where
   runUnion _ _ = notImplemented -- TODO error case
@@ -390,17 +394,21 @@ instance forall m unionName objects.
   ) => HasGraph m (API.Union unionName objects) where
   type Handler m (API.Union unionName objects) = DynamicUnionValue (API.Union unionName objects) m
   buildResolver mHandler selectionSet = do
-    let duv@(DynamicUnionValue label _) = mHandler
+    let duv@(DynamicUnionValue _label _) = mHandler
     -- we only need to look at the fragment that matches:
-    case find (matchFragmentName label) selectionSet of
+    case find (matchFragmentName _label) selectionSet of
       Nothing -> pure (Result [UnionTypeNotFound] GValue.ValueNull) -- TODO more error detail
       Just fragment -> do
         -- loop through union handlers and call right one when type matches.
-        runUnion @m @(API.Union unionName objects) @objects duv fragment
+        r <- runUnion @m @(API.Union unionName objects) @objects duv fragment
+        case r of
+          Just r' -> pure r'
+          Nothing -> pure (Result [ResolveNonUnionType] GValue.ValueNull)
 
       where
-        matchFragmentName label' (SelectionInlineFragmentPattern (AST.NamedType name') selection) =
+        matchFragmentName label' (SelectionInlineFragmentPattern (AST.NamedType name') _) =
           label' == AST.getNameText name'
+        matchFragmentName _ _ = False
 
 
 symbolText :: forall ks. KnownSymbol ks => Text
