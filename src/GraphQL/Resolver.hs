@@ -9,14 +9,16 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE RoleAnnotations #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module GraphQL.Resolver
   ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasGraph(..)
   , (:<>)(..)
-  , (:<|>)(..)
   , BuildFieldResolver(..)
   , Result(..)
+  , unionValue
   ) where
 
 -- TODO (probably incomplete, the spec is large)
@@ -27,9 +29,10 @@ module GraphQL.Resolver
 -- - Directives (https://facebook.github.io/graphql/#sec-Type-System.Directives)
 -- - Enforce non-empty lists (might only be doable via value-level validation)
 
-import Protolude hiding (Enum)
-import GHC.TypeLits (KnownSymbol)
-import qualified GHC.TypeLits as TypeLits
+import Protolude hiding (Enum, TypeError)
+import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..), Symbol, symbolVal)
+import qualified GHC.Exts (Any)
+import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Data.Map as Map
 import GraphQL.API
@@ -43,6 +46,8 @@ import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Validation
   ( SelectionSet
+  , pattern SelectionInlineFragmentPattern
+  , Selection
   , Field
   , Arguments
   , getArguments
@@ -64,6 +69,12 @@ data ResolverError
   -- | We found a variable in an input value. We should only have constants at
   -- this point.
   | UnresolvedVariable AST.Name AST.Value
+  -- | We tried to resolve something that wasn't a field. Once our validation
+  -- stuff is sorted out this error should go away.
+  | ResolveNonField AST.Selection
+  -- | We tried to use an inline fragment with a name that the union
+  -- type does not support.
+  | UnionTypeNotFound
   deriving (Show, Eq)
 
 -- | Object field separation operator.
@@ -88,10 +99,6 @@ data ResolverError
 -- >>> let myObjectHandler = pure $ fooHandler :<> barHandler :<> ()
 data a :<> b = a :<> b
 infixr 8 :<>
-
--- | Union type separation operator.
-data a :<|> b = a :<|> b
-infixr 8 :<|>
 
 
 -- Result collects errors and values at the same time unless a handler
@@ -262,16 +269,16 @@ type family RunFieldsType (m :: Type -> Type) (a :: [Type]) = (r :: Type) where
   RunFieldsType m '[a :> b] = a :> b
   RunFieldsType m ((API.Field ks t) ': rest) = API.Field ks t :<> RunFieldsType m rest
   RunFieldsType m ((a :> b) ': rest) = (a :> b) :<> RunFieldsType m rest
-  RunFieldsType m a = TypeLits.TypeError (
-    'TypeLits.Text "All field entries in an Object must be Field or Argument :> Field. Got: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+  RunFieldsType m a = TypeError (
+    'Text "All field entries in an Object must be Field or Argument :> Field. Got: " ':<>: 'ShowType a)
 
 -- Match the three possible cases for Fields (see also RunFieldsType)
 type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
   RunFieldsHandler m (f :<> fs) = FieldHandler m f :<> RunFieldsHandler m fs
   RunFieldsHandler m (API.Field ks t) = FieldHandler m (API.Field ks t)
   RunFieldsHandler m (a :> b) = FieldHandler m (a :> b)
-  RunFieldsHandler m a = TypeLits.TypeError (
-    'TypeLits.Text "Unexpected RunFieldsHandler types: " 'TypeLits.:<>: 'TypeLits.ShowType a)
+  RunFieldsHandler m a = TypeError (
+    'Text "Unexpected RunFieldsHandler types: " ':<>: 'ShowType a)
 
 
 class RunFields m a where
@@ -326,3 +333,98 @@ instance forall typeName interfaces fields m.
     case obj of
       Nothing -> pure (Result [DuplicateFields r] GValue.ValueNull)
       Just object -> pure (Result errs (GValue.ValueObject object))
+
+
+-- TODO(tom): we're getting to a point where it might make sense to
+-- split resolver into submodules (GraphQL.Resolver.Union  etc.)
+
+-- TODO(tom): document what we're doing here.
+type family TypeIndex (m :: Type -> Type) (o :: Type) (union :: Type) = (r :: Type) where
+  TypeIndex m (API.Object name i f) (API.Union uName ((API.Object name i f):os)) =
+    Handler m (API.Object name i f)
+  TypeIndex m (API.Object name i f) (API.Union uName ((API.Object name' i' f'):os)) =
+    TypeIndex m (API.Object name i f) (API.Union uName os)
+  -- Slightly nicer type errors:
+  TypeIndex m (API.Object name i f) x =
+    TypeError ('Text "3rd type must be a union but it is: " ':<>: 'ShowType x)
+  TypeIndex _ o _ =
+    TypeError ('Text "Type not found in union definition: " ':<>: 'ShowType o)
+
+-- types are just to tag the type, and to represent the valid types
+type role DynamicUnionValue representational representational
+data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { label :: Text, value :: GHC.Exts.Any }
+
+-- For each Object in the union we check if the name matches the
+-- DynamicUnionValue, and if it does we execute the handler
+-- Inputs:
+--  * InlineFragment name
+--  * Current Object of union looked at
+--  * DynamicUnionValue
+class RunUnion m union objects where
+  runUnion :: DynamicUnionValue union m -> Selection -> m (Result GValue.Value) -- TODO return Result
+
+instance forall m union os n i f uName objs.
+  ( Monad m
+  , KnownSymbol n
+  , TypeIndex m (API.Object n i f) union ~ Handler m (API.Object n i f)
+  , RunFields m (RunFieldsType m f)
+  , RunUnion m union os
+  ) => RunUnion m union ((API.Object n i f):os) where
+  runUnion duv@(DynamicUnionValue label _) fragment@(SelectionInlineFragmentPattern (AST.NamedType name') selection) =
+    if label == AST.getNameText name'
+    then case extractUnionValue @(API.Object n i f) @union @m duv of
+           Nothing -> runUnion @m @union @os duv fragment
+           Just handler -> buildResolver @m @(API.Object n i f) handler selection
+    else runUnion @m @union @os duv fragment -- TODO is this the error condition?
+
+instance forall m union. RunUnion m union '[] where
+  runUnion _ _ = notImplemented -- TODO error case
+
+-- TODO empty list of RunUnion
+
+-- TODO: list version (I think)
+instance forall m unionName objects.
+  ( Monad m
+  , KnownSymbol unionName
+  , RunUnion m (API.Union unionName objects) objects
+  ) => HasGraph m (API.Union unionName objects) where
+  type Handler m (API.Union unionName objects) = DynamicUnionValue (API.Union unionName objects) m
+  buildResolver mHandler selectionSet = do
+    let duv@(DynamicUnionValue label _) = mHandler
+    -- we only need to look at the fragment that matches:
+    case find (matchFragmentName label) selectionSet of
+      Nothing -> pure (Result [UnionTypeNotFound] GValue.ValueNull) -- TODO more error detail
+      Just fragment -> do
+        -- loop through union handlers and call right one when type matches.
+        runUnion @m @(API.Union unionName objects) @objects duv fragment
+
+      where
+        matchFragmentName label' (SelectionInlineFragmentPattern (AST.NamedType name') selection) =
+          label' == AST.getNameText name'
+
+
+symbolText :: forall ks. KnownSymbol ks => Text
+symbolText = toS (symbolVal @ks Proxy)
+
+-- | Build a tagged handler for an Object. This allows us to create a
+-- list of DynamicUnionValue that have the same type, but are backed
+-- by different handlers. We can then extract the correct handler
+-- based on a name (the name comes from an inline fragment).
+--
+-- Use e.g. like "unionValue @O1 @U1" - the @U1 is not neccessary when
+-- GHC can infer it.
+unionValue ::
+  forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
+  (Monad m, API.Object name i f ~ o, KnownSymbol name)
+  => TypeIndex m o union -> DynamicUnionValue union m
+unionValue x =
+  DynamicUnionValue (symbolText @name) (unsafeCoerce x)
+
+extractUnionValue ::
+  forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
+  (Monad m, API.Object name i f ~ o, KnownSymbol name) -- TODO probably don't need all constraints here
+  => DynamicUnionValue union m -> Maybe (TypeIndex m o union)
+extractUnionValue (DynamicUnionValue uName uValue) =
+  if uName == symbolText @name
+  then Just (unsafeCoerce uValue)
+  else Nothing

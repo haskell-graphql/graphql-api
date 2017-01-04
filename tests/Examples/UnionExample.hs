@@ -5,38 +5,33 @@ module Examples.UnionExample  where
 -- spec. The server decides the return type and we'll probably need an
 -- open sum type for returning.
 
-{-
 
-import Protolude hiding (Enum)
-import qualified GraphQL.Internal.AST as AST
-import Data.Attoparsec.Text (parseOnly, endOfInput)
-import GraphQL.Internal.Parser (queryDocument)
-
-
+import Protolude hiding (Enum, U1)
+import qualified GraphQL.Internal.Validation as Validation
 import GraphQL.API
-import GraphQL.Server
+import GraphQL (compileQuery, getOperation)
+import GraphQL.Resolver
 import GraphQL.Value (Value)
 
 type O1 = Object "O1" '[] '[Field "o1" Text]
-type O2 = Object "O2" '[] '[Field "o2" Text]
+type O2 = Object "O2" '[] '[Field "o2" Int32]
 
-type T = Union "U" '[O1, O2]
+type U1 = Union "U1" '[O1, O2]
 
 o1 :: Handler IO O1
 o1 = pure (pure "hello from O1")
 
 o2 :: Handler IO O2
-o2 = pure (pure "hello from O2")
+o2 = pure (pure 32)
 
-tHandler :: Handler IO T
-tHandler = o1 :<|> o2
+u1 :: Handler IO U1
+u1 = unionValue @O2 o2
 
-exampleQuery :: IO Value
-exampleQuery = buildResolver @IO @T tHandler (query "{ ... on O1 { o1 } ... on O2 { o2 } }")
+exampleQuery :: IO (Result Value)
+exampleQuery = buildResolver @IO @U1 u1 (query "{ ... on O1 { o1 } ... on O2 { o2 } }")
 
-query :: Text -> AST.SelectionSet
+query :: Text -> Validation.SelectionSet
 query q =
-  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-       parseOnly (queryDocument <* endOfInput) q
-  in selectionSet
--}
+  let Right doc = compileQuery q
+      Just x = getOperation doc Nothing
+  in x
