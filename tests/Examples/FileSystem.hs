@@ -4,12 +4,10 @@
 module Examples.FileSystem where
 import Protolude hiding (Enum)
 
+import GraphQL
 import GraphQL.API
-import GraphQL.Resolver
-import qualified GraphQL.Internal.AST as AST
+import GraphQL.Resolver (Handler, Result, (:<>)(..), buildResolver)
 import GraphQL.Value (Value)
-import Data.Attoparsec.Text (parseOnly, endOfInput)
-import GraphQL.Internal.Parser (queryDocument)
 
 import qualified System.Directory as SD
 
@@ -51,11 +49,11 @@ root :: Handler IO Query
 root = do
   pure directory
 
+
 example :: IO (Result Value)
 example = buildResolver @IO @Query root (query "{ root(path: \"/etc\") { entries { name } } }")
 
-query :: Text -> AST.SelectionSet
-query q =
-  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-       parseOnly (queryDocument <* endOfInput) q
-  in selectionSet
+query :: Text -> SelectionSet
+query q = either panic identity $ do
+  document <- first show (compileQuery q)
+  note "Multiple operations defined" (getOperation document Nothing)

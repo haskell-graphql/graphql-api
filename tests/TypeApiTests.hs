@@ -6,6 +6,11 @@ import Protolude hiding (Enum)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
+import GraphQL
+  ( SelectionSet
+  , compileQuery
+  , getOperation
+  )
 import GraphQL.API
   ( Object
   , Field
@@ -23,9 +28,6 @@ import GraphQL.Value (Value)
 import qualified GraphQL.Internal.AST as AST
 import Data.Aeson (encode)
 
-import GraphQL.Internal.Parser (queryDocument)
-import Data.Attoparsec.Text (parseOnly, endOfInput)
-
 -- Test a custom error monad
 -- TODO: I didn't realize that MonadThrow throws in the base monad (IO).
 type TMonad = ExceptT Text IO
@@ -38,13 +40,12 @@ tHandler :: Handler TMonad T
 tHandler =
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> (pure . (*2))
 
-getQuery :: Text -> AST.SelectionSet
-getQuery query =
-  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.AnonymousQuery selectionSet)]) =
-        parseOnly (queryDocument <* endOfInput) query
-  in selectionSet
+getQuery :: Text -> SelectionSet
+getQuery query = either panic identity $ do
+  validated <- first show (compileQuery query)
+  note "Multiple operations found. Must specify name." (getOperation validated Nothing)
 
-runQuery :: AST.SelectionSet -> IO (Either Text (Result Value))
+runQuery :: SelectionSet -> IO (Either Text (Result Value))
 runQuery query = runExceptT (buildResolver @TMonad @T tHandler query)
 
 tests :: IO TestTree
