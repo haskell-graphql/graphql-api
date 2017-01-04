@@ -43,6 +43,9 @@ import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.AST (Name(..))
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.OrderedMap (OrderedMap)
+import qualified GraphQL.Internal.OrderedMap as OrderedMap
+
 
 -- | Concrete GraphQL value. Essentially Data.GraphQL.AST.Value, but without
 -- the "variable" field.
@@ -123,18 +126,17 @@ instance ToJSON List where
 --
 -- Note that https://facebook.github.io/graphql/#sec-Response calls these
 -- \"Maps\", but everywhere else in the spec refers to them as objects.
-newtype Object = Object { objectFields :: [ObjectField] } deriving (Eq, Ord, Show)
+newtype Object = Object (OrderedMap Name Value) deriving (Eq, Ord, Show)
+
+objectFields :: Object -> [ObjectField]
+objectFields (Object object) = map (uncurry ObjectField) (OrderedMap.toList object)
 
 instance Arbitrary Object where
   arbitrary = sized genObject
 
 -- | Generate an arbitrary object to the given maximum depth.
 genObject :: Int -> Gen Object
-genObject n = Object <$> fields
-  where
-    fields = zipWith ObjectField <$> names <*> values
-    names = ordNub <$> listOf arbitrary
-    values = listOf (genValue n)
+genObject n = Object <$> OrderedMap.genOrderedMap arbitrary (genValue n)
 
 data ObjectField = ObjectField Name Value deriving (Eq, Ord, Show)
 
@@ -142,22 +144,18 @@ instance Arbitrary ObjectField where
   arbitrary = ObjectField <$> arbitrary <*> arbitrary
 
 makeObject :: [ObjectField] -> Maybe Object
-makeObject fields
-  | fieldNames == ordNub fieldNames = pure (Object fields)
-  | otherwise = empty
-  where
-    fieldNames = [name | ObjectField name _ <- fields]
+makeObject fields = objectFromList [(name, value) | ObjectField name value <- fields]
 
 objectFromList :: [(Name, Value)] -> Maybe Object
-objectFromList = makeObject . map (uncurry ObjectField)
+objectFromList xs = Object <$> OrderedMap.orderedMap xs
 
 unionObjects :: [Object] -> Maybe Object
-unionObjects objects = makeObject (objects >>= objectFields)
+unionObjects objects = Object <$> OrderedMap.unions [obj | Object obj <- objects]
 
 instance ToJSON Object where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Object xs) = toJSON (Map.fromList [(getNameText k, v) | ObjectField k v <- xs])
-  toEncoding (Object xs) = pairs (foldMap (\(ObjectField k v) -> toS (getNameText k) .= v) xs)
+  toJSON (Object xs) = toJSON (Map.fromList [(getNameText k, v) | (k, v) <- OrderedMap.toList xs])
+  toEncoding (Object xs) = pairs (foldMap (\(k, v) -> toS (getNameText k) .= v) (OrderedMap.toList xs))
 
 -- | Turn a Haskell value into a GraphQL value.
 class ToValue a where
@@ -287,9 +285,9 @@ valueToAST (ValueBoolean x) = AST.ValueBoolean x
 valueToAST (ValueString (String x)) = AST.ValueString (AST.StringValue x)
 valueToAST (ValueEnum x) = AST.ValueEnum x
 valueToAST (ValueList (List xs)) = AST.ValueList (AST.ListValue (map valueToAST xs))
-valueToAST (ValueObject (Object fields)) = AST.ValueObject (AST.ObjectValue (map toObjectField fields))
+valueToAST (ValueObject (Object fields)) = AST.ValueObject (AST.ObjectValue (map toObjectField (OrderedMap.toList fields)))
   where
-    toObjectField (ObjectField name value) = AST.ObjectField name (valueToAST value)
+    toObjectField (name, value) = AST.ObjectField name (valueToAST value)
 valueToAST ValueNull = AST.ValueNull
 
 -- | A literal value can be converted to the AST and back.

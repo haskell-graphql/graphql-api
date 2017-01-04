@@ -11,10 +11,11 @@ import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
 import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Value
-  ( Object(..)
+  ( Object
   , ObjectField(..)
   , astToValue
   , unionObjects
+  , objectFields
   , objectFromList
   , prop_roundtripFromAST
   , prop_roundtripFromValue
