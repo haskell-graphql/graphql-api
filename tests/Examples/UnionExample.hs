@@ -15,19 +15,21 @@ type MiniDog = Object "MiniDog" '[] '[Field "barkVolume" Int32]
 type CatOrDog = Union "CatOrDog" '[MiniCat, MiniDog]
 type CatOrDogList = List (Union "CatOrDog" '[MiniCat, MiniDog])
 
-miniCat :: Handler IO MiniCat
-miniCat = pure (pure "Felix" :<> pure 32)
+miniCat :: Text -> Handler IO MiniCat
+miniCat name = pure (pure name :<> pure 32)
 
 miniDog :: Handler IO MiniDog
 miniDog = pure (pure 100)
 
 catOrDog :: Handler IO CatOrDog
-catOrDog = unionValue @MiniCat miniCat
+catOrDog = do
+  name <- pure "Hello" -- we can do nomadic actions
+  unionValue @MiniCat (miniCat name)
 
 catOrDogList :: Handler IO CatOrDogList
 catOrDogList =
-  [ unionValue @MiniCat miniCat
-  , unionValue @MiniCat miniCat
+  [ unionValue @MiniCat (miniCat "Felix")
+  , unionValue @MiniCat (miniCat "Mini")
   , unionValue @MiniDog miniDog
   ]
 
