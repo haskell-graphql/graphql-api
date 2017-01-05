@@ -383,12 +383,10 @@ instance forall m union os n i f.
   , RunFields m (RunFieldsType m f)
   , RunUnion m union os
   ) => RunUnion m union ((API.Object n i f):os) where
-  runUnion duv@(DynamicUnionValue _label _) fragment@(SelectionInlineFragmentPattern (AST.NamedType name') selection) =
-    if _label == AST.getNameText name'
-    then case extractUnionValue @(API.Object n i f) @union @m duv of
-           Nothing -> runUnion @m @union @os duv fragment
-           Just handler -> Just <$> (buildResolver @m @(API.Object n i f) handler selection)
-    else runUnion @m @union @os duv fragment -- TODO is this the error condition?
+  runUnion duv fragment@(SelectionInlineFragmentPattern _ selection) =
+    case extractUnionValue @(API.Object n i f) @union @m duv of
+      Just handler -> Just <$> (buildResolver @m @(API.Object n i f) handler selection)
+      Nothing -> runUnion @m @union @os duv fragment
   runUnion _ _ = pure Nothing
 
 -- TODO(tom): AFAICT it should not be possible to ever hit the empty
@@ -406,7 +404,7 @@ instance forall m unionName objects.
   type Handler m (API.Union unionName objects) = DynamicUnionValue (API.Union unionName objects) m
   buildResolver mHandler selectionSet = do
     let duv@(DynamicUnionValue _label _) = mHandler
-    -- we only need to look at the fragment that matches:
+    -- we only need to look at the fragment that matches by name:
     case find (matchFragmentName _label) selectionSet of
       Nothing -> pure (Result [UnionTypeNotFound] GValue.ValueNull) -- TODO more error detail
       Just fragment -> do
