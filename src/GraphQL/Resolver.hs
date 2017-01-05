@@ -393,8 +393,11 @@ instance forall m union os n i f.
 -- case because the compiler doesn't allow constructing a unionValue
 -- that's not in the Union. If the following code ever gets executed
 -- it's almost certainly a bug in the union code.
+--
+-- We still need to implement this instance for the compiler because
+-- it exhaustively checks all cases when deconstructs the Union.
 instance forall m union. RunUnion m union '[] where
-  runUnion _ _ = notImplemented -- TODO error case
+  runUnion _ _ = notImplemented
 
 instance forall m unionName objects.
   ( Monad m

@@ -13,6 +13,7 @@ type MiniCat = Object "MiniCat" '[] '[Field "name" Text, Field "meowVolume" Int3
 type MiniDog = Object "MiniDog" '[] '[Field "barkVolume" Int32]
 
 type CatOrDog = Union "CatOrDog" '[MiniCat, MiniDog]
+type CatOrDogList = List (Union "CatOrDog" '[MiniCat, MiniDog])
 
 miniCat :: Handler IO MiniCat
 miniCat = pure (pure "Felix" :<> pure 32)
@@ -23,8 +24,19 @@ miniDog = pure (pure 100)
 catOrDog :: Handler IO CatOrDog
 catOrDog = unionValue @MiniCat miniCat
 
+catOrDogList :: Handler IO CatOrDogList
+catOrDogList =
+  [ unionValue @MiniCat miniCat
+  , unionValue @MiniCat miniCat
+  , unionValue @MiniDog miniDog
+  ]
+
 exampleQuery :: IO (Result Value)
 exampleQuery = buildResolver @IO @CatOrDog catOrDog (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
+
+-- unionValue can also be used in a list:
+exampleListQuery :: IO (Result Value)
+exampleListQuery = buildResolver @IO @CatOrDogList catOrDogList  (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
 
 query :: Text -> Validation.SelectionSet
 query q =
