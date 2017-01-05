@@ -23,7 +23,7 @@ library
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
   build-depends:
       base >= 4.9 && < 5
     , protolude
