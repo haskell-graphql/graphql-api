@@ -341,7 +341,15 @@ instance forall typeName interfaces fields m.
 -- TODO(tom): we're getting to a point where it might make sense to
 -- split resolver into submodules (GraphQL.Resolver.Union  etc.)
 
--- TODO(tom): document what we're doing here.
+
+-- | For unions we need a way to have type-safe, open sum types based
+-- on the possible @API.Object@s of a union. The following closed type
+-- family selects one Object from the union and returns the matching
+-- @HasGraph@ @Handler@ type. If the object @o@ is not a member of
+-- @union@ then the user code won't compile.
+--
+-- This type family is an implementation detail but its TypeError
+-- messages are visible at compile time.
 type family TypeIndex (m :: Type -> Type) (o :: Type) (union :: Type) = (r :: Type) where
   TypeIndex m (API.Object name i f) (API.Union uName ((API.Object name i f):os)) =
     Handler m (API.Object name i f)
@@ -356,16 +364,15 @@ type family TypeIndex (m :: Type -> Type) (o :: Type) (union :: Type) = (r :: Ty
     TypeError ('Text "Invalid TypeIndex. Must be Object but got: " ':<>: 'ShowType o)
 
 
--- types are just to tag the type, and to represent the valid types
+-- | The @Handler@ type of a @API.Union@ must be the same for all
+-- possible Objects, but each Object has a different type. We
+-- unsafeCoerce the return type into an Any, tagging it with the union
+-- and the underlying monad for type safety, but we elide the Object
+-- type itself. This way we can represent all @Handler@ types of the
+-- Union with a single type and still stay type-safe.
 type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
--- For each Object in the union we check if the name matches the
--- DynamicUnionValue, and if it does we execute the handler
--- Inputs:
---  * InlineFragment name
---  * Current Object of union looked at
---  * DynamicUnionValue
 class RunUnion m union objects where
   runUnion :: DynamicUnionValue union m -> Selection -> m (Maybe (Result GValue.Value)) -- TODO return Result
 
@@ -384,12 +391,13 @@ instance forall m union os n i f.
     else runUnion @m @union @os duv fragment -- TODO is this the error condition?
   runUnion _ _ = pure Nothing
 
+-- TODO(tom): AFAICT it should not be possible to ever hit the empty
+-- case because the compiler doesn't allow constructing a unionValue
+-- that's not in the Union. If the following code ever gets executed
+-- it's almost certainly a bug in the union code.
 instance forall m union. RunUnion m union '[] where
   runUnion _ _ = notImplemented -- TODO error case
 
--- TODO empty list of RunUnion
-
--- TODO: list version (I think)
 instance forall m unionName objects.
   ( Monad m
   , KnownSymbol unionName
@@ -417,13 +425,13 @@ instance forall m unionName objects.
 symbolText :: forall ks. KnownSymbol ks => Text
 symbolText = toS (symbolVal @ks Proxy)
 
--- | Build a tagged handler for an Object. This allows us to create a
--- list of DynamicUnionValue that have the same type, but are backed
--- by different handlers. We can then extract the correct handler
--- based on a name (the name comes from an inline fragment).
+-- | Translate a @Handler@ into a DynamicUnionValue type required by
+-- @Union@ handlers. This is dynamic, but nevertheless type-safe
+-- because we can only tag with types that are part of the union.
 --
--- Use e.g. like "unionValue @O1 @U1" - the @U1 is not neccessary when
--- GHC can infer it.
+-- Use e.g. like "unionValue @Cat" if you have an object like this:
+--
+-- > type Cat = Object "Cat" '[] '[Field "name" Text]
 unionValue ::
   forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
   (Monad m, API.Object name i f ~ o, KnownSymbol name)
