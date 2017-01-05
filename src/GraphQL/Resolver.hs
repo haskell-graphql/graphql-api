@@ -191,8 +191,10 @@ instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (
 -- argument in the list) but considering the graphql use case where N usually
 -- < 10 this is probably OK.
 lookupValue :: AST.Name -> Field AST.Value -> Maybe GValue.Value
-lookupValue name field = GValue.astToValue =<< lookupArgument field name
-
+lookupValue name field = do
+  ast <- lookupArgument field name
+  variable <- GValue.astToVariableValue ast
+  traverse hush variable
 
 -- TODO: variables should error, they should have been resolved already.
 --

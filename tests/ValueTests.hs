@@ -3,7 +3,7 @@ module ValueTests (tests) where
 import Protolude
 
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (arbitrary, forAll, resize)
+import Test.QuickCheck (forAll)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
@@ -12,13 +12,11 @@ import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
 import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Value
   ( Object
-  , ObjectField(..)
-  , astToValue
+  , ObjectField'(..)
+  , astToVariableValue
   , unionObjects
   , objectFields
   , objectFromList
-  , prop_roundtripFromAST
-  , prop_roundtripFromValue
   , prop_roundtripValue
   , toValue
   )
@@ -28,7 +26,7 @@ tests :: IO TestTree
 tests = testSpec "Value" $ do
   describe "unionObject" $ do
     it "returns empty on empty list" $ do
-      unionObjects [] `shouldBe` objectFromList []
+      unionObjects [] `shouldBe` (objectFromList [] :: Maybe Object)
     it "merges objects" $ do
       let (Just foo) = objectFromList [ (unsafeMakeName "foo", toValue @Int32 1)
                                       , (unsafeMakeName "bar",toValue @Int32 2)]
@@ -56,18 +54,13 @@ tests = testSpec "Value" $ do
     prop "Double" $ prop_roundtripValue @Double
     prop "Text" $ forAll arbitraryText prop_roundtripValue
     prop "Lists" $ prop_roundtripValue @[Int32]
-    prop "Maybes" $ prop_roundtripValue @(Maybe Int32)
     prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
   describe "AST" $ do
-    prop "Values can be converted to AST and back" $ do
-      forAll (resize 5 arbitrary) prop_roundtripFromValue
-    prop "Values can be converted from AST and back" $ do
-      prop_roundtripFromAST
     it "Objects converted from AST have unique fields" $ do
       let input = AST.ObjectValue [ AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "bar"))
                                   , AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "qux"))
                                   ]
-      astToValue (AST.ValueObject input) `shouldBe` Nothing
+      astToVariableValue (AST.ValueObject input) `shouldBe` Nothing
 
 
 -- | All of the fields in an object should have unique names.

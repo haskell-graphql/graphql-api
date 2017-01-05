@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 -- | GraphQL output.
 --
 -- How we encode GraphQL responses.
@@ -13,7 +14,9 @@ import GraphQL.Value
   ( Object
   , objectFromList
   , ToValue(..)
-  , Value(ValueObject, ValueNull)
+  , Value
+  , pattern ValueObject
+  , pattern ValueNull
   )
 import GraphQL.Internal.AST (unsafeMakeName)
 
