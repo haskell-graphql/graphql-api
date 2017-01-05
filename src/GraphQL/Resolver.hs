@@ -438,6 +438,14 @@ unionValue ::
   (Monad m, API.Object name i f ~ o, KnownSymbol name)
   => TypeIndex m o union -> m (DynamicUnionValue union m)
 unionValue x =
+  -- TODO(tom) - we might want to move to Typeable `cast` for uValue
+  -- instead of doing our own unsafeCoerce because it comes with
+  -- additional safety guarantees: Typerep is unforgeable, while we
+  -- can still into a bad place by matching on name only. We can't
+  -- actually segfault this because right now we walk the list of
+  -- objects in a union left-to-right so in case of duplicate names we
+  -- only every see one type. That doesn't seen like a great thing to
+  -- rely on though!
   pure (DynamicUnionValue (symbolText @name) (unsafeCoerce x))
 
 extractUnionValue ::
