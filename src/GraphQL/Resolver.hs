@@ -404,9 +404,9 @@ instance forall m unionName objects.
   , KnownSymbol unionName
   , RunUnion m (API.Union unionName objects) objects
   ) => HasGraph m (API.Union unionName objects) where
-  type Handler m (API.Union unionName objects) = DynamicUnionValue (API.Union unionName objects) m
+  type Handler m (API.Union unionName objects) = m (DynamicUnionValue (API.Union unionName objects) m)
   buildResolver mHandler selectionSet = do
-    let duv@(DynamicUnionValue _label _) = mHandler
+    duv@(DynamicUnionValue _label _) <- mHandler
     -- we only need to look at the fragment that matches by name:
     case find (matchFragmentName _label) selectionSet of
       Nothing -> pure (Result [UnionTypeNotFound] GValue.ValueNull) -- TODO more error detail
@@ -436,9 +436,9 @@ symbolText = toS (symbolVal @ks Proxy)
 unionValue ::
   forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
   (Monad m, API.Object name i f ~ o, KnownSymbol name)
-  => TypeIndex m o union -> DynamicUnionValue union m
+  => TypeIndex m o union -> m (DynamicUnionValue union m)
 unionValue x =
-  DynamicUnionValue (symbolText @name) (unsafeCoerce x)
+  pure (DynamicUnionValue (symbolText @name) (unsafeCoerce x))
 
 extractUnionValue ::
   forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
