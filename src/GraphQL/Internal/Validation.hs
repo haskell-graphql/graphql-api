@@ -36,8 +36,9 @@ module GraphQL.Internal.Validation
   ( ValidationError(..)
   , ValidationErrors
   , QueryDocument
-  , pattern SelectionInlineFragmentPattern
-  , Selection -- TODO, can we hide this again?
+  , Selection'(..) -- TODO, can we hide this again?
+  , Selection
+  , InlineFragment(..)
   , validate
   , getErrors
   -- * Operating on validated documents
@@ -49,6 +50,7 @@ module GraphQL.Internal.Validation
   , Field
   , getFieldSelectionSet
   , Arguments
+  , FragmentSpread
   , getArguments
   -- * Exported for testing
   , findDuplicates
@@ -213,9 +215,6 @@ data Selection' spread
   | SelectionFragmentSpread spread
   | SelectionInlineFragment (InlineFragment spread)
   deriving (Eq, Show)
-
-pattern SelectionInlineFragmentPattern :: TypeCondition -> [Selection' t] -> Selection' t
-pattern SelectionInlineFragmentPattern name selection <- SelectionInlineFragment (InlineFragment name _ selection)
 
 -- | Get all of the fields directly inside the given selection set.
 --

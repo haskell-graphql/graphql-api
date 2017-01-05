@@ -13,6 +13,7 @@ main = doctest $ ["-isrc"] <> options <> files
                  , "OverloadedStrings"
                  , "RecordWildCards"
                  , "TypeApplications"
+                 , "DataKinds"
                  ]
     -- All of our source files.
     files = [ "src/" ]

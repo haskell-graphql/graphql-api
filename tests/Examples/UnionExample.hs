@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 module Examples.UnionExample  where
 
-import Protolude hiding (Enum, U1)
+import Protolude hiding (Enum)
 import qualified GraphQL.Internal.Validation as Validation
 import GraphQL.API
 import GraphQL (compileQuery, getOperation)
@@ -23,7 +23,7 @@ miniDog = pure (pure 100)
 
 catOrDog :: Handler IO CatOrDog
 catOrDog = do
-  name <- pure "Hello" -- we can do nomadic actions
+  name <- pure "Hello" -- we can do monadic actions
   unionValue @MiniCat (miniCat name)
 
 catOrDogList :: Handler IO CatOrDogList

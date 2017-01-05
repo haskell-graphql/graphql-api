@@ -46,8 +46,9 @@ import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Validation
   ( SelectionSet
-  , pattern SelectionInlineFragmentPattern
-  , Selection
+  , Selection'(..)
+  , InlineFragment(..)
+  , FragmentSpread
   , Field
   , Arguments
   , getArguments
@@ -74,10 +75,10 @@ data ResolverError
   | ResolveNonField AST.Selection
   -- | We tried to resolve something that wasn't a union type despite
   -- expecting one.
-  | ResolveNonUnionType
+  | ResolveNonUnionType Text SelectionSet
   -- | We tried to use an inline fragment with a name that the union
   -- type does not support.
-  | UnionTypeNotFound
+  | UnionTypeNotFound Text SelectionSet
   deriving (Show, Eq)
 
 -- | Object field separation operator.
@@ -125,7 +126,6 @@ ok = pure
 class HasGraph m a where
   type Handler m a
   buildResolver :: Handler m a -> SelectionSet -> m (Result GValue.Value)
-
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -343,61 +343,61 @@ instance forall typeName interfaces fields m.
 
 
 -- | For unions we need a way to have type-safe, open sum types based
--- on the possible @API.Object@s of a union. The following closed type
+-- on the possible 'API.Object's of a union. The following closed type
 -- family selects one Object from the union and returns the matching
--- @HasGraph@ @Handler@ type. If the object @o@ is not a member of
--- @union@ then the user code won't compile.
+-- 'HasGraph' 'Handler' type. If the object @o@ is not a member of
+-- 'API.Union' then the user code won't compile.
 --
 -- This type family is an implementation detail but its TypeError
 -- messages are visible at compile time.
-type family TypeIndex (m :: Type -> Type) (o :: Type) (union :: Type) = (r :: Type) where
-  TypeIndex m (API.Object name i f) (API.Union uName ((API.Object name i f):os)) =
-    Handler m (API.Object name i f)
-  TypeIndex m (API.Object name i f) (API.Union uName ((API.Object name' i' f'):os)) =
-    TypeIndex m (API.Object name i f) (API.Union uName os)
+type family TypeIndex (m :: Type -> Type) (object :: Type) (union :: Type) = (result :: Type) where
+  TypeIndex m (API.Object name interfaces fields) (API.Union uName ((API.Object name interfaces fields):_)) =
+    Handler m (API.Object name interfaces fields)
+  TypeIndex m (API.Object name interfaces fields) (API.Union uName ((API.Object name' i' f'):objects)) =
+    TypeIndex m (API.Object name interfaces fields) (API.Union uName objects)
   -- Slightly nicer type errors:
-  TypeIndex _ (API.Object name i f) (API.Union uName '[]) =
-    TypeError ('Text "Type not found in union definition: " ':<>: 'ShowType (API.Object name i f))
-  TypeIndex _ (API.Object name i f) x =
+  TypeIndex _ (API.Object name interfaces fields) (API.Union uName '[]) =
+    TypeError ('Text "Type not found in union definition: " ':<>: 'ShowType (API.Object name interfaces fields))
+  TypeIndex _ (API.Object name interfaces fields) x =
     TypeError ('Text "3rd type must be a union but it is: " ':<>: 'ShowType x)
   TypeIndex _ o _ =
     TypeError ('Text "Invalid TypeIndex. Must be Object but got: " ':<>: 'ShowType o)
 
 
--- | The @Handler@ type of a @API.Union@ must be the same for all
+-- | The 'Handler' type of a 'API.Union' must be the same for all
 -- possible Objects, but each Object has a different type. We
 -- unsafeCoerce the return type into an Any, tagging it with the union
 -- and the underlying monad for type safety, but we elide the Object
--- type itself. This way we can represent all @Handler@ types of the
+-- type itself. This way we can represent all 'Handler' types of the
 -- Union with a single type and still stay type-safe.
 type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 class RunUnion m union objects where
-  runUnion :: DynamicUnionValue union m -> Selection -> m (Maybe (Result GValue.Value)) -- TODO return Result
+  runUnion :: DynamicUnionValue union m -> InlineFragment FragmentSpread -> m (Result GValue.Value) -- TODO return Result
 
-instance forall m union os n i f.
+instance forall m union objects name interfaces fields.
   ( Monad m
-  , KnownSymbol n
-  , TypeIndex m (API.Object n i f) union ~ Handler m (API.Object n i f)
-  , RunFields m (RunFieldsType m f)
-  , RunUnion m union os
-  ) => RunUnion m union ((API.Object n i f):os) where
-  runUnion duv fragment@(SelectionInlineFragmentPattern _ selection) =
-    case extractUnionValue @(API.Object n i f) @union @m duv of
-      Just handler -> Just <$> (buildResolver @m @(API.Object n i f) handler selection)
-      Nothing -> runUnion @m @union @os duv fragment
-  runUnion _ _ = pure Nothing
+  , KnownSymbol name
+  , TypeIndex m (API.Object name interfaces fields) union ~ Handler m (API.Object name interfaces fields)
+  , RunFields m (RunFieldsType m fields)
+  , RunUnion m union objects
+  ) => RunUnion m union ((API.Object name interfaces fields):objects) where
+  runUnion duv fragment@(InlineFragment _ _ selection) =
+    case extractUnionValue @(API.Object name interfaces fields) @union @m duv of
+      Just handler -> buildResolver @m @(API.Object name interfaces fields) handler selection
+      Nothing -> runUnion @m @union @objects duv fragment
 
--- TODO(tom): AFAICT it should not be possible to ever hit the empty
--- case because the compiler doesn't allow constructing a unionValue
--- that's not in the Union. If the following code ever gets executed
--- it's almost certainly a bug in the union code.
+-- AFAICT it should not be possible to ever hit the empty case because
+-- the compiler doesn't allow constructing a unionValue that's not in
+-- the Union. If the following code ever gets executed it's almost
+-- certainly a bug in the union code.
 --
 -- We still need to implement this instance for the compiler because
 -- it exhaustively checks all cases when deconstructs the Union.
 instance forall m union. RunUnion m union '[] where
-  runUnion _ _ = notImplemented
+  runUnion (DynamicUnionValue label _) selection =
+    panic ("Unexpected branch in runUnion, got " <> show selection <> " for label " <> label <> ". Please file a bug.")
 
 instance forall m unionName objects.
   ( Monad m
@@ -406,19 +406,17 @@ instance forall m unionName objects.
   ) => HasGraph m (API.Union unionName objects) where
   type Handler m (API.Union unionName objects) = m (DynamicUnionValue (API.Union unionName objects) m)
   buildResolver mHandler selectionSet = do
-    duv@(DynamicUnionValue _label _) <- mHandler
+    duv@(DynamicUnionValue label _) <- mHandler
     -- we only need to look at the fragment that matches by name:
-    case find (matchFragmentName _label) selectionSet of
-      Nothing -> pure (Result [UnionTypeNotFound] GValue.ValueNull) -- TODO more error detail
-      Just fragment -> do
+    case find (matchFragmentName label) selectionSet of
+      Nothing -> pure (Result [UnionTypeNotFound label selectionSet] GValue.ValueNull)
+      Just (SelectionInlineFragment inlineFragment) -> do
         -- loop through union handlers and call right one when type matches.
-        r <- runUnion @m @(API.Union unionName objects) @objects duv fragment
-        case r of
-          Just r' -> pure r'
-          Nothing -> pure (Result [ResolveNonUnionType] GValue.ValueNull)
-
+        runUnion @m @(API.Union unionName objects) @objects duv inlineFragment
+      Just _ -> pure (Result [ResolveNonUnionType label selectionSet] GValue.ValueNull)
       where
-        matchFragmentName label' (SelectionInlineFragmentPattern (AST.NamedType name') _) =
+        matchFragmentName label' (SelectionInlineFragment (InlineFragment (AST.NamedType name') _ _)) =
+          -- TODO: error handler
           label' == AST.getNameText name'
         matchFragmentName _ _ = False
 
@@ -426,17 +424,20 @@ instance forall m unionName objects.
 symbolText :: forall ks. KnownSymbol ks => Text
 symbolText = toS (symbolVal @ks Proxy)
 
--- | Translate a @Handler@ into a DynamicUnionValue type required by
--- @Union@ handlers. This is dynamic, but nevertheless type-safe
+-- | Translate a 'Handler' into a DynamicUnionValue type required by
+-- 'Union' handlers. This is dynamic, but nevertheless type-safe
 -- because we can only tag with types that are part of the union.
 --
 -- Use e.g. like "unionValue @Cat" if you have an object like this:
 --
--- > type Cat = Object "Cat" '[] '[Field "name" Text]
+-- >>> type Cat = API.Object "Cat" '[] '[API.Field "name" Text]
+--
+-- and then use `unionValue @Cat (pure (pure "Felix"))`. See
+-- `examples/UnionExample.hs` for more code.
 unionValue ::
-  forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
-  (Monad m, API.Object name i f ~ o, KnownSymbol name)
-  => TypeIndex m o union -> m (DynamicUnionValue union m)
+  forall (object :: Type) (union :: Type) m (name :: Symbol) interfaces fields.
+  (Monad m, API.Object name interfaces fields ~ object, KnownSymbol name)
+  => TypeIndex m object union -> m (DynamicUnionValue union m)
 unionValue x =
   -- TODO(tom) - we might want to move to Typeable `cast` for uValue
   -- instead of doing our own unsafeCoerce because it comes with
@@ -446,12 +447,18 @@ unionValue x =
   -- objects in a union left-to-right so in case of duplicate names we
   -- only every see one type. That doesn't seen like a great thing to
   -- rely on though!
+
+  -- Note that unsafeCoerce is safe because we index the type from the
+  -- union with an 'API.Object' whose name we're storing in label. On
+  -- the way out we check that the name is the same, and we know the
+  -- type universe is the same because we annotated DynamicUnionValue
+  -- with the type universe.
   pure (DynamicUnionValue (symbolText @name) (unsafeCoerce x))
 
 extractUnionValue ::
-  forall (o :: Type) (union :: Type) m (name :: Symbol) i f.
-  (Monad m, API.Object name i f ~ o, KnownSymbol name) -- TODO probably don't need all constraints here
-  => DynamicUnionValue union m -> Maybe (TypeIndex m o union)
+  forall (object :: Type) (union :: Type) m (name :: Symbol) interfaces fields.
+  (Monad m, API.Object name interfaces fields ~ object, KnownSymbol name) -- TODO probably don't need all constraints here
+  => DynamicUnionValue union m -> Maybe (TypeIndex m object union)
 extractUnionValue (DynamicUnionValue uName uValue) =
   if uName == symbolText @name
   then Just (unsafeCoerce uValue)
