@@ -348,10 +348,13 @@ type family TypeIndex (m :: Type -> Type) (o :: Type) (union :: Type) = (r :: Ty
   TypeIndex m (API.Object name i f) (API.Union uName ((API.Object name' i' f'):os)) =
     TypeIndex m (API.Object name i f) (API.Union uName os)
   -- Slightly nicer type errors:
-  TypeIndex m (API.Object name i f) x =
+  TypeIndex _ (API.Object name i f) (API.Union uName '[]) =
+    TypeError ('Text "Type not found in union definition: " ':<>: 'ShowType (API.Object name i f))
+  TypeIndex _ (API.Object name i f) x =
     TypeError ('Text "3rd type must be a union but it is: " ':<>: 'ShowType x)
   TypeIndex _ o _ =
-    TypeError ('Text "Type not found in union definition: " ':<>: 'ShowType o)
+    TypeError ('Text "Invalid TypeIndex. Must be Object but got: " ':<>: 'ShowType o)
+
 
 -- types are just to tag the type, and to represent the valid types
 type role DynamicUnionValue representational representational
