@@ -33,10 +33,15 @@ catOrDogList =
   , unionValue @MiniDog miniDog
   ]
 
+-- | Show usage of a single unionValue
+-- >>> exampleQuery
+-- Result [] (ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "MonadicFelix")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}))
 exampleQuery :: IO (Result Value)
 exampleQuery = buildResolver @IO @CatOrDog catOrDog (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
 
--- unionValue can also be used in a list:
+-- | 'unionValue' can be used in a list context
+-- >>> exampleListQuery
+-- Result [] (ValueList (List [ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "Felix")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}),ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "Mini")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}),ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "barkVolume"}) (ValueInt 100)]})]))
 exampleListQuery :: IO (Result Value)
 exampleListQuery = buildResolver @IO @CatOrDogList catOrDogList  (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
 

@@ -15,5 +15,7 @@ main = doctest $ ["-isrc"] <> options <> files
                  , "TypeApplications"
                  , "DataKinds"
                  ]
-    -- All of our source files.
-    files = [ "src/" ]
+    -- library code and examples
+    files = [ "src/"
+            , "examples/"
+            ]
