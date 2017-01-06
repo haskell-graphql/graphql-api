@@ -23,7 +23,7 @@ miniDog = pure (pure 100)
 
 catOrDog :: Handler IO CatOrDog
 catOrDog = do
-  name <- pure "Hello" -- we can do monadic actions
+  name <- pure "MonadicFelix" -- we can do monadic actions
   unionValue @MiniCat (miniCat name)
 
 catOrDogList :: Handler IO CatOrDogList
