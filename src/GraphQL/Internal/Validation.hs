@@ -303,7 +303,7 @@ validateSelection selection =
 -- We're doing a standard depth-first traversal of fragment references, where
 -- references are by name, so the set of names can be thought of as a record
 -- of visited references.
-resolveSelection :: Fragments value2 -> Selection' (UnresolvedFragmentSpread value2) value1 -> StateT (Set Name) Validation (Selection' (FragmentSpread value2) value1)
+resolveSelection :: Fragments a -> Selection' (UnresolvedFragmentSpread a) b -> StateT (Set Name) Validation (Selection' (FragmentSpread a) b)
 resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
@@ -336,7 +336,7 @@ type Fragments value = Map Name (FragmentDefinition (FragmentSpread value) value
 -- and directives are sane.
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-Name-Uniqueness>
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition (UnresolvedFragmentSpread AST.Value) AST.Value ))
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition (UnresolvedFragmentSpread AST.Value) AST.Value))
 validateFragmentDefinitions frags = do
   defns <- traverse validateFragmentDefinition frags
   mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
