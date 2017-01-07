@@ -374,7 +374,7 @@ type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 class RunUnion m union objects where
-  runUnion :: DynamicUnionValue union m -> InlineFragment FragmentSpread -> m (Result GValue.Value) -- TODO return Result
+  runUnion :: DynamicUnionValue union m -> InlineFragment FragmentSpread -> m (Result GValue.Value)
 
 instance forall m union objects name interfaces fields.
   ( Monad m
@@ -457,7 +457,7 @@ unionValue x =
 
 extractUnionValue ::
   forall (object :: Type) (union :: Type) m (name :: Symbol) interfaces fields.
-  (Monad m, API.Object name interfaces fields ~ object, KnownSymbol name) -- TODO probably don't need all constraints here
+  (API.Object name interfaces fields ~ object, KnownSymbol name)
   => DynamicUnionValue union m -> Maybe (TypeIndex m object union)
 extractUnionValue (DynamicUnionValue uName uValue) =
   if uName == symbolText @name
