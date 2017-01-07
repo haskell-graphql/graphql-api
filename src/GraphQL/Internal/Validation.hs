@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 -- | Transform GraphQL query documents from AST into valid structures
@@ -51,9 +52,8 @@ module GraphQL.Internal.Validation
   , getFields
   , Field
   , getFieldSelectionSet
-  , Arguments
   , FragmentSpread
-  , getArguments
+  , lookupArgument
   -- * Exported for testing
   , findDuplicates
   ) where
@@ -73,34 +73,34 @@ import GraphQL.Internal.Schema (HasName(..))
 -- | A valid query document.
 --
 -- Construct this using 'validate' on an 'AST.QueryDocument'.
-data QueryDocument
+data QueryDocument value
   -- | The query document contains a single anonymous operation.
-  = LoneAnonymousOperation Operation Fragments
+  = LoneAnonymousOperation (Operation value) (Fragments value)
   -- | The query document contains multiple uniquely-named operations.
-  | MultipleOperations Operations Fragments
+  | MultipleOperations (Operations value) (Fragments value)
   deriving (Eq, Show)
 
-data Operation
-  = Query VariableDefinitions Directives SelectionSet
-  | Mutation VariableDefinitions Directives SelectionSet
+data Operation value
+  = Query VariableDefinitions (Directives value) (SelectionSet value)
+  | Mutation VariableDefinitions (Directives value) (SelectionSet value)
   deriving (Eq, Show)
 
 -- | Get the selection set for an operation.
 --
 -- TODO: This doesn't return the *actual* selection set we need, because it
 -- hasn't substituted variables or applied directives.
-getSelectionSet :: Operation -> SelectionSet
+getSelectionSet :: Operation value -> SelectionSet value
 getSelectionSet (Query _ _ ss) = ss
 getSelectionSet (Mutation _ _ ss) = ss
 
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
-type OperationType = VariableDefinitions -> Directives -> SelectionSet -> Operation
+type OperationType value = VariableDefinitions -> (Directives value) -> (SelectionSet value) -> (Operation value)
 
-newtype Operations = Operations (Map Name Operation) deriving (Eq, Show)
+newtype Operations value = Operations (Map Name (Operation value)) deriving (Eq, Show)
 
-type SelectionSet = [Selection]
+type SelectionSet value = [Selection value]
 
-type Selection = Selection' FragmentSpread
+type Selection value = Selection' (FragmentSpread value) value
 
 -- | Get an operation from a GraphQL document
 --
@@ -119,7 +119,7 @@ type Selection = Selection' FragmentSpread
 --     * Let {operation} be the Operation named {operationName} in {document}.
 --     * If {operation} was not found, produce a query error.
 --     * Return {operation}.
-getOperation :: QueryDocument -> Maybe Name -> Maybe Operation
+getOperation :: QueryDocument value -> Maybe Name -> Maybe (Operation value)
 getOperation (LoneAnonymousOperation op _) Nothing = pure op
 getOperation (MultipleOperations (Operations ops) _) (Just name) = Map.lookup name ops
 getOperation (MultipleOperations (Operations ops) _) Nothing =
@@ -132,7 +132,7 @@ getOperation _ _ = empty
 --
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
-validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) QueryDocument
+validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument AST.Value)
 validate (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
@@ -159,19 +159,18 @@ validate (AST.QueryDocument defns) = runValidator $ do
     splitOps (AST.Query node@(AST.Node name _ _ _)) = Right (name, (Query, node))
     splitOps (AST.Mutation node@(AST.Node name _ _ _)) = Right (name, (Mutation, node))
 
-    assertAllFragmentsUsed :: Fragments -> Set Name -> Validation ()
+    assertAllFragmentsUsed :: Fragments value -> Set Name -> Validation ()
     assertAllFragmentsUsed fragments used =
       let unused = Map.keysSet fragments `Set.difference` used
       in unless (Set.null unused) (throwE (UnusedFragments unused))
 
 -- * Operations
 
-validateOperations :: Fragments -> [(Name, (OperationType, AST.Node))] -> StateT (Set Name) Validation Operations
+validateOperations :: Fragments AST.Value -> [(Name, (OperationType AST.Value, AST.Node))] -> StateT (Set Name) Validation (Operations AST.Value)
 validateOperations fragments ops = do
   deduped <- lift (mapErrors DuplicateOperation (makeMap ops))
   Operations <$> traverse validateNode deduped
   where
-    validateNode :: (OperationType, AST.Node) -> StateT (Set Name) Validation Operation
     validateNode (operationType, AST.Node _ vars directives ss) =
       operationType <$> lift (validateVariables vars) <*> lift (validateDirectives directives) <*> validateSelectionSet fragments ss
 
@@ -180,13 +179,13 @@ validateOperations fragments ops = do
 -- | The set of arguments for a given field, directive, etc.
 --
 -- Note that the 'value' can be a variable.
-type Arguments = Map Name AST.Value
+newtype Arguments value = Arguments (Map Name value) deriving (Eq, Show)
 
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
 -- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
-validateArguments :: [AST.Argument] -> Validation Arguments
-validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
+validateArguments :: [AST.Argument] -> Validation (Arguments AST.Value)
+validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
 -- * Selections
 
@@ -212,10 +211,10 @@ validateArguments args = mapErrors DuplicateArgument (makeMap [(name, value) | A
 -- imply that everything is valid.
 
 -- | A GraphQL selection.
-data Selection' spread
-  = SelectionField (Field' spread)
+data Selection' spread value
+  = SelectionField (Field' spread value)
   | SelectionFragmentSpread spread
-  | SelectionInlineFragment (InlineFragment spread)
+  | SelectionInlineFragment (InlineFragment spread value)
   deriving (Eq, Show)
 
 -- | Get all of the fields directly inside the given selection set.
@@ -226,42 +225,42 @@ data Selection' spread
 -- TODO: At this point, we ought to know that field names are unique. As such,
 -- we should return an ordered map of Name to Fields, rather than a bland
 -- list.
-getFields :: SelectionSet -> [Field]
+getFields :: SelectionSet value -> [Field value]
 getFields ss = [field | SelectionField field <- ss]
 
 -- | A field in a selection set, which itself might have children which might
 -- have fragment spreads.
-data Field' spread
-  = Field' (Maybe Alias) Name Arguments Directives [Selection' spread]
+data Field' spread value
+  = Field' (Maybe Alias) Name (Arguments value) (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
-instance HasName (Field' spread) where
+instance HasName (Field' spread value) where
   getName (Field' _ name _ _ _) = name
 
-type Field = Field' FragmentSpread
+type Field value = Field' (FragmentSpread value) value
 
--- | Get the arguments of a field.
-getArguments :: Field -> Arguments
-getArguments (Field' _ _ args _ _) = args
+-- | Get the value of an argument in a field.
+lookupArgument :: Field value -> Name -> Maybe value
+lookupArgument (Field' _ _ (Arguments args) _ _) name = Map.lookup name args
 
 -- | Get the selection set within a field.
-getFieldSelectionSet :: Field' spread -> [Selection' spread]
+getFieldSelectionSet :: Field' spread value -> [Selection' spread value]
 getFieldSelectionSet (Field' _ _ _ _ ss) = ss
 
 -- | A fragment spread that has a valid set of directives, but may or may not
 -- refer to a fragment that actually exists.
-data UnresolvedFragmentSpread
-  = UnresolvedFragmentSpread Name Directives
+data UnresolvedFragmentSpread value
+  = UnresolvedFragmentSpread Name (Directives value)
   deriving (Eq, Show)
 
 -- | A fragment spread that refers to fragments which are known to exist.
-data FragmentSpread
-  = FragmentSpread Name Directives (FragmentDefinition FragmentSpread)
+data FragmentSpread value
+  = FragmentSpread Name (Directives value) (FragmentDefinition (FragmentSpread value) value)
   deriving (Eq, Show)
 
 -- | An inline fragment, which itself can contain fragment spreads.
-data InlineFragment spread
-  = InlineFragment TypeCondition Directives [Selection' spread]
+data InlineFragment spread value
+  = InlineFragment TypeCondition (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
 -- | Traverse through every fragment spread in a selection.
@@ -273,7 +272,7 @@ data InlineFragment spread
 -- 'Selection'. However, we probably also want to have other kinds of
 -- traversals (e.g. for transforming values), so best not to bless one kind
 -- with a type class.
-traverseFragmentSpreads :: Applicative f => (a -> f b) -> Selection' a -> f (Selection' b)
+traverseFragmentSpreads :: Applicative f => (a -> f b) -> Selection' a value -> f (Selection' b value)
 traverseFragmentSpreads f selection =
   case selection of
     SelectionField (Field' alias name args directives ss) ->
@@ -286,7 +285,7 @@ traverseFragmentSpreads f selection =
     childSegments = traverse (traverseFragmentSpreads f)
 
 -- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validation (Selection' UnresolvedFragmentSpread)
+validateSelection :: AST.Selection -> Validation (Selection' (UnresolvedFragmentSpread AST.Value) AST.Value)
 validateSelection selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
@@ -304,10 +303,9 @@ validateSelection selection =
 -- We're doing a standard depth-first traversal of fragment references, where
 -- references are by name, so the set of names can be thought of as a record
 -- of visited references.
-resolveSelection :: Fragments -> Selection' UnresolvedFragmentSpread -> StateT (Set Name) Validation (Selection' FragmentSpread)
+resolveSelection :: Fragments value2 -> Selection' (UnresolvedFragmentSpread value2) value1 -> StateT (Set Name) Validation (Selection' (FragmentSpread value2) value1)
 resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
-    resolveFragmentSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
       case Map.lookup name fragments of
         Nothing -> lift (throwE (NoSuchFragment name))
@@ -315,7 +313,7 @@ resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
           modify (Set.insert name)
           pure (FragmentSpread name directive fragment)
 
-validateSelectionSet :: Fragments -> [AST.Selection] -> StateT (Set Name) Validation SelectionSet
+validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSet AST.Value)
 validateSelectionSet fragments selections = do
   unresolved <- lift (traverse validateSelection selections)
   resolved <- traverse (resolveSelection fragments) unresolved
@@ -328,17 +326,17 @@ validateSelectionSet fragments selections = do
 --
 -- @spread@ indicates whether references to other fragment definitions have
 -- been resolved.
-data FragmentDefinition spread
-  = FragmentDefinition Name TypeCondition Directives [Selection' spread]
+data FragmentDefinition spread value
+  = FragmentDefinition Name TypeCondition (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
-type Fragments = Map Name (FragmentDefinition FragmentSpread)
+type Fragments value = Map Name (FragmentDefinition (FragmentSpread value) value)
 
 -- | Ensure fragment definitions are uniquely named, and that their arguments
 -- and directives are sane.
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-Name-Uniqueness>
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition UnresolvedFragmentSpread))
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition (UnresolvedFragmentSpread AST.Value) AST.Value ))
 validateFragmentDefinitions frags = do
   defns <- traverse validateFragmentDefinition frags
   mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
@@ -358,7 +356,7 @@ validateFragmentDefinitions frags = do
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-spread-target-defined>
 -- <https://facebook.github.io/graphql/#sec-Fragment-spreads-must-not-form-cycles>
-resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread) -> Validation (Fragments, Set Name)
+resolveFragmentDefinitions :: Map Name (FragmentDefinition (UnresolvedFragmentSpread value) value) -> Validation (Fragments value, Set Name)
 resolveFragmentDefinitions allFragments =
   splitResult <$> traverse resolveFragment allFragments
   where
@@ -366,19 +364,15 @@ resolveFragmentDefinitions allFragments =
     -- definitions to the resolved fragment and visited names. We want to
     -- split out the visited names and combine them so that later we can
     -- report on the _un_visited names.
-    splitResult :: Map Name (FragmentDefinition FragmentSpread, Set Name) -> (Fragments, Set Name)
     splitResult mapWithVisited = (map fst mapWithVisited, foldMap snd mapWithVisited)
 
     -- | Resolves all references to fragments in a fragment definition,
     -- returning the resolved fragment and a set of visited names.
-    resolveFragment :: FragmentDefinition UnresolvedFragmentSpread -> Validation (FragmentDefinition FragmentSpread, Set Name)
     resolveFragment frag = runStateT (resolveFragment' frag) mempty
 
-    resolveFragment' :: FragmentDefinition UnresolvedFragmentSpread -> StateT (Set Name) Validation (FragmentDefinition FragmentSpread)
     resolveFragment' (FragmentDefinition name cond directives ss) =
       FragmentDefinition name cond directives <$> traverse (traverseFragmentSpreads resolveSpread) ss
 
-    resolveSpread :: UnresolvedFragmentSpread -> StateT (Set Name) Validation FragmentSpread
     resolveSpread (UnresolvedFragmentSpread name directives) = do
       visited <- Set.member name <$> get
       when visited (lift (throwE (CircularFragmentSpread name)))
@@ -403,9 +397,9 @@ validateVariables vars = VariableDefinitions <$> mapErrors DuplicateVariableDefi
 -- * Directives
 
 -- | A directive is a way of changing the run-time behaviour
-newtype Directives = Directives (Map Name Arguments) deriving (Eq, Show)
+newtype Directives value = Directives (Map Name (Arguments value)) deriving (Eq, Show)
 
-emptyDirectives :: Directives
+emptyDirectives :: Directives value
 emptyDirectives = Directives Map.empty
 
 -- | Ensure that the directives in a given place are valid.
@@ -415,7 +409,7 @@ emptyDirectives = Directives Map.empty
 -- this point.
 --
 -- <https://facebook.github.io/graphql/#sec-Directives-Are-Unique-Per-Location>
-validateDirectives :: [AST.Directive] -> Validation Directives
+validateDirectives :: [AST.Directive] -> Validation (Directives AST.Value)
 validateDirectives directives = do
   items <- traverse validateDirective directives
   Directives <$> mapErrors DuplicateDirective (makeMap items)

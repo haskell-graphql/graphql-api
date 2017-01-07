@@ -34,7 +34,6 @@ import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..), Symbol, symbolVal
 import qualified GHC.Exts (Any)
 import Unsafe.Coerce (unsafeCoerce)
 
-import qualified Data.Map as Map
 import GraphQL.API
   ( (:>)
   , HasAnnotatedType(..)
@@ -50,17 +49,16 @@ import GraphQL.Internal.Validation
   , InlineFragment(..)
   , FragmentSpread
   , Field
-  , Arguments
-  , getArguments
   , getFields
   , getFieldSelectionSet
+  , lookupArgument
   )
 
 data ResolverError
   -- | There was a problem in the schema. Server-side problem.
   = SchemaError AST.NameError
   -- | Couldn't find the requested field in the object. A client-side problem.
-  | FieldNotFoundError Field
+  | FieldNotFoundError (Field AST.Value)
   -- | No value provided for name, and no default specified. Client-side problem.
   | ValueMissing AST.Name
   -- | Could not translate value into Haskell. Probably a client-side problem.
@@ -75,10 +73,10 @@ data ResolverError
   | ResolveNonField AST.Selection
   -- | We tried to resolve something that wasn't a union type despite
   -- expecting one.
-  | ResolveNonUnionType Text SelectionSet
+  | ResolveNonUnionType Text (SelectionSet AST.Value)
   -- | We tried to use an inline fragment with a name that the union
   -- type does not support.
-  | UnionTypeNotFound Text SelectionSet
+  | UnionTypeNotFound Text (SelectionSet AST.Value)
   deriving (Show, Eq)
 
 -- | Object field separation operator.
@@ -125,7 +123,7 @@ ok = pure
 
 class HasGraph m a where
   type Handler m a
-  buildResolver :: Handler m a -> SelectionSet -> m (Result GValue.Value)
+  buildResolver :: Handler m a -> SelectionSet AST.Value -> m (Result GValue.Value)
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -192,8 +190,8 @@ instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (
 -- TODO: lookup is O(N log N) in number of arguments (we linearly search each
 -- argument in the list) but considering the graphql use case where N usually
 -- < 10 this is probably OK.
-lookupValue :: AST.Name -> Arguments -> Maybe GValue.Value
-lookupValue name args = GValue.astToValue =<< Map.lookup name args
+lookupValue :: AST.Name -> Field AST.Value -> Maybe GValue.Value
+lookupValue name field = GValue.astToValue =<< lookupArgument field name
 
 
 -- TODO: variables should error, they should have been resolved already.
@@ -216,7 +214,7 @@ data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value)
 type ResolveFieldResult = Result (Maybe GValue.ObjectField)
 
 resolveField :: forall a (m :: Type -> Type). (BuildFieldResolver m a, Monad m)
-  => FieldHandler m a -> m ResolveFieldResult -> Field -> m ResolveFieldResult
+  => FieldHandler m a -> m ResolveFieldResult -> Field AST.Value -> m ResolveFieldResult
 resolveField handler nextHandler field =
   case buildFieldResolver @m @a handler field of
     -- TODO the fact that this doesn't fit together nicely makes me think that ObjectField is not a good idea)
@@ -238,7 +236,7 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (API.Argument ks t :> f) = t -> FieldHandler m f
 
 class BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> Field -> Either ResolverError (NamedValueResolver m)
+  buildFieldResolver :: FieldHandler m a -> Field AST.Value -> Either ResolverError (NamedValueResolver m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (API.Field ks t) where
   buildFieldResolver handler field = do
@@ -259,8 +257,7 @@ instance forall ks t f m.
   buildFieldResolver handler field = do
     argument <- first SchemaError (API.getArgumentDefinition @(API.Argument ks t))
     let argName = getName argument
-    let arguments = getArguments field
-    value <- case lookupValue argName arguments of
+    value <- case lookupValue argName field of
       Nothing -> valueMissing @t argName
       Just v -> first (InvalidValue argName) (GValue.fromValue @t v)
     buildFieldResolver @m @f (handler value) field
@@ -287,7 +284,7 @@ type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
 class RunFields m a where
   -- runFields is run on a single AST.Selection so it can only ever
   -- return one ObjectField.
-  runFields :: RunFieldsHandler m a -> Field -> m ResolveFieldResult
+  runFields :: RunFieldsHandler m a -> Field AST.Value -> m ResolveFieldResult
 
 instance forall f fs m.
          ( BuildFieldResolver m f
@@ -374,7 +371,7 @@ type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 class RunUnion m union objects where
-  runUnion :: DynamicUnionValue union m -> InlineFragment FragmentSpread -> m (Result GValue.Value)
+  runUnion :: DynamicUnionValue union m -> InlineFragment (FragmentSpread AST.Value) AST.Value -> m (Result GValue.Value)
 
 instance forall m union objects name interfaces fields.
   ( Monad m

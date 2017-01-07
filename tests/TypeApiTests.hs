@@ -40,12 +40,12 @@ tHandler :: Handler TMonad T
 tHandler =
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> (pure . (*2))
 
-getQuery :: Text -> SelectionSet
+getQuery :: Text -> SelectionSet AST.Value
 getQuery query = either panic identity $ do
   validated <- first show (compileQuery query)
   note "Multiple operations found. Must specify name." (getOperation validated Nothing)
 
-runQuery :: SelectionSet -> IO (Either Text (Result Value))
+runQuery :: SelectionSet AST.Value -> IO (Either Text (Result Value))
 runQuery query = runExceptT (buildResolver @TMonad @T tHandler query)
 
 tests :: IO TestTree

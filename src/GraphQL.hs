@@ -35,7 +35,7 @@ data QueryError
   deriving (Eq, Show)
 
 -- | Turn some text into a valid query document.
-compileQuery :: Text -> Either QueryError QueryDocument
+compileQuery :: Text -> Either QueryError (QueryDocument AST.Value)
 compileQuery query = do
   parsed <- first ParseError (parseQuery query)
   first ValidationError (validate parsed)
@@ -47,7 +47,7 @@ parseQuery query = first toS (parseOnly (Parser.queryDocument <* endOfInput) que
 -- | Get an operation from a query document ready to be processed.
 --
 -- TODO: This is the wrong API. For example, it doesn't take variable values.
-getOperation :: QueryDocument -> Maybe AST.Name -> Maybe SelectionSet
+getOperation :: QueryDocument value -> Maybe AST.Name -> Maybe (SelectionSet value)
 getOperation document name = do
   op <- GraphQL.Internal.Validation.getOperation document name
   pure (getSelectionSet op)

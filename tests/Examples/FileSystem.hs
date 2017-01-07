@@ -8,6 +8,7 @@ import GraphQL
 import GraphQL.API
 import GraphQL.Resolver (Handler, Result, (:<>)(..), buildResolver)
 import GraphQL.Value (Value)
+import qualified GraphQL.Internal.AST as AST
 
 import qualified System.Directory as SD
 
@@ -53,7 +54,7 @@ root = do
 example :: IO (Result Value)
 example = buildResolver @IO @Query root (query "{ root(path: \"/etc\") { entries { name } } }")
 
-query :: Text -> SelectionSet
+query :: Text -> SelectionSet AST.Value
 query q = either panic identity $ do
   document <- first show (compileQuery q)
   note "Multiple operations defined" (getOperation document Nothing)
