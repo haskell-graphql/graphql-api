@@ -9,39 +9,37 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 
-module GraphQL.API.Enum where
+module GraphQL.API.Enum
+  ( GraphQLEnum(..)
+  ) where
 
 import Protolude hiding (Enum, U1, TypeError)
 import GraphQL.Internal.AST (Name, nameFromSymbol)
 import qualified GraphQL.Value as GValue
-import GHC.Generics -- TODO explicit imports
+import GHC.Generics (M1(..), Rep, Meta(..), C1, U1(..), D, (:+:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 
-{-
-For values we need to extract the whole representation, e.g.:
-
-λ  :kind! (Rep B)
-(Rep B) :: * -> *
-= D1
-    ('MetaData "B" "Ghci1" "interactive" 'False)
-    (C1 ('MetaCons "B1" 'PrefixI 'False) U1
-     :+: (C1 ('MetaCons "B2" 'PrefixI 'False) U1
-          :+: C1 ('MetaCons "B3" 'PrefixI 'False) U1))
--}
 
 class GenricEnumValues (r :: Type -> Type) where
   genericEnumValues :: [Name]
   genericEnumFromValue :: GValue.Value -> Either Text (r p)
   genericEnumToValue :: r p -> GValue.Value
 
-instance forall n m p f nt. (KnownSymbol n, KnownSymbol m, KnownSymbol p, GenricEnumValues f) => GenricEnumValues (M1 D ('MetaData n m p nt) f) where
+instance forall n m p f nt.
+  ( KnownSymbol n
+  , KnownSymbol m
+  , KnownSymbol p
+  , GenricEnumValues f
+  ) => GenricEnumValues (M1 D ('MetaData n m p nt) f) where
   genericEnumValues = genericEnumValues @f
   genericEnumFromValue v@(GValue.ValueEnum _) = fmap M1 (genericEnumFromValue v)
   genericEnumFromValue x = Left ("Not an enum: " <> show x)
   genericEnumToValue (M1 gv) = genericEnumToValue gv
 
-
-instance (KnownSymbol n, GenricEnumValues f) => GenricEnumValues (C1 ('MetaCons n p b) U1 :+: f) where
+instance forall n f p b.
+  ( KnownSymbol n
+  , GenricEnumValues f
+  ) => GenricEnumValues (C1 ('MetaCons n p b) U1 :+: f) where
   genericEnumValues = let Right name = nameFromSymbol @n in name:(genericEnumValues @f)
   genericEnumFromValue v@(GValue.ValueEnum vname) =
     case nameFromSymbol @n of
@@ -68,26 +66,29 @@ instance forall n p b. (KnownSymbol n) => GenricEnumValues (C1 ('MetaCons n p b)
     let Right name = nameFromSymbol @n
     in GValue.ValueEnum name
 
-
--- TODO(tom): better type errors using `n`
-instance ( TypeError ('Text "Constructor not unary: " ':<>: 'Text n)
-         , KnownSymbol n
-         ) => GenricEnumValues (C1 ('MetaCons n p b) (S1 sa sb)) where
+-- TODO(tom): better type errors using `n`. Also type errors for other
+-- invalid constructors.
+instance forall n p b sa sb.
+  ( TypeError ('Text "Constructor not unary: " ':<>: 'Text n)
+  , KnownSymbol n
+  ) => GenricEnumValues (C1 ('MetaCons n p b) (S1 sa sb)) where
   genericEnumValues = undefined
   genericEnumFromValue = undefined
   genericEnumToValue = undefined
 
-instance ( TypeError ('Text "Constructor not unary: " ':<>: 'Text n)
-         , KnownSymbol n
-         ) => GenricEnumValues (C1 ('MetaCons n p b) (S1 sa sb) :+: f) where
+instance forall n p b sa sb f.
+  ( TypeError ('Text "Constructor not unary: " ':<>: 'Text n)
+  , KnownSymbol n
+  ) => GenricEnumValues (C1 ('MetaCons n p b) (S1 sa sb) :+: f) where
   genericEnumValues = undefined
   genericEnumFromValue = undefined
   genericEnumToValue = undefined
+
 
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
 class GraphQLEnum a where
-  -- sadly we can't use visible type application to make @enumValues@
+  -- Sadly we can't use visible type application to make @enumValues@
   -- a nullary function because the solver can't constrain the
   -- function signature without an @a@ argument. Hence the Proxy.
   enumValues :: Proxy a -> [Name]
@@ -101,8 +102,3 @@ class GraphQLEnum a where
   enumToValue :: a -> GValue.Value
   default enumToValue :: (Generic a, GenricEnumValues (Rep a)) => a -> GValue.Value
   enumToValue = genericEnumToValue . from
-
-instance GraphQLEnum B
-
-data B = B1 | B2 | B3 deriving (Generic, Show)
-data A = A1 | A2 Text | A3 deriving (Generic, Show)
