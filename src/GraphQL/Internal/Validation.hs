@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms #-}
 -- | Transform GraphQL query documents from AST into valid structures
 --
 -- This corresponds roughly to the
@@ -35,6 +36,9 @@ module GraphQL.Internal.Validation
   ( ValidationError(..)
   , ValidationErrors
   , QueryDocument
+  , Selection'(..) -- TODO, can we hide this again?
+  , Selection
+  , InlineFragment(..)
   , validate
   , getErrors
   -- * Operating on validated documents
@@ -46,6 +50,7 @@ module GraphQL.Internal.Validation
   , Field
   , getFieldSelectionSet
   , Arguments
+  , FragmentSpread
   , getArguments
   -- * Exported for testing
   , findDuplicates

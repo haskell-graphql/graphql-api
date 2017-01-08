@@ -1,42 +1,52 @@
 {-# LANGUAGE DataKinds #-}
 module Examples.UnionExample  where
 
--- TODO: union code is totally wrong because I misunderstood the
--- spec. The server decides the return type and we'll probably need an
--- open sum type for returning.
-
-{-
-
 import Protolude hiding (Enum)
-import qualified GraphQL.Internal.AST as AST
-import Data.Attoparsec.Text (parseOnly, endOfInput)
-import GraphQL.Internal.Parser (queryDocument)
-
-
+import qualified GraphQL.Internal.Validation as Validation
 import GraphQL.API
-import GraphQL.Server
+import GraphQL (compileQuery, getOperation)
+import GraphQL.Resolver
 import GraphQL.Value (Value)
 
-type O1 = Object "O1" '[] '[Field "o1" Text]
-type O2 = Object "O2" '[] '[Field "o2" Text]
+-- Slightly reduced example from the spec
+type MiniCat = Object "MiniCat" '[] '[Field "name" Text, Field "meowVolume" Int32]
+type MiniDog = Object "MiniDog" '[] '[Field "barkVolume" Int32]
 
-type T = Union "U" '[O1, O2]
+type CatOrDog = Union "CatOrDog" '[MiniCat, MiniDog]
+type CatOrDogList = List (Union "CatOrDog" '[MiniCat, MiniDog])
 
-o1 :: Handler IO O1
-o1 = pure (pure "hello from O1")
+miniCat :: Text -> Handler IO MiniCat
+miniCat name = pure (pure name :<> pure 32)
 
-o2 :: Handler IO O2
-o2 = pure (pure "hello from O2")
+miniDog :: Handler IO MiniDog
+miniDog = pure (pure 100)
 
-tHandler :: Handler IO T
-tHandler = o1 :<|> o2
+catOrDog :: Handler IO CatOrDog
+catOrDog = do
+  name <- pure "MonadicFelix" -- we can do monadic actions
+  unionValue @MiniCat (miniCat name)
 
-exampleQuery :: IO Value
-exampleQuery = buildResolver @IO @T tHandler (query "{ ... on O1 { o1 } ... on O2 { o2 } }")
+catOrDogList :: Handler IO CatOrDogList
+catOrDogList =
+  [ unionValue @MiniCat (miniCat "Felix")
+  , unionValue @MiniCat (miniCat "Mini")
+  , unionValue @MiniDog miniDog
+  ]
 
-query :: Text -> AST.SelectionSet
+-- | Show usage of a single unionValue
+-- >>> exampleQuery
+-- Result [] (ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "MonadicFelix")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}))
+exampleQuery :: IO (Result Value)
+exampleQuery = buildResolver @IO @CatOrDog catOrDog (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
+
+-- | 'unionValue' can be used in a list context
+-- >>> exampleListQuery
+-- Result [] (ValueList (List [ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "Felix")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}),ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "Mini")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}),ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "barkVolume"}) (ValueInt 100)]})]))
+exampleListQuery :: IO (Result Value)
+exampleListQuery = buildResolver @IO @CatOrDogList catOrDogList  (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
+
+query :: Text -> Validation.SelectionSet
 query q =
-  let Right (AST.QueryDocument [AST.DefinitionOperation (AST.Query (AST.Node _ _ _ selectionSet))]) =
-       parseOnly (queryDocument <* endOfInput) q
-  in selectionSet
--}
+  let Right doc = compileQuery q
+      Just x = getOperation doc Nothing
+  in x
