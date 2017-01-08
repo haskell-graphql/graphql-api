@@ -46,7 +46,7 @@ import GraphQL.Value (Value(..))
 data DogCommandEnum = Sit | Down | Heel
 
 instance GraphQLEnum DogCommandEnum where
-  enumValues = map unsafeMakeName ["SIT", "DOWN", "HEEL"]
+  enumValues _ = map unsafeMakeName ["SIT", "DOWN", "HEEL"]
   enumToValue _ = undefined
   enumFromValue (ValueEnum x) =
     case getNameText x of
@@ -78,7 +78,7 @@ type Human = Object "Human" '[Sentient] '[Field "name" Text]
 data CatCommandEnum = Jump
 
 instance GraphQLEnum CatCommandEnum where
-  enumValues = [unsafeMakeName "JUMP"]
+  enumValues _ = [unsafeMakeName "JUMP"]
   enumToValue = undefined
   enumFromValue (ValueEnum x)
     | getNameText x == "JUMP" = pure Jump

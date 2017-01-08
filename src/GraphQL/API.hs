@@ -2,6 +2,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeInType #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | Type-level definitions for a GraphQL schema.
 module GraphQL.API
@@ -230,7 +231,7 @@ instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType = do
     let name = nameFromSymbol @ks
-    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
+    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum Proxy))
     TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum <$> et
 
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
@@ -280,5 +281,5 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType = do
     let name = nameFromSymbol @ks
-    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
+    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum Proxy))
     TypeNonNull . NonNullTypeNamed . DefinedInputType . InputTypeDefinitionEnum <$> et
