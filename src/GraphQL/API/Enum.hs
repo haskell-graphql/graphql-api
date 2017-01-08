@@ -32,7 +32,7 @@ instance forall n m p f nt.
   , GenricEnumValues f
   ) => GenricEnumValues (M1 D ('MetaData n m p nt) f) where
   genericEnumValues = genericEnumValues @f
-  genericEnumFromValue v@(GValue.ValueEnum _) = fmap M1 (genericEnumFromValue v)
+  genericEnumFromValue v@(GValue.ValueEnum _) = M1 <$> genericEnumFromValue v
   genericEnumFromValue x = Left ("Not an enum: " <> show x)
   genericEnumToValue (M1 gv) = genericEnumToValue gv
 
@@ -44,8 +44,8 @@ instance forall n f p b.
   genericEnumFromValue v@(GValue.ValueEnum vname) =
     case nameFromSymbol @n of
       Right name -> if name == vname
-                    then fmap L1 (Right (M1 U1 :: (C1 ('MetaCons n p b) U1 f')))
-                    else fmap R1 (genericEnumFromValue v)
+                    then L1 <$> Right (M1 U1)
+                    else R1 <$> genericEnumFromValue v
       Left x -> Left ("Not a valid enum name: " <> show x)
   genericEnumFromValue _ = panic "This case should have been caught at top-level. Please file a bug."
   genericEnumToValue (L1 _) =
@@ -58,7 +58,7 @@ instance forall n p b. (KnownSymbol n) => GenricEnumValues (C1 ('MetaCons n p b)
   genericEnumFromValue (GValue.ValueEnum vname) =
     case nameFromSymbol @n of
       Right name -> if name == vname
-                    then Right (M1 U1 :: (C1 ('MetaCons n p b) U1 f'))
+                    then Right (M1 U1)
                     else Left ("Not a valid enum name: " <> show vname)
       Left x -> Left ("Not a valid enum name: " <> show x)
   genericEnumFromValue _ = panic "This case should have been caught at top-level. Please file a bug."
@@ -97,7 +97,7 @@ class GraphQLEnum a where
 
   enumFromValue :: GValue.Value -> Either Text a
   default enumFromValue :: (Generic a, GenricEnumValues (Rep a)) => GValue.Value -> Either Text a
-  enumFromValue v = fmap to (genericEnumFromValue v)
+  enumFromValue v = to <$> genericEnumFromValue v
 
   enumToValue :: a -> GValue.Value
   default enumToValue :: (Generic a, GenricEnumValues (Rep a)) => a -> GValue.Value
