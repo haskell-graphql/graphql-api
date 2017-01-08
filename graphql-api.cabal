@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.15.0.
+-- This file has been generated from package.yaml by hpack version 0.14.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -23,7 +23,7 @@ library
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -38,6 +38,7 @@ library
   exposed-modules:
       GraphQL
       GraphQL.API
+      GraphQL.API.Enum
       GraphQL.Internal.Arbitrary
       GraphQL.Internal.AST
       GraphQL.Internal.Encoder
