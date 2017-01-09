@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE KindSignatures #-}
 -- | Transform GraphQL query documents from AST into valid structures
 --
 -- This corresponds roughly to the
@@ -85,6 +88,18 @@ data Operation value
   | Mutation VariableDefinitions (Directives value) (SelectionSet value)
   deriving (Eq, Show)
 
+instance Functor Operation where
+  fmap f (Query vars directives selectionSet) = Query vars (fmap f directives) (map (fmap f) selectionSet)
+  fmap f (Mutation vars directives selectionSet) = Mutation vars (fmap f directives) (map (fmap f) selectionSet)
+
+instance Foldable Operation where
+  foldMap f (Query _ directives selectionSet) = foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
+  foldMap f (Mutation _ directives selectionSet) = foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
+
+instance Traversable Operation where
+  traverse f (Query vars directives selectionSet) = Query vars <$> traverse f directives <*> traverse (traverse f) selectionSet
+  traverse f (Mutation vars directives selectionSet) = Mutation vars <$> traverse f directives <*> traverse (traverse f) selectionSet
+
 -- | Get the selection set for an operation.
 --
 -- TODO: This doesn't return the *actual* selection set we need, because it
@@ -100,7 +115,7 @@ newtype Operations value = Operations (Map Name (Operation value)) deriving (Eq,
 
 type SelectionSet value = [Selection value]
 
-type Selection value = Selection' (FragmentSpread value) value
+type Selection value = Selection' FragmentSpread value
 
 -- | Get an operation from a GraphQL document
 --
@@ -179,7 +194,7 @@ validateOperations fragments ops = do
 -- | The set of arguments for a given field, directive, etc.
 --
 -- Note that the 'value' can be a variable.
-newtype Arguments value = Arguments (Map Name value) deriving (Eq, Show)
+newtype Arguments value = Arguments (Map Name value) deriving (Eq, Show, Functor, Foldable, Traversable)
 
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
@@ -211,11 +226,11 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 -- imply that everything is valid.
 
 -- | A GraphQL selection.
-data Selection' spread value
+data Selection' (spread :: * -> *) value
   = SelectionField (Field' spread value)
-  | SelectionFragmentSpread spread
+  | SelectionFragmentSpread (spread value)
   | SelectionInlineFragment (InlineFragment spread value)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 -- | Get all of the fields directly inside the given selection set.
 --
@@ -237,7 +252,24 @@ data Field' spread value
 instance HasName (Field' spread value) where
   getName (Field' _ name _ _ _) = name
 
-type Field value = Field' (FragmentSpread value) value
+instance Functor spread => Functor (Field' spread) where
+  fmap f (Field' alias name arguments directives selectionSet) =
+    Field' alias name (fmap f arguments) (fmap f directives) (map (fmap f) selectionSet)
+
+instance Foldable spread => Foldable (Field' spread) where
+  foldMap f (Field' _ _ arguments directives selectionSet) =
+    mconcat [ foldMap f arguments
+            , foldMap f directives
+            , mconcat (map (foldMap f) selectionSet)
+            ]
+
+instance Traversable spread => Traversable (Field' spread) where
+  traverse f (Field' alias name arguments directives selectionSet) =
+    Field' alias name <$> traverse f arguments
+                      <*> traverse f directives
+                      <*> traverse (traverse f) selectionSet
+
+type Field value = Field' FragmentSpread value
 
 -- | Get the value of an argument in a field.
 lookupArgument :: Field value -> Name -> Maybe value
@@ -251,17 +283,46 @@ getFieldSelectionSet (Field' _ _ _ _ ss) = ss
 -- refer to a fragment that actually exists.
 data UnresolvedFragmentSpread value
   = UnresolvedFragmentSpread Name (Directives value)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Functor)
+
+instance Foldable UnresolvedFragmentSpread where
+  foldMap f (UnresolvedFragmentSpread _ directives) = foldMap f directives
+
+instance Traversable UnresolvedFragmentSpread where
+  traverse f (UnresolvedFragmentSpread name directives) = UnresolvedFragmentSpread name <$> traverse f directives
 
 -- | A fragment spread that refers to fragments which are known to exist.
 data FragmentSpread value
-  = FragmentSpread Name (Directives value) (FragmentDefinition (FragmentSpread value) value)
+  = FragmentSpread Name (Directives value) (FragmentDefinition FragmentSpread value)
   deriving (Eq, Show)
+
+instance Functor FragmentSpread where
+  fmap f (FragmentSpread name directives definition) = FragmentSpread name (fmap f directives) (fmap f definition)
+
+instance Foldable FragmentSpread where
+  foldMap f (FragmentSpread _ directives fragment) = foldMap f directives `mappend` foldMap f fragment
+
+instance Traversable FragmentSpread where
+  traverse f (FragmentSpread name directives definition) =
+    FragmentSpread name <$> traverse f directives <*> traverse f definition
 
 -- | An inline fragment, which itself can contain fragment spreads.
 data InlineFragment spread value
   = InlineFragment TypeCondition (Directives value) [Selection' spread value]
   deriving (Eq, Show)
+
+instance Functor spread => Functor (InlineFragment spread) where
+  fmap f (InlineFragment typeCond directives selectionSet) =
+    InlineFragment typeCond (fmap f directives) (map (fmap f) selectionSet)
+
+instance Foldable spread => Foldable (InlineFragment spread) where
+  foldMap f (InlineFragment _ directives selectionSet) =
+    foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
+
+instance Traversable spread => Traversable (InlineFragment spread) where
+  traverse f (InlineFragment typeCond directives selectionSet) =
+    InlineFragment typeCond <$> traverse f directives
+                            <*> traverse (traverse f) selectionSet
 
 -- | Traverse through every fragment spread in a selection.
 --
@@ -272,7 +333,7 @@ data InlineFragment spread value
 -- 'Selection'. However, we probably also want to have other kinds of
 -- traversals (e.g. for transforming values), so best not to bless one kind
 -- with a type class.
-traverseFragmentSpreads :: Applicative f => (a -> f b) -> Selection' a value -> f (Selection' b value)
+traverseFragmentSpreads :: Applicative f => (a value -> f (b value)) -> Selection' a value -> f (Selection' b value)
 traverseFragmentSpreads f selection =
   case selection of
     SelectionField (Field' alias name args directives ss) ->
@@ -285,7 +346,7 @@ traverseFragmentSpreads f selection =
     childSegments = traverse (traverseFragmentSpreads f)
 
 -- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validation (Selection' (UnresolvedFragmentSpread AST.Value) AST.Value)
+validateSelection :: AST.Selection -> Validation (Selection' UnresolvedFragmentSpread AST.Value)
 validateSelection selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
@@ -303,7 +364,7 @@ validateSelection selection =
 -- We're doing a standard depth-first traversal of fragment references, where
 -- references are by name, so the set of names can be thought of as a record
 -- of visited references.
-resolveSelection :: Fragments a -> Selection' (UnresolvedFragmentSpread a) b -> StateT (Set Name) Validation (Selection' (FragmentSpread a) b)
+resolveSelection :: Fragments a -> Selection' UnresolvedFragmentSpread a -> StateT (Set Name) Validation (Selection' FragmentSpread a)
 resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
@@ -330,13 +391,26 @@ data FragmentDefinition spread value
   = FragmentDefinition Name TypeCondition (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
-type Fragments value = Map Name (FragmentDefinition (FragmentSpread value) value)
+type Fragments value = Map Name (FragmentDefinition FragmentSpread value)
+
+instance Functor spread => Functor (FragmentDefinition spread) where
+  fmap f (FragmentDefinition name typeCond directives selectionSet) =
+    FragmentDefinition name typeCond (fmap f directives) (map (fmap f) selectionSet)
+
+instance Foldable spread => Foldable (FragmentDefinition spread) where
+  foldMap f (FragmentDefinition _ _ directives selectionSet) =
+    foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
+
+instance Traversable spread => Traversable (FragmentDefinition spread) where
+  traverse f (FragmentDefinition name typeCond directives selectionSet) =
+    FragmentDefinition name typeCond <$> traverse f directives
+                                     <*> traverse (traverse f) selectionSet
 
 -- | Ensure fragment definitions are uniquely named, and that their arguments
 -- and directives are sane.
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-Name-Uniqueness>
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition (UnresolvedFragmentSpread AST.Value) AST.Value))
+validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition UnresolvedFragmentSpread AST.Value))
 validateFragmentDefinitions frags = do
   defns <- traverse validateFragmentDefinition frags
   mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
@@ -356,7 +430,7 @@ validateFragmentDefinitions frags = do
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-spread-target-defined>
 -- <https://facebook.github.io/graphql/#sec-Fragment-spreads-must-not-form-cycles>
-resolveFragmentDefinitions :: Map Name (FragmentDefinition (UnresolvedFragmentSpread value) value) -> Validation (Fragments value, Set Name)
+resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread value) -> Validation (Fragments value, Set Name)
 resolveFragmentDefinitions allFragments =
   splitResult <$> traverse resolveFragment allFragments
   where
@@ -397,7 +471,7 @@ validateVariables vars = VariableDefinitions <$> mapErrors DuplicateVariableDefi
 -- * Directives
 
 -- | A directive is a way of changing the run-time behaviour
-newtype Directives value = Directives (Map Name (Arguments value)) deriving (Eq, Show)
+newtype Directives value = Directives (Map Name (Arguments value)) deriving (Eq, Show, Foldable, Functor, Traversable)
 
 emptyDirectives :: Directives value
 emptyDirectives = Directives Map.empty

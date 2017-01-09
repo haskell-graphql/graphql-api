@@ -11,6 +11,7 @@
 -- | Literal GraphQL values.
 module GraphQL.Value
   ( Value
+  , VariableValue
   , pattern ValueInt
   , pattern ValueFloat
   , pattern ValueBoolean
