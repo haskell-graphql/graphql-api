@@ -88,12 +88,9 @@ instance forall conName p b sa sb f.
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
 class GraphQLEnum a where
-  -- Sadly we can't use visible type application to make @enumValues@
-  -- a nullary function because the solver can't constrain the
-  -- function signature without an @a@ argument. Hence the Proxy.
-  enumValues :: Proxy a -> [Either NameError Name]
-  default enumValues :: (Generic a, GenricEnumValues (Rep a)) => Proxy a -> [Either NameError Name]
-  enumValues _ = genericEnumValues @(Rep a)
+  enumValues :: [Either NameError Name]
+  default enumValues :: (Generic a, GenricEnumValues (Rep a)) => [Either NameError Name]
+  enumValues = genericEnumValues @(Rep a)
 
   enumFromValue :: GValue.Value -> Either Text a
   default enumFromValue :: (Generic a, GenricEnumValues (Rep a)) => GValue.Value -> Either Text a
