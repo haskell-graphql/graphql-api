@@ -186,7 +186,7 @@ instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (API.List hg)
 
 instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (API.Enum ks enum) where
   type Handler m (API.Enum ks enum) = enum
-  buildResolver handler _ = (pure . ok . API.enumToValue) handler
+  buildResolver handler _ = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
 
 
 -- TODO: lookup is O(N log N) in number of arguments (we linearly search each
