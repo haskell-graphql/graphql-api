@@ -1,4 +1,6 @@
-{-# LANGUAGE DataKinds, TypeOperators #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveGeneric #-}
 module TypeTests (tests) where
 
 import Protolude hiding (Down, Enum)
@@ -22,7 +24,7 @@ import GraphQL.API
   , getFieldDefinition
   , getInterfaceDefinition
   )
-import GraphQL.Internal.AST (getNameText, unsafeMakeName)
+import GraphQL.Internal.AST (unsafeMakeName)
 import GraphQL.Internal.Schema
   ( EnumTypeDefinition(..)
   , EnumValueDefinition(..)
@@ -39,23 +41,12 @@ import GraphQL.Internal.Schema
   , Builtin(..)
   , InputType(..)
   )
-import GraphQL.Value (Value(..))
 
 -- Examples taken from the spec
 
-data DogCommandEnum = Sit | Down | Heel
+data DogCommandEnum = Sit | Down | Heel deriving (Show, Generic)
 
-instance GraphQLEnum DogCommandEnum where
-  enumValues = map unsafeMakeName ["SIT", "DOWN", "HEEL"]
-  enumToValue _ = undefined
-  enumFromValue (ValueEnum x) =
-    case getNameText x of
-      "SIT" -> pure Sit
-      "DOWN" -> pure Down
-      "HEEL" -> pure Heel
-      _ -> throwError ("Unrecognized enum: " <> show x)
-  enumFromValue x = throwError ("Not an enum: " <> show x)
-
+instance GraphQLEnum DogCommandEnum
 
 -- Alternative might be a sum type with deriving Generic and 0-arity constructors?
 type DogCommand = Enum "DogCommand" DogCommandEnum
@@ -75,15 +66,9 @@ type Pet = Interface "Pet" '[Field "name" Text]
 
 type Human = Object "Human" '[Sentient] '[Field "name" Text]
 
-data CatCommandEnum = Jump
+data CatCommandEnum = Jump deriving Generic
 
-instance GraphQLEnum CatCommandEnum where
-  enumValues = [unsafeMakeName "JUMP"]
-  enumToValue = undefined
-  enumFromValue (ValueEnum x)
-    | getNameText x == "JUMP" = pure Jump
-    | otherwise = throwError ("Unrecognized enum: " <> show x)
-  enumFromValue x = throwError ("Not an enum: " <> show x)
+instance GraphQLEnum CatCommandEnum
 
 type CatCommand = Enum "CatCommand" CatCommandEnum
 
@@ -120,9 +105,9 @@ tests = testSpec "Type" $ do
     it "encodes correctly" $ do
     getAnnotatedType @DogCommand `shouldBe`
        Right (TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum (EnumTypeDefinition (unsafeMakeName "DogCommand")
-         [ EnumValueDefinition (unsafeMakeName "SIT")
-         , EnumValueDefinition (unsafeMakeName "DOWN")
-         , EnumValueDefinition (unsafeMakeName "HEEL")
+         [ EnumValueDefinition (unsafeMakeName "Sit")
+         , EnumValueDefinition (unsafeMakeName "Down")
+         , EnumValueDefinition (unsafeMakeName "Heel")
          ])))))
   describe "Union type" $
     it "encodes correctly" $ do

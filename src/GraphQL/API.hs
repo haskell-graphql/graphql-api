@@ -1,8 +1,8 @@
-{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeFamilyDependencies #-}
-{-# LANGUAGE GADTs, AllowAmbiguousTypes, UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses, RankNTypes #-}
-{-# LANGUAGE FlexibleInstances, TypeOperators, TypeInType #-}
-{-# LANGUAGE OverloadedLabels, MagicHash #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeInType #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | Type-level definitions for a GraphQL schema.
 module GraphQL.API
@@ -30,10 +30,10 @@ import Protolude hiding (Enum)
 
 import GraphQL.Internal.Schema hiding (Type)
 import qualified GraphQL.Internal.Schema (Type)
-import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
+import GHC.TypeLits (Symbol, KnownSymbol)
 import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
-import qualified GraphQL.Value as GValue
-import GraphQL.Internal.AST (NameError, makeName)
+import GraphQL.Internal.AST (NameError, nameFromSymbol)
+import GraphQL.API.Enum (GraphQLEnum(..))
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -81,11 +81,6 @@ data Argument (name :: Symbol) (argType :: Type)
 -- https://hackage.haskell.org/package/optional-args-1.0.1)
 data DefaultArgument (name :: Symbol) (argType :: Type)
 
--- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
-nameFromSymbol :: forall (n :: Symbol). KnownSymbol n => Either NameError Name
-nameFromSymbol = makeName (toS (symbolVal @n Proxy))
-
-
 cons :: a -> [a] -> [a]
 cons = (:)
 
@@ -108,13 +103,6 @@ instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasField
 instance HasFieldDefinitions '[] where
   getFieldDefinitions = pure []
 
--- | For each enum type we need 1) a list of all possible values 2) a
--- way to serialise and 3) deserialise.
-class GraphQLEnum a where
-  enumValues :: [Name]
-  enumFromValue :: GValue.Value -> Either Text a
-  enumToValue :: a -> GValue.Value
-  -- TODO: These are trivially generically derivable
 
 -- object types from union type lists, e.g. for
 -- Union "Horse" '[Leg, Head, Tail]
@@ -243,7 +231,8 @@ instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType = do
     let name = nameFromSymbol @ks
-    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
+    let enums = sequenceA (enumValues @enum Proxy) :: Either NameError [Name]
+    let et = EnumTypeDefinition <$> name <*> map (map EnumValueDefinition) enums
     TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum <$> et
 
 instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
@@ -293,5 +282,6 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType = do
     let name = nameFromSymbol @ks
-    let et = EnumTypeDefinition <$> name <*> pure (map EnumValueDefinition (enumValues @enum))
+        enums = sequenceA (enumValues @enum Proxy) :: Either NameError [Name]
+    let et = EnumTypeDefinition <$> name <*> map (map EnumValueDefinition) enums
     TypeNonNull . NonNullTypeNamed . DefinedInputType . InputTypeDefinitionEnum <$> et

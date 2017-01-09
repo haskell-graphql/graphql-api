@@ -1,11 +1,16 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module GraphQL.Internal.AST
   ( Name(getNameText)
   , NameError
   , formatNameError
   , nameParser
   , makeName
+  , nameFromSymbol
   , unsafeMakeName
   , QueryDocument(..)
   , SchemaDocument(..)
@@ -52,6 +57,7 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
+import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
@@ -146,6 +152,10 @@ data Node = Node Name [VariableDefinition] [Directive] SelectionSet
 -- TODO: Just make Node implement HasName.
 getNodeName :: Node -> Name
 getNodeName (Node name _ _ _) = name
+
+-- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
+nameFromSymbol :: forall (n :: Symbol). KnownSymbol n => Either NameError Name
+nameFromSymbol = makeName (toS (symbolVal @n Proxy))
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
