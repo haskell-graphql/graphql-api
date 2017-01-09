@@ -14,14 +14,14 @@ module GraphQL.API.Enum
   ) where
 
 import Protolude hiding (Enum, U1, TypeError)
-import GraphQL.Internal.AST (Name, nameFromSymbol)
+import GraphQL.Internal.AST (Name, nameFromSymbol, NameError)
 import qualified GraphQL.Value as GValue
 import GHC.Generics (M1(..), Rep, Meta(..), C1, U1(..), D, (:+:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 
 
 class GenricEnumValues (f :: Type -> Type) where
-  genericEnumValues :: [Name]
+  genericEnumValues :: [Either NameError Name]
   genericEnumFromValue :: GValue.Value -> Either Text (f p)
   genericEnumToValue :: f p -> GValue.Value
 
@@ -40,7 +40,7 @@ instance forall conName f p b.
   ( KnownSymbol conName
   , GenricEnumValues f
   ) => GenricEnumValues (C1 ('MetaCons conName p b) U1 :+: f) where
-  genericEnumValues = let Right name = nameFromSymbol @conName in name:(genericEnumValues @f)
+  genericEnumValues = let name = nameFromSymbol @conName in name:(genericEnumValues @f)
   genericEnumFromValue v@(GValue.ValueEnum vname) =
     case nameFromSymbol @conName of
       Right name -> if name == vname
@@ -54,7 +54,7 @@ instance forall conName f p b.
   genericEnumToValue (R1 gv) = genericEnumToValue gv
 
 instance forall conName p b. (KnownSymbol conName) => GenricEnumValues (C1 ('MetaCons conName p b) U1) where
-  genericEnumValues = let Right name = nameFromSymbol @conName in [name]
+  genericEnumValues = let name = nameFromSymbol @conName in [name]
   genericEnumFromValue (GValue.ValueEnum vname) =
     case nameFromSymbol @conName of
       Right name -> if name == vname
@@ -91,8 +91,8 @@ class GraphQLEnum a where
   -- Sadly we can't use visible type application to make @enumValues@
   -- a nullary function because the solver can't constrain the
   -- function signature without an @a@ argument. Hence the Proxy.
-  enumValues :: Proxy a -> [Name]
-  default enumValues :: (Generic a, GenricEnumValues (Rep a)) => Proxy a -> [Name]
+  enumValues :: Proxy a -> [Either NameError Name]
+  default enumValues :: (Generic a, GenricEnumValues (Rep a)) => Proxy a -> [Either NameError Name]
   enumValues _ = genericEnumValues @(Rep a)
 
   enumFromValue :: GValue.Value -> Either Text a
