@@ -187,7 +187,9 @@ validateOperations fragments ops = do
   Operations <$> traverse validateNode deduped
   where
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType <$> lift (validateVariables vars) <*> lift (validateDirectives directives) <*> validateSelectionSet fragments ss
+      operationType <$> lift (validateVariableDefinitions vars)
+                    <*> lift (validateDirectives directives)
+                    <*> validateSelectionSet fragments ss
 
 -- * Arguments
 
@@ -458,13 +460,14 @@ resolveFragmentDefinitions allFragments =
 
 -- * Variables
 
+-- TODO: Need to parametrise this by value and validate.
 newtype VariableDefinitions = VariableDefinitions (Map Variable AST.VariableDefinition) deriving (Eq, Show)
 
 emptyVariableDefinitions :: VariableDefinitions
 emptyVariableDefinitions = VariableDefinitions mempty
 
-validateVariables :: [AST.VariableDefinition] -> Validation VariableDefinitions
-validateVariables vars = VariableDefinitions <$> mapErrors DuplicateVariableDefinition (makeMap items)
+validateVariableDefinitions :: [AST.VariableDefinition] -> Validation VariableDefinitions
+validateVariableDefinitions vars = VariableDefinitions <$> mapErrors DuplicateVariableDefinition (makeMap items)
   where
     items = [(name, defn) | defn@(AST.VariableDefinition name _ _) <- vars]
 
