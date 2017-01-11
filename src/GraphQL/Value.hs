@@ -12,6 +12,7 @@
 module GraphQL.Value
   ( Value
   , VariableValue
+  , UnresolvedVariableValue
   , pattern ValueInt
   , pattern ValueFloat
   , pattern ValueBoolean
@@ -53,7 +54,7 @@ import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.AST (Name(..), Variable)
+import GraphQL.Internal.AST (Name(..), Variable, VariableDefinition)
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
@@ -105,7 +106,14 @@ genValue n
 -- | A GraphQL value which contains no variables.
 type Value = Value' ConstScalar
 
--- | A GraphQL value which might contain some variables.
+-- TODO: These next two definitions are quite internal. We should move this
+-- mode to Internal and then re-export the bits that end-users will use.
+
+-- | A GraphQL value which might contain some variables, some of which may not
+-- have definitions.
+type UnresolvedVariableValue = Value' UnresolvedVariableScalar
+
+-- | A GraphQL value which might contain some defined variables.
 type VariableValue = Value' VariableScalar
 
 pattern ValueInt :: Int32 -> Value
@@ -158,7 +166,11 @@ instance ToJSON ConstScalar where
   toJSON ConstNull = Aeson.Null
 
 -- | A value which contains no other values, and might be a variable.
-type VariableScalar = Either Variable ConstScalar
+type VariableScalar = Either VariableDefinition ConstScalar
+
+-- | A value which contains no other values, and might be a variable that
+-- might lack a definition.
+type UnresolvedVariableScalar = Either Variable ConstScalar
 
 -- | Generate an arbitrary scalar value.
 instance Arbitrary ConstScalar where
@@ -182,13 +194,13 @@ constToAST scalar =
     ConstNull -> AST.ValueNull
 
 -- | Convert a variable scalar to an AST.Value
-variableToAST :: VariableScalar -> AST.Value
+variableToAST :: UnresolvedVariableScalar -> AST.Value
 variableToAST (Left variable) = AST.ValueVariable variable
 variableToAST (Right constant) = constToAST constant
 
 -- | Convert a value from the AST into a variable scalar, presuming it /is/ a
 -- scalar.
-astToScalar :: AST.Value -> Maybe VariableScalar
+astToScalar :: AST.Value -> Maybe UnresolvedVariableScalar
 astToScalar (AST.ValueInt x) = pure $ Right $ ConstInt x
 astToScalar (AST.ValueFloat x) = pure $ Right $ ConstFloat x
 astToScalar (AST.ValueBoolean x) = pure $ Right $ ConstBoolean x
@@ -397,7 +409,7 @@ astToValue' f (AST.ValueObject (AST.ObjectValue fields)) = do
 --
 -- Will fail if the AST value contains duplicate object fields, or is
 -- otherwise invalid.
-astToVariableValue :: HasCallStack => AST.Value -> Maybe VariableValue
+astToVariableValue :: HasCallStack => AST.Value -> Maybe UnresolvedVariableValue
 astToVariableValue ast = astToValue' convertScalar ast
   where
     convertScalar x =
@@ -410,7 +422,7 @@ valueToAST :: Value -> AST.Value
 valueToAST = valueToAST' constToAST
 
 -- | Convert a variable value to an AST value.
-variableValueToAST :: VariableValue -> AST.Value
+variableValueToAST :: UnresolvedVariableValue -> AST.Value
 variableValueToAST = valueToAST' variableToAST
 
 -- | Convert a literal value into an AST value.
