@@ -16,11 +16,7 @@
 --
 -- Still missing:
 --
---   * variable validation <https://facebook.github.io/graphql/#sec-Validation.Variables>
---     * all variable uses defined <https://facebook.github.io/graphql/#sec-All-Variable-Uses-Defined>
---     * all variables used <https://facebook.github.io/graphql/#sec-All-Variables-Used>
 --   * field selection merging <https://facebook.github.io/graphql/#sec-Field-Selection-Merging>
---   * input object field uniqueness <https://facebook.github.io/graphql/#sec-Values>
 --
 -- Deliberately not going to do:
 --
@@ -57,6 +53,7 @@ module GraphQL.Internal.Validation
   , getFieldSelectionSet
   , FragmentSpread
   , lookupArgument
+  , VariableValue
   -- * Exported for testing
   , findDuplicates
   ) where
@@ -72,15 +69,22 @@ import qualified GraphQL.Internal.AST as AST
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
 import GraphQL.Internal.AST (Name, Alias, TypeCondition, Variable)
 import GraphQL.Internal.Schema (HasName(..))
+import GraphQL.Value
+  ( Value
+  , Value'
+  , ConstScalar
+  , UnresolvedVariableValue
+  , astToVariableValue
+  )
 
 -- | A valid query document.
 --
 -- Construct this using 'validate' on an 'AST.QueryDocument'.
 data QueryDocument value
   -- | The query document contains a single anonymous operation.
-  = LoneAnonymousOperation (Operation value) (Fragments value)
+  = LoneAnonymousOperation (Operation value)
   -- | The query document contains multiple uniquely-named operations.
-  | MultipleOperations (Operations value) (Fragments value)
+  | MultipleOperations (Operations value)
   deriving (Eq, Show)
 
 data Operation value
@@ -135,9 +139,9 @@ type Selection value = Selection' FragmentSpread value
 --     * If {operation} was not found, produce a query error.
 --     * Return {operation}.
 getOperation :: QueryDocument value -> Maybe Name -> Maybe (Operation value)
-getOperation (LoneAnonymousOperation op _) Nothing = pure op
-getOperation (MultipleOperations (Operations ops) _) (Just name) = Map.lookup name ops
-getOperation (MultipleOperations (Operations ops) _) Nothing =
+getOperation (LoneAnonymousOperation op) Nothing = pure op
+getOperation (MultipleOperations (Operations ops)) (Just name) = Map.lookup name ops
+getOperation (MultipleOperations (Operations ops)) Nothing =
   case toList ops of
     [op] -> pure op
     _ -> empty
@@ -147,20 +151,23 @@ getOperation _ _ = empty
 --
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
-validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument AST.Value)
+validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument VariableValue)
 validate (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
   (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions fragments
   case (anonymous, named) of
     ([], ops) -> do
-      (validOps, usedFrags) <- runStateT (validateOperations frags ops) mempty
+      (Operations validOps, usedFrags) <- runStateT (validateOperations frags ops) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
-      pure (MultipleOperations validOps frags)
+      resolvedOps <- traverse validateOperation validOps
+      pure (MultipleOperations (Operations resolvedOps))
     ([x], []) -> do
       (ss, usedFrags) <- runStateT (validateSelectionSet frags x) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
-      pure (LoneAnonymousOperation (Query emptyVariableDefinitions emptyDirectives ss) frags)
+      validValuesSS <- traverse validateValues ss
+      resolvedValuesSS <- traverse (resolveVariables emptyVariableDefinitions) validValuesSS
+      pure (LoneAnonymousOperation (Query emptyVariableDefinitions emptyDirectives resolvedValuesSS))
     _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
   where
@@ -190,6 +197,27 @@ validateOperations fragments ops = do
       operationType <$> lift (validateVariableDefinitions vars)
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet fragments ss
+
+-- TODO: Make operation type a parameter of an Operation constructor.
+validateOperation :: Operation AST.Value -> Validation (Operation VariableValue)
+validateOperation (Query vars directives selectionSet) = do
+  validValues <- Query vars <$> validateValues directives <*> traverse validateValues selectionSet
+  -- Instead of doing this, we could build up a list of used variables as we
+  -- resolve them.
+  let usedVariables = getVariables validValues
+  let definedVariables = getDefinedVariables vars
+  let unusedVariables = definedVariables `Set.difference` usedVariables
+  unless (Set.null unusedVariables) $ throwE (UnusedVariables unusedVariables)
+  resolveVariables vars validValues
+validateOperation (Mutation vars directives selectionSet) = do
+  validValues <- Mutation vars <$> validateValues directives <*> traverse validateValues selectionSet
+  -- Instead of doing this, we could build up a list of used variables as we
+  -- resolve them.
+  let usedVariables = getVariables validValues
+  let definedVariables = getDefinedVariables vars
+  let unusedVariables = definedVariables `Set.difference` usedVariables
+  unless (Set.null unusedVariables) $ throwE (UnusedVariables unusedVariables)
+  resolveVariables vars validValues
 
 -- * Arguments
 
@@ -460,16 +488,68 @@ resolveFragmentDefinitions allFragments =
 
 -- * Variables
 
--- TODO: Need to parametrise this by value and validate.
-newtype VariableDefinitions = VariableDefinitions (Map Variable AST.VariableDefinition) deriving (Eq, Show)
+data VariableDefinition = VariableDefinition Variable AST.Type (Maybe Value) deriving (Eq, Ord, Show)
+
+newtype VariableDefinitions = VariableDefinitions (Map Variable VariableDefinition) deriving (Eq, Show)
+
+getDefinedVariables :: VariableDefinitions -> Set Variable
+getDefinedVariables (VariableDefinitions vars) = Map.keysSet vars
+
+-- | A GraphQL value which might contain some defined variables.
+type VariableValue = Value' (Either VariableDefinition ConstScalar)
 
 emptyVariableDefinitions :: VariableDefinitions
 emptyVariableDefinitions = VariableDefinitions mempty
 
+-- | Ensure that a set of variable definitions is valid.
 validateVariableDefinitions :: [AST.VariableDefinition] -> Validation VariableDefinitions
-validateVariableDefinitions vars = VariableDefinitions <$> mapErrors DuplicateVariableDefinition (makeMap items)
+validateVariableDefinitions vars = do
+  validatedDefns <- traverse validateVariableDefinition vars
+  let items = [ (name, defn) | defn@(VariableDefinition name _ _) <- validatedDefns]
+  VariableDefinitions <$> mapErrors DuplicateVariableDefinition (makeMap items)
+
+-- | Ensure that a variable definition is a valid one.
+validateVariableDefinition :: AST.VariableDefinition -> Validation VariableDefinition
+validateVariableDefinition (AST.VariableDefinition name varType value) =
+  VariableDefinition name varType <$> (traverse validateDefaultValue value)
+
+-- | Ensure that a default value contains no variables.
+validateDefaultValue :: AST.DefaultValue -> Validation Value
+validateDefaultValue defaultValue =
+  case astToVariableValue defaultValue of
+    Nothing -> throwE $ InvalidValue defaultValue
+    Just value ->
+      for value $ \scalar -> case scalar of
+                               Left _ -> throwE $ InvalidDefaultValue defaultValue
+                               Right constant -> pure constant
+
+
+-- | Get all the variables referred to in a thing what contains variables.
+getVariables :: Foldable f => f UnresolvedVariableValue -> Set Variable
+getVariables = foldMap valueToVariable
   where
-    items = [(name, defn) | defn@(AST.VariableDefinition name _ _) <- vars]
+    valueToVariable = foldMap (either Set.singleton (const Set.empty))
+
+-- | Make sure all the values are valid.
+validateValues :: Traversable f => f AST.Value -> Validation (f UnresolvedVariableValue)
+validateValues = traverse toVariableValue
+  where
+    toVariableValue astValue =
+      case astToVariableValue astValue of
+        Just value -> pure value
+        Nothing -> throwE (InvalidValue astValue)
+
+-- | Make sure each variable has a definition, and each definition a variable.
+resolveVariables :: Traversable f => VariableDefinitions -> f UnresolvedVariableValue -> Validation (f VariableValue)
+resolveVariables (VariableDefinitions definitions) = traverse resolveVariableValue
+  where
+    resolveVariableValue value = traverse resolveVariable value
+    resolveVariable (Left variable) =
+      case Map.lookup variable definitions of
+        Nothing -> throwE (UndefinedVariable variable)
+        Just defn -> pure (Left defn)
+    resolveVariable (Right constant) = pure (Right constant)
+
 
 -- * Directives
 
@@ -537,6 +617,16 @@ data ValidationError
   -- | 'UnusedFragments' means that fragments were defined that weren't used.
   -- <https://facebook.github.io/graphql/#sec-Fragments-Must-Be-Used>
   | UnusedFragments (Set Name)
+  -- | Variables were defined without being used.
+  -- <https://facebook.github.io/graphql/#sec-All-Variables-Used>
+  | UnusedVariables (Set Variable)
+  -- | A variable was used without being defined.
+  -- <https://facebook.github.io/graphql/#sec-All-Variable-Uses-Defined>
+  | UndefinedVariable Variable
+  -- | Value in AST wasn't valid.
+  | InvalidValue AST.Value
+  -- | Default value in AST contained variables.
+  | InvalidDefaultValue AST.Value
   deriving (Eq, Show)
 
 type ValidationErrors = NonEmpty ValidationError

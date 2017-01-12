@@ -26,6 +26,7 @@ import GraphQL.Resolver
   )
 import GraphQL.Value (Value)
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Validation (VariableValue)
 import Data.Aeson (encode)
 
 -- Test a custom error monad
@@ -40,12 +41,12 @@ tHandler :: Handler TMonad T
 tHandler =
   pure $ (pure 10) :<> (\tArg -> pure tArg) :<> (pure . (*2))
 
-getQuery :: Text -> SelectionSet AST.Value
+getQuery :: Text -> SelectionSet VariableValue
 getQuery query = either panic identity $ do
   validated <- first show (compileQuery query)
   note "Multiple operations found. Must specify name." (getOperation validated Nothing)
 
-runQuery :: SelectionSet AST.Value -> IO (Either Text (Result Value))
+runQuery :: SelectionSet VariableValue -> IO (Either Text (Result Value))
 runQuery query = runExceptT (buildResolver @TMonad @T tHandler query)
 
 tests :: IO TestTree

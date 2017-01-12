@@ -11,7 +11,8 @@
 -- | Literal GraphQL values.
 module GraphQL.Value
   ( Value
-  , VariableValue
+  , Value'
+  , ConstScalar
   , UnresolvedVariableValue
   , pattern ValueInt
   , pattern ValueFloat
@@ -54,7 +55,7 @@ import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.AST (Name(..), Variable, VariableDefinition)
+import GraphQL.Internal.AST (Name(..), Variable)
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
@@ -67,7 +68,7 @@ import qualified GraphQL.Internal.OrderedMap as OrderedMap
 --
 -- Normally, it is one of either 'ConstScalar' (to indicate that there are no
 -- variables whatsoever) or 'VariableScalar' (to indicate that there might be
--- some variables)
+-- some variables).
 data Value' scalar
   = ValueScalar' scalar
   | ValueList' (List' scalar)
@@ -112,9 +113,6 @@ type Value = Value' ConstScalar
 -- | A GraphQL value which might contain some variables, some of which may not
 -- have definitions.
 type UnresolvedVariableValue = Value' UnresolvedVariableScalar
-
--- | A GraphQL value which might contain some defined variables.
-type VariableValue = Value' VariableScalar
 
 pattern ValueInt :: Int32 -> Value
 pattern ValueInt x = ValueScalar' (ConstInt x)
@@ -164,9 +162,6 @@ instance ToJSON ConstScalar where
   toJSON (ConstString x) = toJSON x
   toJSON (ConstEnum x) = toJSON x
   toJSON ConstNull = Aeson.Null
-
--- | A value which contains no other values, and might be a variable.
-type VariableScalar = Either VariableDefinition ConstScalar
 
 -- | A value which contains no other values, and might be a variable that
 -- might lack a definition.

@@ -49,34 +49,33 @@ import GraphQL.Internal.Validation
   , InlineFragment(..)
   , FragmentSpread
   , Field
+  , VariableValue
   , getFields
   , getFieldSelectionSet
   , lookupArgument
   )
+import GraphQL.Value (Name)
 
 data ResolverError
   -- | There was a problem in the schema. Server-side problem.
   = SchemaError AST.NameError
   -- | Couldn't find the requested field in the object. A client-side problem.
-  | FieldNotFoundError (Field AST.Value)
+  | FieldNotFoundError (Field VariableValue)
   -- | No value provided for name, and no default specified. Client-side problem.
-  | ValueMissing AST.Name
+  | ValueMissing Name
   -- | Could not translate value into Haskell. Probably a client-side problem.
-  | InvalidValue AST.Name Text
+  | InvalidValue Name Text
   -- | Found duplicate fields in set.
   | DuplicateFields [ResolveFieldResult]
   -- | We found a variable in an input value. We should only have constants at
   -- this point.
-  | UnresolvedVariable AST.Name AST.Value
-  -- | We tried to resolve something that wasn't a field. Once our validation
-  -- stuff is sorted out this error should go away.
-  | ResolveNonField AST.Selection
+  | UnresolvedVariable Name VariableValue
   -- | We tried to resolve something that wasn't a union type despite
   -- expecting one.
-  | ResolveNonUnionType Text (SelectionSet AST.Value)
+  | ResolveNonUnionType Text (SelectionSet VariableValue)
   -- | We tried to use an inline fragment with a name that the union
   -- type does not support.
-  | UnionTypeNotFound Text (SelectionSet AST.Value)
+  | UnionTypeNotFound Text (SelectionSet VariableValue)
   deriving (Show, Eq)
 
 -- | Object field separation operator.
@@ -123,7 +122,7 @@ ok = pure
 
 class HasGraph m a where
   type Handler m a
-  buildResolver :: Handler m a -> SelectionSet AST.Value -> m (Result GValue.Value)
+  buildResolver :: Handler m a -> SelectionSet VariableValue -> m (Result GValue.Value)
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -138,12 +137,12 @@ class HasGraph m a where
 -- type.
 class Defaultable a where
   -- | defaultFor returns the value to be used when no value has been given.
-  defaultFor :: AST.Name -> Maybe a
+  defaultFor :: Name -> Maybe a
   defaultFor _ = empty
 
 -- | Called when the schema expects an input argument @name@ of type @a@ but
 -- @name@ has not been provided.
-valueMissing :: Defaultable a => AST.Name -> Either ResolverError a
+valueMissing :: Defaultable a => Name -> Either ResolverError a
 valueMissing name = maybe (Left (ValueMissing name)) Right (defaultFor name)
 
 instance Defaultable Int32
@@ -190,11 +189,11 @@ instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (
 -- TODO: lookup is O(N log N) in number of arguments (we linearly search each
 -- argument in the list) but considering the graphql use case where N usually
 -- < 10 this is probably OK.
-lookupValue :: AST.Name -> Field AST.Value -> Maybe GValue.Value
+lookupValue :: Name -> Field VariableValue -> Maybe GValue.Value
 lookupValue name field = do
-  ast <- lookupArgument field name
-  variable <- GValue.astToVariableValue ast
-  traverse hush variable
+  value <- lookupArgument field name
+  -- If it's a variable, just return Nothing, as if the value isn't there.
+  traverse hush value
 
 -- TODO: variables should error, they should have been resolved already.
 --
@@ -209,21 +208,21 @@ lookupValue name field = do
 -- the name matches the query. Note that the name is *not* in monad m,
 -- but the value is. This is necessary so we can skip execution if the
 -- name doesn't match.
-data NamedValueResolver m = NamedValueResolver AST.Name (m (Result GValue.Value))
+data NamedValueResolver m = NamedValueResolver Name (m (Result GValue.Value))
 
 -- Iterate through handlers (zipped together with their type
 -- definition) and execute handler if the name matches.
 type ResolveFieldResult = Result (Maybe GValue.ObjectField)
 
 resolveField :: forall a (m :: Type -> Type). (BuildFieldResolver m a, Monad m)
-  => FieldHandler m a -> m ResolveFieldResult -> Field AST.Value -> m ResolveFieldResult
+  => FieldHandler m a -> m ResolveFieldResult -> Field VariableValue -> m ResolveFieldResult
 resolveField handler nextHandler field =
   case buildFieldResolver @m @a handler field of
     -- TODO the fact that this doesn't fit together nicely makes me think that ObjectField is not a good idea)
     Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
     Right (NamedValueResolver name' resolver) -> runResolver name' resolver
   where
-    runResolver :: AST.Name -> m (Result GValue.Value) -> m ResolveFieldResult
+    runResolver :: Name -> m (Result GValue.Value) -> m ResolveFieldResult
     runResolver name' resolver
       | queryFieldName == name' = do
           Result errs value <- resolver
@@ -238,7 +237,7 @@ type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (API.Argument ks t :> f) = t -> FieldHandler m f
 
 class BuildFieldResolver m a where
-  buildFieldResolver :: FieldHandler m a -> Field AST.Value -> Either ResolverError (NamedValueResolver m)
+  buildFieldResolver :: FieldHandler m a -> Field VariableValue -> Either ResolverError (NamedValueResolver m)
 
 instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad m) => BuildFieldResolver m (API.Field ks t) where
   buildFieldResolver handler field = do
@@ -286,7 +285,7 @@ type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
 class RunFields m a where
   -- runFields is run on a single AST.Selection so it can only ever
   -- return one ObjectField.
-  runFields :: RunFieldsHandler m a -> Field AST.Value -> m ResolveFieldResult
+  runFields :: RunFieldsHandler m a -> Field VariableValue -> m ResolveFieldResult
 
 instance forall f fs m.
          ( BuildFieldResolver m f
@@ -373,7 +372,7 @@ type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 class RunUnion m union objects where
-  runUnion :: DynamicUnionValue union m -> InlineFragment (FragmentSpread AST.Value) AST.Value -> m (Result GValue.Value)
+  runUnion :: DynamicUnionValue union m -> InlineFragment FragmentSpread VariableValue -> m (Result GValue.Value)
 
 instance forall m union objects name interfaces fields.
   ( Monad m

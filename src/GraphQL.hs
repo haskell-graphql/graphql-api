@@ -21,6 +21,7 @@ import GraphQL.Internal.Validation
   , ValidationErrors
   , validate
   , getSelectionSet
+  , VariableValue
   )
 
 -- | Errors that can happen while processing a query document.
@@ -35,7 +36,7 @@ data QueryError
   deriving (Eq, Show)
 
 -- | Turn some text into a valid query document.
-compileQuery :: Text -> Either QueryError (QueryDocument AST.Value)
+compileQuery :: Text -> Either QueryError (QueryDocument VariableValue)
 compileQuery query = do
   parsed <- first ParseError (parseQuery query)
   first ValidationError (validate parsed)
