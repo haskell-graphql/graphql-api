@@ -251,15 +251,15 @@ data Directive = Directive Name [Argument] deriving (Eq,Show)
 data Type = TypeNamed NamedType
           | TypeList ListType
           | TypeNonNull NonNullType
-            deriving (Eq,Show)
+            deriving (Eq, Ord, Show)
 
-newtype NamedType = NamedType Name deriving (Eq,Show)
+newtype NamedType = NamedType Name deriving (Eq, Ord, Show)
 
-newtype ListType = ListType Type deriving (Eq,Show)
+newtype ListType = ListType Type deriving (Eq, Ord, Show)
 
 data NonNullType = NonNullTypeNamed NamedType
                  | NonNullTypeList  ListType
-                   deriving (Eq,Show)
+                   deriving (Eq, Ord, Show)
 
 -- * Type definition
 
