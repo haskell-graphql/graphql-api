@@ -37,7 +37,7 @@
 module GraphQL.Internal.Validation
   ( ValidationError(..)
   , ValidationErrors
-  , QueryDocument
+  , QueryDocument(..)
   , Selection'(..) -- TODO, can we hide this again?
   , Selection
   , InlineFragment(..)
@@ -45,8 +45,12 @@ module GraphQL.Internal.Validation
   , getErrors
   -- * Operating on validated documents
   , Operation
-  , getOperation
+  , getVariableDefinitions
   , getSelectionSet
+  , VariableDefinitions
+  , VariableDefinition(..)
+  , AST.Type(..)
+  , Variable
   , SelectionSet
   , getFields
   , Field
@@ -104,6 +108,12 @@ instance Traversable Operation where
   traverse f (Query vars directives selectionSet) = Query vars <$> traverse f directives <*> traverse (traverse f) selectionSet
   traverse f (Mutation vars directives selectionSet) = Mutation vars <$> traverse f directives <*> traverse (traverse f) selectionSet
 
+
+-- | Get the variable definitions for an operation.
+getVariableDefinitions :: Operation value -> VariableDefinitions
+getVariableDefinitions (Query vars _ _) = vars
+getVariableDefinitions (Mutation vars _ _) = vars
+
 -- | Get the selection set for an operation.
 --
 -- TODO: This doesn't return the *actual* selection set we need, because it
@@ -115,37 +125,11 @@ getSelectionSet (Mutation _ _ ss) = ss
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
 type OperationType value = VariableDefinitions -> (Directives value) -> (SelectionSet value) -> (Operation value)
 
-newtype Operations value = Operations (Map Name (Operation value)) deriving (Eq, Show)
+type Operations value = Map Name (Operation value)
 
 type SelectionSet value = [Selection value]
 
 type Selection value = Selection' FragmentSpread value
-
--- | Get an operation from a GraphQL document
---
--- Technically this is part of the "Execution" phase, but we're keeping it
--- here for now to avoid exposing constructors for valid documents.
---
--- <https://facebook.github.io/graphql/#sec-Executing-Requests>
---
--- GetOperation(document, operationName):
---
---   * If {operationName} is {null}:
---     * If {document} contains exactly one operation.
---       * Return the Operation contained in the {document}.
---     * Otherwise produce a query error requiring {operationName}.
---   * Otherwise:
---     * Let {operation} be the Operation named {operationName} in {document}.
---     * If {operation} was not found, produce a query error.
---     * Return {operation}.
-getOperation :: QueryDocument value -> Maybe Name -> Maybe (Operation value)
-getOperation (LoneAnonymousOperation op) Nothing = pure op
-getOperation (MultipleOperations (Operations ops)) (Just name) = Map.lookup name ops
-getOperation (MultipleOperations (Operations ops)) Nothing =
-  case toList ops of
-    [op] -> pure op
-    _ -> empty
-getOperation _ _ = empty
 
 -- | Turn a parsed document into a known valid one.
 --
@@ -158,10 +142,10 @@ validate (AST.QueryDocument defns) = runValidator $ do
   (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions fragments
   case (anonymous, named) of
     ([], ops) -> do
-      (Operations validOps, usedFrags) <- runStateT (validateOperations frags ops) mempty
+      (validOps, usedFrags) <- runStateT (validateOperations frags ops) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
       resolvedOps <- traverse validateOperation validOps
-      pure (MultipleOperations (Operations resolvedOps))
+      pure (MultipleOperations resolvedOps)
     ([x], []) -> do
       (ss, usedFrags) <- runStateT (validateSelectionSet frags x) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
@@ -191,14 +175,16 @@ validate (AST.QueryDocument defns) = runValidator $ do
 validateOperations :: Fragments AST.Value -> [(Name, (OperationType AST.Value, AST.Node))] -> StateT (Set Name) Validation (Operations AST.Value)
 validateOperations fragments ops = do
   deduped <- lift (mapErrors DuplicateOperation (makeMap ops))
-  Operations <$> traverse validateNode deduped
+  traverse validateNode deduped
   where
     validateNode (operationType, AST.Node _ vars directives ss) =
       operationType <$> lift (validateVariableDefinitions vars)
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet fragments ss
 
--- TODO: Make operation type a parameter of an Operation constructor.
+-- TODO: Either make operation type (Query, Mutation) a parameter of an
+-- Operation constructor or give all the fields accessors. This duplication is
+-- driving me batty.
 validateOperation :: Operation AST.Value -> Validation (Operation VariableValue)
 validateOperation (Query vars directives selectionSet) = do
   validValues <- Query vars <$> validateValues directives <*> traverse validateValues selectionSet
@@ -490,23 +476,23 @@ resolveFragmentDefinitions allFragments =
 
 data VariableDefinition = VariableDefinition Variable AST.Type (Maybe Value) deriving (Eq, Ord, Show)
 
-newtype VariableDefinitions = VariableDefinitions (Map Variable VariableDefinition) deriving (Eq, Show)
+type VariableDefinitions = Map Variable VariableDefinition
 
 getDefinedVariables :: VariableDefinitions -> Set Variable
-getDefinedVariables (VariableDefinitions vars) = Map.keysSet vars
+getDefinedVariables = Map.keysSet
 
 -- | A GraphQL value which might contain some defined variables.
 type VariableValue = Value' (Either VariableDefinition ConstScalar)
 
 emptyVariableDefinitions :: VariableDefinitions
-emptyVariableDefinitions = VariableDefinitions mempty
+emptyVariableDefinitions = mempty
 
 -- | Ensure that a set of variable definitions is valid.
 validateVariableDefinitions :: [AST.VariableDefinition] -> Validation VariableDefinitions
 validateVariableDefinitions vars = do
   validatedDefns <- traverse validateVariableDefinition vars
   let items = [ (name, defn) | defn@(VariableDefinition name _ _) <- validatedDefns]
-  VariableDefinitions <$> mapErrors DuplicateVariableDefinition (makeMap items)
+  mapErrors DuplicateVariableDefinition (makeMap items)
 
 -- | Ensure that a variable definition is a valid one.
 validateVariableDefinition :: AST.VariableDefinition -> Validation VariableDefinition
@@ -541,7 +527,7 @@ validateValues = traverse toVariableValue
 
 -- | Make sure each variable has a definition, and each definition a variable.
 resolveVariables :: Traversable f => VariableDefinitions -> f UnresolvedVariableValue -> Validation (f VariableValue)
-resolveVariables (VariableDefinitions definitions) = traverse resolveVariableValue
+resolveVariables definitions = traverse resolveVariableValue
   where
     resolveVariableValue value = traverse resolveVariable value
     resolveVariable (Left variable) =

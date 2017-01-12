@@ -1,17 +1,17 @@
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Literal GraphQL values.
 module GraphQL.Value
   ( Value
-  , Value'
+  , Value'(..)
   , ConstScalar
   , UnresolvedVariableValue
   , pattern ValueInt
@@ -31,9 +31,11 @@ module GraphQL.Value
   , FromValue(..)
   , Name
   , List
+  , List'(..)
   , String(..)
     -- * Objects
   , Object
+  , Object'(..)
   , ObjectField
   , ObjectField'(ObjectField)
     -- ** Constructing
@@ -77,13 +79,13 @@ data Value' scalar
 
 instance Foldable Value' where
   foldMap f (ValueScalar' scalar) = f scalar
-  foldMap f (ValueList' (List' values)) = mconcat (map (foldMap f) values)
-  foldMap f (ValueObject' (Object' fieldMap)) = foldMap (foldMap f) fieldMap
+  foldMap f (ValueList' values) = foldMap f values
+  foldMap f (ValueObject' obj) = foldMap f obj
 
 instance Traversable Value' where
   traverse f (ValueScalar' x) = ValueScalar' <$> f x
-  traverse f (ValueList' (List' xs)) = ValueList' . List' <$> traverse (traverse f) xs
-  traverse f (ValueObject' (Object' xs)) = ValueObject' . Object' <$> traverse (traverse f) xs
+  traverse f (ValueList' xs) = ValueList' <$> traverse f xs
+  traverse f (ValueObject' xs) = ValueObject' <$> traverse f xs
 
 instance ToJSON scalar => ToJSON (Value' scalar) where
   toJSON (ValueScalar' x) = toJSON x
@@ -220,6 +222,13 @@ instance ToJSON String where
 
 newtype List' scalar = List' [Value' scalar] deriving (Eq, Ord, Show, Functor)
 
+instance Foldable List' where
+  foldMap f (List' values) = mconcat (map (foldMap f) values)
+
+instance Traversable List' where
+  traverse f (List' xs) = List' <$> traverse (traverse f) xs
+
+
 -- | A list of values that are known to be constants.
 --
 -- Note that this list might not be valid GraphQL, because GraphQL only allows
@@ -247,6 +256,12 @@ instance ToJSON scalar => ToJSON (List' scalar) where
 -- Note that https://facebook.github.io/graphql/#sec-Response calls these
 -- \"Maps\", but everywhere else in the spec refers to them as objects.
 newtype Object' scalar = Object' (OrderedMap Name (Value' scalar)) deriving (Eq, Ord, Show, Functor)
+
+instance Foldable Object' where
+  foldMap f (Object' fieldMap) = foldMap (foldMap f) fieldMap
+
+instance Traversable Object' where
+  traverse f (Object' xs) = Object' <$> traverse (traverse f) xs
 
 -- | A GraphQL object that contains only non-variable values.
 type Object = Object' ConstScalar

@@ -8,7 +8,6 @@ import GraphQL
 import GraphQL.API
 import GraphQL.Resolver (Handler, Result, (:<>)(..), buildResolver)
 import GraphQL.Value (Value)
-import GraphQL.Internal.Validation (VariableValue)
 
 import qualified System.Directory as SD
 
@@ -54,7 +53,7 @@ root = do
 example :: IO (Result Value)
 example = buildResolver @IO @Query root (query "{ root(path: \"/etc\") { entries { name } } }")
 
-query :: Text -> SelectionSet VariableValue
-query q = either panic identity $ do
-  document <- first show (compileQuery q)
-  note "Multiple operations defined" (getOperation document Nothing)
+query :: Text -> SelectionSet Value
+query q = either (panic . show) identity $ do
+  document <- compileQuery q
+  getOperation document Nothing mempty

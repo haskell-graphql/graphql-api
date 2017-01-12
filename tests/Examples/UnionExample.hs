@@ -7,7 +7,6 @@ import GraphQL.API
 import GraphQL (compileQuery, getOperation)
 import GraphQL.Resolver
 import GraphQL.Value (Value)
-import GraphQL.Internal.Validation (VariableValue)
 
 -- Slightly reduced example from the spec
 type MiniCat = Object "MiniCat" '[] '[Field "name" Text, Field "meowVolume" Int32]
@@ -55,8 +54,8 @@ exampleQuery = buildResolver @IO @CatOrDog catOrDog (query "{ ... on MiniCat { n
 exampleListQuery :: IO (Result Value)
 exampleListQuery = buildResolver @IO @CatOrDogList catOrDogList  (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
 
-query :: Text -> Validation.SelectionSet VariableValue
+query :: Text -> Validation.SelectionSet Value
 query q =
   let Right doc = compileQuery q
-      Just x = getOperation doc Nothing
+      Right x = getOperation doc Nothing mempty
   in x
