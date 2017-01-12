@@ -183,8 +183,8 @@ instance Arbitrary ConstScalar where
                     ]
 
 -- | Convert a constant scalar to an AST.Value
-constToAST :: ConstScalar -> AST.Value
-constToAST scalar =
+constScalarToAST :: ConstScalar -> AST.Value
+constScalarToAST scalar =
   case scalar of
     ConstInt x -> AST.ValueInt x
     ConstFloat x -> AST.ValueFloat x
@@ -196,7 +196,7 @@ constToAST scalar =
 -- | Convert a variable scalar to an AST.Value
 variableToAST :: UnresolvedVariableScalar -> AST.Value
 variableToAST (Left variable) = AST.ValueVariable variable
-variableToAST (Right constant) = constToAST constant
+variableToAST (Right constant) = constScalarToAST constant
 
 -- | Convert a value from the AST into a variable scalar, presuming it /is/ a
 -- scalar.
@@ -419,7 +419,7 @@ astToVariableValue ast = astToValue' convertScalar ast
 
 -- | Convert a value to an AST value.
 valueToAST :: Value -> AST.Value
-valueToAST = valueToAST' constToAST
+valueToAST = valueToAST' constScalarToAST
 
 -- | Convert a variable value to an AST value.
 variableValueToAST :: UnresolvedVariableValue -> AST.Value
