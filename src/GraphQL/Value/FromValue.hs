@@ -2,11 +2,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 -- | Literal GraphQL values.
 module GraphQL.Value.FromValue
@@ -15,11 +16,11 @@ module GraphQL.Value.FromValue
   , wrongType
   ) where
 
-import Protolude
+import Protolude hiding (TypeError)
 import GraphQL.Value
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
-import GHC.Generics (D, (:*:)(..))
+import GHC.Generics ((:*:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 
 -- * FromValue
@@ -33,6 +34,8 @@ class FromValue a where
   -- | Convert an already-parsed value into a Haskell value, generally to be
   -- passed to a handler.
   fromValue :: Value' ConstScalar -> Either Text a
+  default fromValue :: (Generic a, GenericFromValue (Rep a)) => Value' ConstScalar -> Either Text a
+  fromValue v = to <$> genericFromValue v
 
 instance FromValue Int32 where
   fromValue (ValueInt v) = pure v
@@ -79,11 +82,11 @@ wrongType expected value = throwError ("Wrong type, should be " <> expected <> s
 class GenericFromValue (f :: Type -> Type) where
   genericFromValue :: Value' ConstScalar -> Either Text (f p)
 
-instance
+instance forall dataName consName records s l p.
   ( KnownSymbol dataName
   , KnownSymbol consName
   , GenericFromValue records
-  ) => GenericFromValue (D1 ('MetaData dataName "Ghci5" "interactive" 'False)
+  ) => GenericFromValue (D1 ('MetaData dataName s l 'False)
                          (C1 ('MetaCons consName p 'True) records
                          )) where
   genericFromValue v = M1 . M1 <$> genericFromValue @records v
@@ -98,35 +101,13 @@ instance forall wrappedType fieldName rest u s l.
         r = genericFromValue @rest v
     in (:*:) <$> l <*> r
 
-instance forall wrappedType fieldName rest u s l.
+instance forall wrappedType fieldName u s l.
   ( KnownSymbol fieldName
   , FromValue wrappedType
   ) => GenericFromValue (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) where
   genericFromValue v = M1 . K1 <$> fromValue @wrappedType v
 
-
-{-
-
-M1 {unM1 = M1 {unM1 = M1 {unM1 = K1 {unK1 = "tom"}} :*: M1 {unM1 = K1 {unK1 = 10}}}}
-
-
-= D1
-    ('MetaData "Rec" "Ghci5" "interactive" 'False)
-    (C1
-       ('MetaCons "Rec" 'GHC.Generics.PrefixI 'True)
-       (S1
-          ('MetaSel
-             ('Just "name")
-             'GHC.Generics.NoSourceUnpackedness
-             'GHC.Generics.NoSourceStrictness
-             'GHC.Generics.DecidedLazy)
-          (Rec0 Text)
-        :*: S1
-              ('MetaSel
-                 ('Just "year")
-                 'GHC.Generics.NoSourceUnpackedness
-                 'GHC.Generics.NoSourceStrictness
-                 'GHC.Generics.DecidedLazy)
-              (Rec0 Int)))
-
--}
+instance forall l r m.
+  ( TypeError ('Text "Generic fromValue only works for records with exactly one data constructor.")
+  ) => GenericFromValue (D1 m (l :+: r)) where
+  genericFromValue = undefined

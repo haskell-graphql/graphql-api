@@ -23,7 +23,7 @@ library
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -51,6 +51,7 @@ library
       GraphQL.Internal.Validation
       GraphQL.Resolver
       GraphQL.Value
+      GraphQL.Value.FromValue
   default-language: Haskell2010
 
 test-suite graphql-api-doctests
