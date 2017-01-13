@@ -110,10 +110,13 @@ genValue n
 type Value = Value' ConstScalar
 
 -- TODO: These next two definitions are quite internal. We should move this
--- mode to Internal and then re-export the bits that end-users will use.
+-- module to Internal and then re-export the bits that end-users will use.
 
--- | A GraphQL value which might contain some variables, some of which may not
--- have definitions.
+-- | A GraphQL value which might contain some variables. These variables are
+-- not yet associated with
+-- <https://facebook.github.io/graphql/#VariableDefinition variable
+-- definitions> (see also 'GraphQL.Internal.Validation.VariableDefinition'),
+-- which are provided in a different context.
 type UnresolvedVariableValue = Value' UnresolvedVariableScalar
 
 pattern ValueInt :: Int32 -> Value

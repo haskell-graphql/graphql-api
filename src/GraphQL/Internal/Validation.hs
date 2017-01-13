@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
 -- | Transform GraphQL query documents from AST into valid structures
 --
@@ -505,9 +506,10 @@ validateDefaultValue defaultValue =
   case astToVariableValue defaultValue of
     Nothing -> throwE $ InvalidValue defaultValue
     Just value ->
-      for value $ \scalar -> case scalar of
-                               Left _ -> throwE $ InvalidDefaultValue defaultValue
-                               Right constant -> pure constant
+      for value $
+      \case
+        Left _ -> throwE $ InvalidDefaultValue defaultValue
+        Right constant -> pure constant
 
 
 -- | Get all the variables referred to in a thing what contains variables.

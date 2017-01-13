@@ -57,7 +57,8 @@ parseQuery query = first toS (parseOnly (Parser.queryDocument <* endOfInput) que
 
 -- | Get an operation from a query document ready to be processed.
 --
--- TODO: This is the wrong API. For example, it doesn't take variable values.
+-- TODO: Open question whether we want to export this to the end-user. If we
+-- do, it should probably not be in first position.
 getOperation :: QueryDocument VariableValue -> Maybe AST.Name -> VariableValues -> Either QueryError (SelectionSet Value)
 getOperation document name vars = first ExecutionError $ do
   op <- Execution.getOperation document name

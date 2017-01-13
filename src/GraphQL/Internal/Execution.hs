@@ -103,7 +103,11 @@ formatError (MissingValue name) = "Missing value for " <> show name <> " and mus
 formatError (NoSuchOperation name) = "Requested operation " <> show name <> " but couldn't find it."
 formatError NoAnonymousOperation = "No name supplied for opertaion, but no anonymous operation."
 
--- | Variable values.
+-- | A map of variables to their values.
+--
+-- In GraphQL the variable values are not part of the query itself, they are
+-- instead passed in through a separate channel. Create a 'VariableValues'
+-- from this other channel and pass it to 'substituteVariables'.
 --
 -- GraphQL allows the values of variables to be specified, but doesn't provide
 -- a way for doing so in the language.
