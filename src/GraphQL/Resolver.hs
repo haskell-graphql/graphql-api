@@ -42,6 +42,7 @@ import GraphQL.API
 import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
 import GraphQL.Value (Name, Value)
+import GraphQL.Value.FromValue (FromValue(..))
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (HasName(..))
@@ -256,7 +257,7 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad
 instance forall ks t f m.
   ( KnownSymbol ks
   , BuildFieldResolver m f
-  , GValue.FromValue t
+  , FromValue t
   , Defaultable t
   , HasAnnotatedInputType t
   , Monad m
@@ -266,7 +267,7 @@ instance forall ks t f m.
     let argName = getName argument
     value <- case lookupArgument field argName of
       Nothing -> valueMissing @t argName
-      Just v -> first (InvalidValue argName) (GValue.fromValue @t v)
+      Just v -> first (InvalidValue argName) (fromValue @t v)
     buildFieldResolver @m @f (handler value) field
 
 

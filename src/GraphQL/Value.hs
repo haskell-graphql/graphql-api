@@ -27,8 +27,6 @@ module GraphQL.Value
   , valueToAST
   , astToVariableValue
   , variableValueToAST
-  , prop_roundtripValue
-  , FromValue(..)
   , Name
   , List
   , List'(..)
@@ -51,7 +49,6 @@ import Protolude
 
 import qualified Data.Aeson as Aeson
 import Data.Aeson (ToJSON(..), (.=), pairs)
-import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
@@ -61,7 +58,6 @@ import GraphQL.Internal.AST (Name(..), Variable)
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
-
 
 -- * Values
 
@@ -345,56 +341,6 @@ instance ToValue List where
 instance ToValue (Object' ConstScalar) where
   toValue = ValueObject'
 
--- * FromValue
-
--- | @a@ can be converted from a GraphQL 'Value' to a Haskell value.
---
--- The @FromValue@ instance converts 'AST.Value' to the type expected by the
--- handler function. It is the boundary between incoming data and your custom
--- application Haskell types.
-class FromValue a where
-  -- | Convert an already-parsed value into a Haskell value, generally to be
-  -- passed to a handler.
-  fromValue :: Value' ConstScalar -> Either Text a
-
-instance FromValue Int32 where
-  fromValue (ValueScalar' (ConstInt v)) = pure v
-  fromValue v = wrongType "Int" v
-
-instance FromValue Double where
-  fromValue (ValueScalar' (ConstFloat v)) = pure v
-  fromValue v = wrongType "Double" v
-
-instance FromValue Bool where
-  fromValue (ValueScalar' (ConstBoolean v)) = pure v
-  fromValue v = wrongType "Bool" v
-
-instance FromValue Text where
-  fromValue (ValueScalar' (ConstString (String v))) = pure v
-  fromValue v = wrongType "String" v
-
-instance forall v. FromValue v => FromValue [v] where
-  fromValue (ValueList' (List' values)) = traverse (fromValue @v) values
-  fromValue v = wrongType "List" v
-
-instance forall v. FromValue v => FromValue (NonEmpty v) where
-  fromValue (ValueList' (List' values)) =
-    case NonEmpty.nonEmpty values of
-      Nothing -> Left "Cannot construct NonEmpty from empty list"
-      Just values' -> traverse (fromValue @v) values'
-  fromValue v = wrongType "List" v
-
-instance forall v. FromValue v => FromValue (Maybe v) where
-  fromValue (ValueScalar' ConstNull) = pure Nothing
-  fromValue x = Just <$> fromValue @v x
-
--- | Anything that can be converted to a value and from a value should roundtrip.
-prop_roundtripValue :: forall a. (Eq a, ToValue a, FromValue a) => a -> Bool
-prop_roundtripValue x = fromValue (toValue x) == Right x
-
--- | Throw an error saying that @value@ does not have the @expected@ type.
-wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
-wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
 
 -- * Conversion to and from AST.
 

@@ -1,0 +1,132 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+
+-- | Literal GraphQL values.
+module GraphQL.Value.FromValue
+  ( FromValue(..)
+  , prop_roundtripValue
+  , wrongType
+  ) where
+
+import Protolude
+import GraphQL.Value
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.List.NonEmpty (NonEmpty)
+import GHC.Generics (D, (:*:)(..))
+import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
+
+-- * FromValue
+
+-- | @a@ can be converted from a GraphQL 'Value' to a Haskell value.
+--
+-- The @FromValue@ instance converts 'AST.Value' to the type expected by the
+-- handler function. It is the boundary between incoming data and your custom
+-- application Haskell types.
+class FromValue a where
+  -- | Convert an already-parsed value into a Haskell value, generally to be
+  -- passed to a handler.
+  fromValue :: Value' ConstScalar -> Either Text a
+
+instance FromValue Int32 where
+  fromValue (ValueInt v) = pure v
+  fromValue v = wrongType "Int" v
+
+instance FromValue Double where
+  fromValue (ValueFloat v) = pure v
+  fromValue v = wrongType "Double" v
+
+instance FromValue Bool where
+  fromValue (ValueBoolean v) = pure v
+  fromValue v = wrongType "Bool" v
+
+instance FromValue Text where
+  fromValue (ValueString (String v)) = pure v
+  fromValue v = wrongType "String" v
+
+instance forall v. FromValue v => FromValue [v] where
+  fromValue (ValueList' (List' values)) = traverse (fromValue @v) values
+  fromValue v = wrongType "List" v
+
+instance forall v. FromValue v => FromValue (NonEmpty v) where
+  fromValue (ValueList' (List' values)) =
+    case NonEmpty.nonEmpty values of
+      Nothing -> Left "Cannot construct NonEmpty from empty list"
+      Just values' -> traverse (fromValue @v) values'
+  fromValue v = wrongType "List" v
+
+instance forall v. FromValue v => FromValue (Maybe v) where
+  fromValue ValueNull = pure Nothing
+  fromValue x = Just <$> fromValue @v x
+
+-- | Anything that can be converted to a value and from a value should roundtrip.
+prop_roundtripValue :: forall a. (Eq a, ToValue a, FromValue a) => a -> Bool
+prop_roundtripValue x = fromValue (toValue x) == Right x
+
+-- | Throw an error saying that @value@ does not have the @expected@ type.
+wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
+wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
+
+
+-- We only allow generic record reading for now because I am not sure
+-- how we should interpret any other generic things (e.g. tuples).
+class GenericFromValue (f :: Type -> Type) where
+  genericFromValue :: Value' ConstScalar -> Either Text (f p)
+
+instance
+  ( KnownSymbol dataName
+  , KnownSymbol consName
+  , GenericFromValue records
+  ) => GenericFromValue (D1 ('MetaData dataName "Ghci5" "interactive" 'False)
+                         (C1 ('MetaCons consName p 'True) records
+                         )) where
+  genericFromValue v = M1 . M1 <$> genericFromValue @records v
+
+instance forall wrappedType fieldName rest u s l.
+  ( KnownSymbol fieldName
+  , FromValue wrappedType
+  , GenericFromValue rest
+  ) => GenericFromValue (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType) :*: rest) where
+  genericFromValue v =
+    let l = M1 . K1 <$> fromValue @wrappedType v
+        r = genericFromValue @rest v
+    in (:*:) <$> l <*> r
+
+instance forall wrappedType fieldName rest u s l.
+  ( KnownSymbol fieldName
+  , FromValue wrappedType
+  ) => GenericFromValue (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) where
+  genericFromValue v = M1 . K1 <$> fromValue @wrappedType v
+
+
+{-
+
+M1 {unM1 = M1 {unM1 = M1 {unM1 = K1 {unK1 = "tom"}} :*: M1 {unM1 = K1 {unK1 = 10}}}}
+
+
+= D1
+    ('MetaData "Rec" "Ghci5" "interactive" 'False)
+    (C1
+       ('MetaCons "Rec" 'GHC.Generics.PrefixI 'True)
+       (S1
+          ('MetaSel
+             ('Just "name")
+             'GHC.Generics.NoSourceUnpackedness
+             'GHC.Generics.NoSourceStrictness
+             'GHC.Generics.DecidedLazy)
+          (Rec0 Text)
+        :*: S1
+              ('MetaSel
+                 ('Just "year")
+                 'GHC.Generics.NoSourceUnpackedness
+                 'GHC.Generics.NoSourceStrictness
+                 'GHC.Generics.DecidedLazy)
+              (Rec0 Int)))
+
+-}

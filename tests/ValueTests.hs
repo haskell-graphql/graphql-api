@@ -17,9 +17,9 @@ import GraphQL.Value
   , unionObjects
   , objectFields
   , objectFromList
-  , prop_roundtripValue
   , toValue
   )
+import GraphQL.Value.FromValue (prop_roundtripValue)
 
 
 tests :: IO TestTree
