@@ -124,7 +124,7 @@ getSelectionSet (Query _ _ ss) = ss
 getSelectionSet (Mutation _ _ ss) = ss
 
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
-type OperationType value = VariableDefinitions -> (Directives value) -> (SelectionSet value) -> (Operation value)
+type OperationType value = VariableDefinitions -> Directives value -> SelectionSet value -> Operation value
 
 type Operations value = Map Name (Operation value)
 
@@ -506,7 +506,7 @@ validateVariableDefinitions vars = do
 -- | Ensure that a variable definition is a valid one.
 validateVariableDefinition :: AST.VariableDefinition -> Validation VariableDefinition
 validateVariableDefinition (AST.VariableDefinition name varType value) =
-  VariableDefinition name varType <$> (traverse validateDefaultValue value)
+  VariableDefinition name varType <$> traverse validateDefaultValue value
 
 -- | Ensure that a default value contains no variables.
 validateDefaultValue :: AST.DefaultValue -> Validation Value
@@ -539,7 +539,7 @@ validateValues = traverse toVariableValue
 resolveVariables :: Traversable f => VariableDefinitions -> f UnresolvedVariableValue -> Validation (f VariableValue)
 resolveVariables definitions = traverse resolveVariableValue
   where
-    resolveVariableValue value = traverse resolveVariable value
+    resolveVariableValue = traverse resolveVariable
     resolveVariable (Left variable) =
       case Map.lookup variable definitions of
         Nothing -> throwE (UndefinedVariable variable)
