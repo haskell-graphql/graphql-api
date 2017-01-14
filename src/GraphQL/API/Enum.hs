@@ -1,7 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
@@ -14,15 +13,22 @@ module GraphQL.API.Enum
   ) where
 
 import Protolude hiding (Enum, TypeError)
-import GraphQL.Internal.AST (Name, nameFromSymbol, NameError, formatNameError)
+import GraphQL.Internal.AST (Name, nameFromSymbol, NameError)
+import GraphQL.Internal.Output (GraphQLError(..))
 import GHC.Generics (D, (:+:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 
 invalidEnumName :: forall t. NameError -> Either Text t
-invalidEnumName x = Left ("In Enum: " <> formatNameError x)
+invalidEnumName x = Left ("In Enum: " <> formatError x)
+
+-- TODO: Enums have a slightly more restricted set of names than 'Name'
+-- implies. Especially, they cannot be 'true', 'false', or 'nil'. The parser
+-- /probably/ guarantees this, so it should export this guarantee by providing
+-- an 'Enum' type.
 
 class GenericEnumValues (f :: Type -> Type) where
   genericEnumValues :: [Either NameError Name]
+  -- XXX: Why is this 'Text' and not 'NameError'?
   genericEnumFromValue :: Name -> Either Text (f p)
   genericEnumToValue :: f p -> Name
 
@@ -40,7 +46,7 @@ instance forall conName f p b.
   ( KnownSymbol conName
   , GenericEnumValues f
   ) => GenericEnumValues (C1 ('MetaCons conName p b) U1 :+: f) where
-  genericEnumValues = let name = nameFromSymbol @conName in name:(genericEnumValues @f)
+  genericEnumValues = let name = nameFromSymbol @conName in name:genericEnumValues @f
   genericEnumFromValue vname =
     case nameFromSymbol @conName of
       Right name -> if name == vname
@@ -50,6 +56,14 @@ instance forall conName f p b.
   genericEnumToValue (L1 _) =
     case nameFromSymbol @conName of
       Right name -> name
+      -- XXX: This is impossible to catch during validation, because we cannot
+      -- validate type-level symbols, we can only validate values. We could
+      -- show that the schema is invalid at the type-level and still decide to
+      -- call this anyway. The error should rather say that the schema is
+      -- invalid.
+      --
+      -- Further, we don't actually have any schema-level validation, so
+      -- "should have been caught during validation" is misleading.
       Left err -> panic ("Invalid name: " <> show err <> ". This should have been caught during validation. Please file a bug.")
   genericEnumToValue (R1 gv) = genericEnumToValue gv
 
