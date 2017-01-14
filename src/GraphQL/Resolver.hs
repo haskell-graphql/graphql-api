@@ -426,9 +426,10 @@ instance forall m unionName objects.
 -- | Inline fragments have optional[*] type conditions. Find the inline
 -- fragment in the selection set that matches the named type.
 --
--- [*] Except we currently treat type conditions as mandatory.
---
 -- <https://facebook.github.io/graphql/#sec-Inline-Fragments>
+--
+-- [*] Except we currently treat type conditions as mandatory. This is a bug.
+-- See <https://github.com/jml/graphql-api/issues/70>
 --
 -- Note: probably want to move this to Validation, esp. as part of work to
 -- validate selection sets (see https://github.com/jml/graphql-api/issues/59).
