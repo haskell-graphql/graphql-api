@@ -17,6 +17,7 @@ module GraphQL.Value.FromValue
 
 import Protolude hiding (TypeError)
 import GraphQL.Value
+import GraphQL.Value.ToValue (ToValue(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
 import GHC.Generics ((:*:)(..))

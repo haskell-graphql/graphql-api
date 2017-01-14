@@ -23,7 +23,6 @@ module GraphQL.Value
   , pattern ValueObject
   , pattern ValueNull
   , toObject
-  , ToValue(..)
   , valueToAST
   , astToVariableValue
   , variableValueToAST
@@ -49,7 +48,6 @@ import Protolude
 
 import qualified Data.Aeson as Aeson
 import Data.Aeson (ToJSON(..), (.=), pairs)
-import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
@@ -241,9 +239,6 @@ instance Arbitrary scalar => Arbitrary (List' scalar) where
   -- invalid lists.
   arbitrary = List' <$> listOf arbitrary
 
-makeList :: (Functor f, Foldable f, ToValue a) => f a -> List
-makeList = List' . Protolude.toList . map toValue
-
 
 instance ToJSON scalar => ToJSON (List' scalar) where
   toJSON (List' x) = toJSON x
@@ -303,43 +298,6 @@ instance ToJSON scalar => ToJSON (Object' scalar) where
   toEncoding (Object' xs) = pairs (foldMap (\(k, v) -> toS (getNameText k) .= v) (OrderedMap.toList xs))
 
 
--- * ToValue
-
--- | Turn a Haskell value into a GraphQL value.
-class ToValue a where
-  toValue :: a -> Value' ConstScalar
-
-instance ToValue (Value' ConstScalar) where
-  toValue = identity
-
--- XXX: Should this just be for Foldable?
-instance ToValue a => ToValue [a] where
-  toValue = toValue . List' . map toValue
-
-instance ToValue a => ToValue (NonEmpty a) where
-  toValue = toValue . makeList
-
-instance ToValue Bool where
-  toValue = ValueScalar' . ConstBoolean
-
-instance ToValue Int32 where
-  toValue = ValueScalar' . ConstInt
-
-instance ToValue Double where
-  toValue = ValueScalar' . ConstFloat
-
-instance ToValue String where
-  toValue = ValueScalar' . ConstString
-
--- XXX: Make more generic: any string-like thing rather than just Text.
-instance ToValue Text where
-  toValue = toValue . String
-
-instance ToValue List where
-  toValue = ValueList'
-
-instance ToValue (Object' ConstScalar) where
-  toValue = ValueObject'
 
 
 -- * Conversion to and from AST.

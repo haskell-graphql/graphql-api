@@ -43,6 +43,7 @@ import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
 import GraphQL.Value (Name, Value)
 import GraphQL.Value.FromValue (FromValue(..))
+import GraphQL.Value.ToValue (ToValue(..))
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (HasName(..))
@@ -126,7 +127,7 @@ data Result a = Result [ResolverError] a deriving (Show, Functor, Eq)
 -- Aggregating results keeps all errors and creates a ValueList
 -- containing the individual values.
 aggregateResults :: [Result Value] -> Result Value
-aggregateResults r = GValue.toValue <$> sequenceA r
+aggregateResults r = toValue <$> sequenceA r
 
 instance Applicative Result where
   pure v = Result [] v
@@ -177,18 +178,18 @@ instance forall m. (Functor m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  do
-    map (ok . GValue.toValue) handler
+    map (ok . toValue) handler
 
 
 instance forall m. (Functor m) => HasGraph m Double where
   type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . GValue.toValue) handler
+  buildResolver handler _ =  map (ok . toValue) handler
 
 instance forall m. (Functor m) => HasGraph m Text where
   type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . GValue.toValue) handler
+  buildResolver handler _ =  map (ok . toValue) handler
 
 
 instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
