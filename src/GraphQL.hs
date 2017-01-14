@@ -14,6 +14,7 @@ module GraphQL
 import Protolude
 
 import Data.Attoparsec.Text (parseOnly, endOfInput)
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Execution
   ( VariableValues
@@ -30,6 +31,7 @@ import GraphQL.Internal.Validation
   , getSelectionSet
   , VariableValue
   )
+import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Value (Value)
 
 -- | Errors that can happen while processing a query document.
@@ -44,6 +46,14 @@ data QueryError
   -- | Validated, but failed during execution.
   | ExecutionError ExecutionError
   deriving (Eq, Show)
+
+instance GraphQLError QueryError where
+  formatError (ParseError e) =
+    "Couldn't parse query document: " <> e
+  formatError (ValidationError es) =
+    "Validation errors:\n" <> mconcat ["  " <> formatError e <> "\n" | e <- NonEmpty.toList es]
+  formatError (ExecutionError e) =
+    "Execution error: " <> show e
 
 -- | Turn some text into a valid query document.
 compileQuery :: Text -> Either QueryError (QueryDocument VariableValue)
