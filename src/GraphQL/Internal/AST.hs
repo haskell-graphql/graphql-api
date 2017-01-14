@@ -1,13 +1,12 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module GraphQL.Internal.AST
   ( Name(getNameText)
-  , NameError
-  , formatNameError
+  , NameError(..)
   , nameParser
   , makeName
   , nameFromSymbol
@@ -95,11 +94,6 @@ nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
 
 newtype NameError = NameError Text deriving (Eq, Show)
 
--- TODO: error-handling: if we do go for an ADT error style, we should have a
--- type class for pretty-printing errors. See jml/graphql-api#20.
-formatNameError :: NameError -> Text
-formatNameError (NameError name) = "Not a valid GraphQL name: " <> show name
-
 -- | Create a 'Name'.
 --
 -- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
@@ -118,10 +112,10 @@ makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
 --
 -- >>> unsafeMakeName "foo"
 -- Name {getNameText = "foo"}
-unsafeMakeName :: Text -> Name
+unsafeMakeName :: HasCallStack => Text -> Name
 unsafeMakeName name =
   case makeName name of
-    Left e -> panic (formatNameError e)
+    Left e -> panic (show e)
     Right n -> n
 
 -- * Documents

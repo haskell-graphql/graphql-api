@@ -6,6 +6,7 @@ module GraphQL.Internal.Output
   ( Response(..)
   , Errors
   , Error(..)  -- XXX: Maybe export helper functions rather than constructors.
+  , GraphQLError(..)
   ) where
 
 import Protolude hiding (Location, Map)
@@ -18,7 +19,7 @@ import GraphQL.Value
   , pattern ValueObject
   , pattern ValueNull
   )
-import GraphQL.Internal.AST (unsafeMakeName)
+import GraphQL.Internal.AST (NameError(..), unsafeMakeName)
 
 -- | GraphQL response.
 --
@@ -57,7 +58,7 @@ data Response
 -- | Construct an object from a list of names and values.
 --
 -- Panic if there are duplicate names.
-unsafeMakeObject :: [(Text, Value)] -> Value
+unsafeMakeObject :: HasCallStack => [(Text, Value)] -> Value
 unsafeMakeObject fields =
   case objectFromList (map (first unsafeMakeName) fields) of
     Nothing -> panic $ "Object has duplicate keys: " <> show fields
@@ -90,3 +91,20 @@ instance ToValue Location where
   toValue (Location line column) = unsafeMakeObject [("line" , toValue line)
                                                     ,("column", toValue column)
                                                     ]
+
+-- | An error that arises while processing a GraphQL query.
+class GraphQLError e where
+  -- | Represent an error as human-readable text, primarily intended for
+  -- developers of GraphQL clients, and secondarily for developers of GraphQL
+  -- servers.
+  formatError :: e -> Text
+
+  -- | Represent an error as human-readable text, together with reference to a
+  -- series of locations within a GraphQL query document. Default
+  -- implementation calls 'formatError' and provides no locations.
+  toError :: e -> Error
+  toError e = Error (formatError e) []
+
+-- Defined here to avoid circular dependency.
+instance GraphQLError NameError where
+  formatError (NameError name) = "Not a valid GraphQL name: " <> show name

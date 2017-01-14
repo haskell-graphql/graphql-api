@@ -73,6 +73,7 @@ import qualified GraphQL.Internal.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
 import GraphQL.Internal.AST (Name, Alias, TypeCondition, Variable)
+import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Value
   ( Value
@@ -624,6 +625,23 @@ data ValidationError
   -- | Default value in AST contained variables.
   | InvalidDefaultValue AST.Value
   deriving (Eq, Show)
+
+instance GraphQLError ValidationError where
+  formatError (DuplicateOperation name) = "More than one operation named '" <> show name <> "'"
+  formatError (MixedAnonymousOperations n names)
+    | n > 1 && null names = "Multiple anonymous operations defined. Found " <> show n
+    | otherwise = "Document contains both anonymous operations (" <> show n <> ") and named operations (" <> show names <> ")"
+  formatError (DuplicateArgument name) = "More than one argument named '" <> show name <> "'"
+  formatError (DuplicateFragmentDefinition name) = "More than one fragment named '" <> show name <> "'"
+  formatError (NoSuchFragment name) = "No fragment named '" <> show name <> "'"
+  formatError (DuplicateDirective name) = "More than one directive named '" <> show name <> "'"
+  formatError (DuplicateVariableDefinition name) = "More than one variable defined with name '" <> show name <> "'"
+  formatError (CircularFragmentSpread name) = "Fragment '" <> show name <> "' contains a fragment spread that refers back to itself."
+  formatError (UnusedFragments names) = "Fragments defined but not used: " <> show names
+  formatError (UnusedVariables names) = "Variables defined but not used: " <> show names
+  formatError (UndefinedVariable variable) = "No definition for variable: " <> show variable
+  formatError (InvalidValue value) = "Invalid value (maybe an object has duplicate field names?): " <> show value
+  formatError (InvalidDefaultValue value) = "Invalid default value, contains variables: " <> show value
 
 type ValidationErrors = NonEmpty ValidationError
 

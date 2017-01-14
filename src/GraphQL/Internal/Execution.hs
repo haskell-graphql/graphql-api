@@ -25,6 +25,7 @@ import GraphQL.Value
   , List'(..)
   , Object'(..)
   )
+import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Validation
   ( Operation
   , QueryDocument(..)
@@ -98,10 +99,10 @@ data ExecutionError
   | NoAnonymousOperation
   deriving (Eq, Show)
 
-formatError :: ExecutionError -> Text
-formatError (MissingValue name) = "Missing value for " <> show name <> " and must be non-null."
-formatError (NoSuchOperation name) = "Requested operation " <> show name <> " but couldn't find it."
-formatError NoAnonymousOperation = "No name supplied for opertaion, but no anonymous operation."
+instance GraphQLError ExecutionError where
+  formatError (MissingValue name) = "Missing value for " <> show name <> " and must be non-null."
+  formatError (NoSuchOperation name) = "Requested operation " <> show name <> " but couldn't find it."
+  formatError NoAnonymousOperation = "No name supplied for opertaion, but no anonymous operation."
 
 -- | A map of variables to their values.
 --

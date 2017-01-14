@@ -1,16 +1,16 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE RoleAnnotations #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module GraphQL.Resolver
   ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
@@ -41,8 +41,9 @@ import GraphQL.API
   )
 import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
-import GraphQL.Value (Value)
+import GraphQL.Value (Name, Value)
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Validation
   ( SelectionSet
@@ -54,7 +55,6 @@ import GraphQL.Internal.Validation
   , getFieldSelectionSet
   , lookupArgument
   )
-import GraphQL.Value (Name)
 
 data ResolverError
   -- | There was a problem in the schema. Server-side problem.
@@ -66,14 +66,32 @@ data ResolverError
   -- | Could not translate value into Haskell. Probably a client-side problem.
   | InvalidValue Name Text
   -- | Found duplicate fields in set.
-  | DuplicateFields [ResolveFieldResult]
-  -- | We tried to resolve something that wasn't a union type despite
-  -- expecting one.
-  | ResolveNonUnionType Text (SelectionSet Value)
+  | DuplicateFields [ResolveFieldResult]  -- TODO: Catch this in validation
   -- | We tried to use an inline fragment with a name that the union
   -- type does not support.
-  | UnionTypeNotFound Text (SelectionSet Value)
+  | UnionTypeNotFound Name (SelectionSet Value)
+  -- | We found more than one inline fragment matching the given type condition.
+  | MultipleInlineFragmentsForType Name [InlineFragment FragmentSpread Value]
   deriving (Show, Eq)
+
+instance GraphQLError ResolverError where
+  formatError (SchemaError e) =
+    "Schema error: " <> formatError e
+  formatError (FieldNotFoundError field) =
+    "Could not find value for field: " <> show field
+  formatError (ValueMissing name) =
+    "No value provided for " <> show name <> ", and no default specified."
+  formatError (InvalidValue name text) =
+    "Could not coerce " <> show name <> " to valid value: " <> text
+  -- TODO: format 'result' nicely
+  formatError (DuplicateFields result) =
+    "Duplicate fields requested: " <> show result
+  formatError (UnionTypeNotFound unionTypeName selectionSet) =
+    "No inline fragment for " <> show unionTypeName
+    <> " (e.g. '... on " <> show unionTypeName <> "') found in selection set: "
+    <> show selectionSet
+  formatError (MultipleInlineFragmentsForType name fragments) =
+    "Multiple inline fragments found for " <> show name <> ": " <> show fragments
 
 -- | Object field separation operator.
 --
@@ -337,9 +355,9 @@ instance forall typeName interfaces fields m.
 -- This type family is an implementation detail but its TypeError
 -- messages are visible at compile time.
 type family TypeIndex (m :: Type -> Type) (object :: Type) (union :: Type) = (result :: Type) where
-  TypeIndex m (API.Object name interfaces fields) (API.Union uName ((API.Object name interfaces fields):_)) =
+  TypeIndex m (API.Object name interfaces fields) (API.Union uName (API.Object name interfaces fields:_)) =
     Handler m (API.Object name interfaces fields)
-  TypeIndex m (API.Object name interfaces fields) (API.Union uName ((API.Object name' i' f'):objects)) =
+  TypeIndex m (API.Object name interfaces fields) (API.Union uName (API.Object name' i' f':objects)) =
     TypeIndex m (API.Object name interfaces fields) (API.Union uName objects)
   -- Slightly nicer type errors:
   TypeIndex _ (API.Object name interfaces fields) (API.Union uName '[]) =
@@ -368,7 +386,7 @@ instance forall m union objects name interfaces fields.
   , TypeIndex m (API.Object name interfaces fields) union ~ Handler m (API.Object name interfaces fields)
   , RunFields m (RunFieldsType m fields)
   , RunUnion m union objects
-  ) => RunUnion m union ((API.Object name interfaces fields):objects) where
+  ) => RunUnion m union (API.Object name interfaces fields:objects) where
   runUnion duv fragment@(InlineFragment _ _ selection) =
     case extractUnionValue @(API.Object name interfaces fields) @union @m duv of
       Just handler -> buildResolver @m @(API.Object name interfaces fields) handler selection
@@ -391,21 +409,41 @@ instance forall m unionName objects.
   , RunUnion m (API.Union unionName objects) objects
   ) => HasGraph m (API.Union unionName objects) where
   type Handler m (API.Union unionName objects) = m (DynamicUnionValue (API.Union unionName objects) m)
+  -- 'label' is the name of the GraphQL type of the branch of the union that
+  -- we are currently implementing.
   buildResolver mHandler selectionSet = do
     duv@(DynamicUnionValue label _) <- mHandler
-    -- we only need to look at the fragment that matches by name:
-    case find (matchFragmentName label) selectionSet of
-      Nothing -> pure (Result [UnionTypeNotFound label selectionSet] GValue.ValueNull)
-      Just (SelectionInlineFragment inlineFragment) -> do
-        -- loop through union handlers and call right one when type matches.
-        runUnion @m @(API.Union unionName objects) @objects duv inlineFragment
-      Just _ -> pure (Result [ResolveNonUnionType label selectionSet] GValue.ValueNull)
-      where
-        matchFragmentName label' (SelectionInlineFragment (InlineFragment (AST.NamedType name') _ _)) =
-          -- TODO: error handler
-          label' == AST.getNameText name'
-        matchFragmentName _ _ = False
+    case AST.makeName label of
+      Left e -> pure (Result [SchemaError e] GValue.ValueNull)
+      Right name ->
+        -- we only need to look at the fragment that matches by name:
+        case findInlineFragmentForType name selectionSet of
+          Left e -> pure (Result [e] GValue.ValueNull)
+          Right inlineFragment -> do
+            -- loop through union handlers and call right one when type matches.
+            runUnion @m @(API.Union unionName objects) @objects duv inlineFragment
 
+-- | Inline fragments have optional[*] type conditions. Find the inline
+-- fragment in the selection set that matches the named type.
+--
+-- <https://facebook.github.io/graphql/#sec-Inline-Fragments>
+--
+-- [*] Except we currently treat type conditions as mandatory. This is a bug.
+-- See <https://github.com/jml/graphql-api/issues/70>
+--
+-- Note: probably want to move this to Validation, esp. as part of work to
+-- validate selection sets (see https://github.com/jml/graphql-api/issues/59).
+findInlineFragmentForType :: Name -> SelectionSet Value -> Either ResolverError (InlineFragment FragmentSpread Value)
+findInlineFragmentForType name selectionSet =
+  case mapMaybe getInlineFragment selectionSet of
+    [] -> Left (UnionTypeNotFound name selectionSet)
+    [x] -> Right x
+    xs -> Left (MultipleInlineFragmentsForType name xs)
+  where
+    getInlineFragment (SelectionInlineFragment frag@(InlineFragment (AST.NamedType name') _ _))
+      | name == name' = Just frag
+      | otherwise = Nothing
+    getInlineFragment _ = Nothing
 
 symbolText :: forall ks. KnownSymbol ks => Text
 symbolText = toS (symbolVal @ks Proxy)
