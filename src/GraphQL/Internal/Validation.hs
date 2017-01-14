@@ -475,7 +475,15 @@ resolveFragmentDefinitions allFragments =
 
 -- * Variables
 
-data VariableDefinition = VariableDefinition Variable AST.Type (Maybe Value) deriving (Eq, Ord, Show)
+-- | Defines a variable within the context of an operation.
+--
+-- See <https://facebook.github.io/graphql/#sec-Language.Variables>
+data VariableDefinition
+  = VariableDefinition
+    { variable :: Variable -- ^ The name of the variable
+    , variableType :: AST.Type -- ^ The type of the variable
+    , defaultValue :: Maybe Value -- ^ An optional default value for the variable
+    } deriving (Eq, Ord, Show)
 
 type VariableDefinitions = Map Variable VariableDefinition
 
@@ -492,7 +500,7 @@ emptyVariableDefinitions = mempty
 validateVariableDefinitions :: [AST.VariableDefinition] -> Validation VariableDefinitions
 validateVariableDefinitions vars = do
   validatedDefns <- traverse validateVariableDefinition vars
-  let items = [ (name, defn) | defn@(VariableDefinition name _ _) <- validatedDefns]
+  let items = [ (variable defn, defn) | defn <- validatedDefns]
   mapErrors DuplicateVariableDefinition (makeMap items)
 
 -- | Ensure that a variable definition is a valid one.
