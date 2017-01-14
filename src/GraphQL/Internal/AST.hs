@@ -160,7 +160,7 @@ nameFromSymbol = makeName (toS (symbolVal @n Proxy))
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
 
-newtype Variable = Variable Name deriving (Eq,Show)
+newtype Variable = Variable Name deriving (Eq, Ord, Show)
 
 instance Arbitrary Variable where
   arbitrary = Variable <$> arbitrary
@@ -251,15 +251,15 @@ data Directive = Directive Name [Argument] deriving (Eq,Show)
 data Type = TypeNamed NamedType
           | TypeList ListType
           | TypeNonNull NonNullType
-            deriving (Eq,Show)
+            deriving (Eq, Ord, Show)
 
-newtype NamedType = NamedType Name deriving (Eq,Show)
+newtype NamedType = NamedType Name deriving (Eq, Ord, Show)
 
-newtype ListType = ListType Type deriving (Eq,Show)
+newtype ListType = ListType Type deriving (Eq, Ord, Show)
 
 data NonNullType = NonNullTypeNamed NamedType
                  | NonNullTypeList  ListType
-                   deriving (Eq,Show)
+                   deriving (Eq, Ord, Show)
 
 -- * Type definition
 

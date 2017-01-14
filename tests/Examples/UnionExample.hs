@@ -33,20 +33,29 @@ catOrDogList =
   , unionValue @MiniDog miniDog
   ]
 
+-- $setup
+-- >>> import qualified GraphQL.Internal.Encoder as Encode
+-- >>> import GraphQL.Value (valueToAST)
+
+
 -- | Show usage of a single unionValue
--- >>> exampleQuery
--- Result [] (ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "MonadicFelix")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}))
+--
+-- >>> (Result _ result) <- exampleQuery
+-- >>> putStrLn $ Encode.value (valueToAST result)
+-- {name:"MonadicFelix",meowVolume:32}
 exampleQuery :: IO (Result Value)
 exampleQuery = buildResolver @IO @CatOrDog catOrDog (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
 
 -- | 'unionValue' can be used in a list context
--- >>> exampleListQuery
--- Result [] (ValueList (List [ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "Felix")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}),ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "name"}) (ValueString (String "Mini")),ObjectField (Name {getNameText = "meowVolume"}) (ValueInt 32)]}),ValueObject (Object {objectFields = [ObjectField (Name {getNameText = "barkVolume"}) (ValueInt 100)]})]))
+--
+-- >>> (Result _ result) <- exampleListQuery
+-- >>> putStrLn $ Encode.value (valueToAST result)
+-- [{name:"Felix",meowVolume:32},{name:"Mini",meowVolume:32},{barkVolume:100}]
 exampleListQuery :: IO (Result Value)
 exampleListQuery = buildResolver @IO @CatOrDogList catOrDogList  (query "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }")
 
-query :: Text -> Validation.SelectionSet
+query :: Text -> Validation.SelectionSet Value
 query q =
   let Right doc = compileQuery q
-      Just x = getOperation doc Nothing
+      Right x = getOperation doc Nothing mempty
   in x

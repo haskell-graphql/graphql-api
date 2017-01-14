@@ -5,6 +5,8 @@
 module GraphQL
   ( QueryError
   , SelectionSet
+  , VariableValues
+  , Value
   , getOperation
   , compileQuery
   ) where
@@ -13,15 +15,22 @@ import Protolude
 
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Execution
+  ( VariableValues
+  , ExecutionError
+  , substituteVariables
+  )
+import qualified GraphQL.Internal.Execution as Execution
 import qualified GraphQL.Internal.Parser as Parser
-import qualified GraphQL.Internal.Validation
 import GraphQL.Internal.Validation
   ( QueryDocument
   , SelectionSet
   , ValidationErrors
   , validate
   , getSelectionSet
+  , VariableValue
   )
+import GraphQL.Value (Value)
 
 -- | Errors that can happen while processing a query document.
 data QueryError
@@ -32,10 +41,12 @@ data QueryError
   -- See <https://facebook.github.io/graphql/#sec-Validation> for more
   -- details.
   | ValidationError ValidationErrors
+  -- | Validated, but failed during execution.
+  | ExecutionError ExecutionError
   deriving (Eq, Show)
 
 -- | Turn some text into a valid query document.
-compileQuery :: Text -> Either QueryError QueryDocument
+compileQuery :: Text -> Either QueryError (QueryDocument VariableValue)
 compileQuery query = do
   parsed <- first ParseError (parseQuery query)
   first ValidationError (validate parsed)
@@ -46,8 +57,10 @@ parseQuery query = first toS (parseOnly (Parser.queryDocument <* endOfInput) que
 
 -- | Get an operation from a query document ready to be processed.
 --
--- TODO: This is the wrong API. For example, it doesn't take variable values.
-getOperation :: QueryDocument -> Maybe AST.Name -> Maybe SelectionSet
-getOperation document name = do
-  op <- GraphQL.Internal.Validation.getOperation document name
-  pure (getSelectionSet op)
+-- TODO: Open question whether we want to export this to the end-user. If we
+-- do, it should probably not be in first position.
+getOperation :: QueryDocument VariableValue -> Maybe AST.Name -> VariableValues -> Either QueryError (SelectionSet Value)
+getOperation document name vars = first ExecutionError $ do
+  op <- Execution.getOperation document name
+  resolved <- substituteVariables op vars
+  pure (getSelectionSet resolved)
