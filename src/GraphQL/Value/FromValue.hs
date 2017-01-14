@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Literal GraphQL values.
 module GraphQL.Value.FromValue
@@ -16,6 +17,8 @@ module GraphQL.Value.FromValue
   ) where
 
 import Protolude hiding (TypeError)
+import GraphQL.Internal.AST (nameFromSymbol)
+import qualified GraphQL.Internal.OrderedMap as OM
 import GraphQL.Value
 import GraphQL.Value.ToValue (ToValue(..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -30,12 +33,16 @@ import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 -- The @FromValue@ instance converts 'AST.Value' to the type expected by the
 -- handler function. It is the boundary between incoming data and your custom
 -- application Haskell types.
+--
+-- @FromValue@ has a generic instance for converting input objects to
+-- records.
 class FromValue a where
   -- | Convert an already-parsed value into a Haskell value, generally to be
   -- passed to a handler.
   fromValue :: Value' ConstScalar -> Either Text a
   default fromValue :: (Generic a, GenericFromValue (Rep a)) => Value' ConstScalar -> Either Text a
-  fromValue v = to <$> genericFromValue v
+  fromValue (ValueObject v) = to <$> genericFromValue v
+  fromValue v = wrongType "genericFromValue only works with objects." v
 
 instance FromValue Int32 where
   fromValue (ValueInt v) = pure v
@@ -80,7 +87,7 @@ wrongType expected value = throwError ("Wrong type, should be " <> expected <> s
 -- We only allow generic record reading for now because I am not sure
 -- how we should interpret any other generic things (e.g. tuples).
 class GenericFromValue (f :: Type -> Type) where
-  genericFromValue :: Value' ConstScalar -> Either Text (f p)
+  genericFromValue :: Object' ConstScalar -> Either Text (f p)
 
 instance forall dataName consName records s l p.
   ( KnownSymbol dataName
@@ -89,23 +96,38 @@ instance forall dataName consName records s l p.
   ) => GenericFromValue (D1 ('MetaData dataName s l 'False)
                          (C1 ('MetaCons consName p 'True) records
                          )) where
-  genericFromValue v = M1 . M1 <$> genericFromValue @records v
+  genericFromValue o = M1 . M1 <$> genericFromValue @records o
 
 instance forall wrappedType fieldName rest u s l.
   ( KnownSymbol fieldName
   , FromValue wrappedType
   , GenericFromValue rest
   ) => GenericFromValue (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType) :*: rest) where
-  genericFromValue v =
-    let l = M1 . K1 <$> fromValue @wrappedType v
-        r = genericFromValue @rest v
-    in (:*:) <$> l <*> r
+  genericFromValue object = do
+    l <- getValue @wrappedType @fieldName object
+    r <- genericFromValue @rest object
+    pure (l :*: r)
+
+-- | Look up a single record field element in the Object.
+getValue :: forall wrappedType fieldName u s l p. (FromValue wrappedType, KnownSymbol fieldName)
+         => Object' ConstScalar -> Either Text ((S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) p)
+getValue (Object' fieldMap) = do
+  fieldName <- case nameFromSymbol @fieldName of
+    Left err -> throwError ("invalid field name" <> show err)
+    Right name' -> pure name'
+   -- TODO(tom): How do we deal with optional fields? Maybe sounds
+   -- like the correct type, but how would Maybe be different from
+   -- `null`? Delegating to FromValue not good enough here because of
+   -- the dictionary lookup.
+  case OM.lookup fieldName fieldMap of
+    Nothing -> throwError ("Key not found: " <> show fieldName)
+    Just v -> M1 . K1 <$> fromValue @wrappedType v
 
 instance forall wrappedType fieldName u s l.
   ( KnownSymbol fieldName
   , FromValue wrappedType
   ) => GenericFromValue (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) where
-  genericFromValue v = M1 . K1 <$> fromValue @wrappedType v
+  genericFromValue = getValue @wrappedType @fieldName
 
 instance forall l r m.
   ( TypeError ('Text "Generic fromValue only works for records with exactly one data constructor.")
