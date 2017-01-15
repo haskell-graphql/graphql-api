@@ -238,7 +238,7 @@ instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType = do
     let name = nameFromSymbol @ks
-    let enums = sequenceA (enumValues @enum Proxy) :: Either NameError [Name]
+    let enums = sequenceA (enumValues @enum) :: Either NameError [Name]
     let et = EnumTypeDefinition <$> name <*> map (map EnumValueDefinition) enums
     TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum <$> et
 
@@ -291,7 +291,7 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType = do
     let name = nameFromSymbol @ks
-        enums = sequenceA (enumValues @enum Proxy) :: Either NameError [Name]
+        enums = sequenceA (enumValues @enum) :: Either NameError [Name]
     let et = EnumTypeDefinition <$> name <*> map (map EnumValueDefinition) enums
     TypeNonNull . NonNullTypeNamed . DefinedInputType . InputTypeDefinitionEnum <$> et
 
