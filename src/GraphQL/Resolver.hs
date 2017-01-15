@@ -17,6 +17,7 @@ module GraphQL.Resolver
   , HasGraph(..)
   , (:<>)(..)
   , BuildFieldResolver(..)
+  , Defaultable(..)
   , Result(..)
   , unionValue
   ) where
