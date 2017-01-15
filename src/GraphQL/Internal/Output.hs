@@ -14,12 +14,12 @@ import Data.List.NonEmpty (NonEmpty)
 import GraphQL.Value
   ( Object
   , objectFromList
-  , ToValue(..)
   , Value
   , pattern ValueObject
   , pattern ValueNull
   )
 import GraphQL.Internal.AST (NameError(..), unsafeMakeName)
+import GraphQL.Value.ToValue (ToValue(..))
 
 -- | GraphQL response.
 --

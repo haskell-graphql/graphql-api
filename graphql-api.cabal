@@ -51,6 +51,8 @@ library
       GraphQL.Internal.Validation
       GraphQL.Resolver
       GraphQL.Value
+      GraphQL.Value.FromValue
+      GraphQL.Value.ToValue
   default-language: Haskell2010
 
 test-suite graphql-api-doctests

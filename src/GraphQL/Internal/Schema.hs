@@ -28,6 +28,8 @@ module GraphQL.Internal.Schema
   -- ** Input types
   , InputType(..)
   , InputTypeDefinition(..)
+  , InputObjectTypeDefinition(..)
+  , InputObjectFieldDefinition(..)
   -- * Using existing types
   , AnnotatedType(..)
   , ListType(..)

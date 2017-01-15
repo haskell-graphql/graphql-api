@@ -1,7 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Type-level definitions for a GraphQL schema.
@@ -26,14 +32,15 @@ module GraphQL.API
   , getAnnotatedInputType
   ) where
 
-import Protolude hiding (Enum)
+import Protolude hiding (Enum, TypeError)
 
 import GraphQL.Internal.Schema hiding (Type)
 import qualified GraphQL.Internal.Schema (Type)
-import GHC.TypeLits (Symbol, KnownSymbol)
-import qualified GHC.TypeLits (TypeError, ErrorMessage(..))
+import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
 import GraphQL.Internal.AST (NameError, nameFromSymbol)
 import GraphQL.API.Enum (GraphQLEnum(..))
+import GHC.Generics ((:*:)(..))
+
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -137,7 +144,7 @@ instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasIn
 
 -- Give users some help if they don't terminate Arguments with a Field:
 -- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
-instance forall ks t. GHC.TypeLits.TypeError ('GHC.TypeLits.Text ":> Arguments must end with a Field") =>
+instance forall ks t. TypeError ('Text ":> Arguments must end with a Field") =>
          HasFieldDefinition (Argument ks t) where
   getFieldDefinition = notImplemented
 
@@ -231,7 +238,7 @@ instance forall t. (HasAnnotatedType t) => HasAnnotatedType (List t) where
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType (Enum ks enum) where
   getAnnotatedType = do
     let name = nameFromSymbol @ks
-    let enums = sequenceA (enumValues @enum Proxy) :: Either NameError [Name]
+    let enums = sequenceA (enumValues @enum) :: Either NameError [Name]
     let et = EnumTypeDefinition <$> name <*> map (map EnumValueDefinition) enums
     TypeNonNull . NonNullTypeNamed . DefinedType . TypeDefinitionEnum <$> et
 
@@ -242,7 +249,7 @@ instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) =>
     in (TypeNamed . DefinedType . TypeDefinitionUnion) <$> (UnionTypeDefinition <$> name <*> types)
 
 -- Help users with better type errors
-instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
+instance TypeError ('Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
          HasAnnotatedType Integer where
   getAnnotatedType = undefined
 
@@ -251,6 +258,8 @@ instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Cannot encode Integer becau
 class HasAnnotatedInputType a where
   -- See TODO comment in "HasAnnotatedType" class for nullability.
   getAnnotatedInputType :: Either NameError (AnnotatedType InputType)
+  default getAnnotatedInputType :: (Generic a, GenericAnnotatedInputType (Rep a)) => Either NameError (AnnotatedType InputType)
+  getAnnotatedInputType = genericGetAnnotatedInputType @(Rep a)
 
 instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) where
   getAnnotatedInputType = dropNonNull <$> getAnnotatedInputType @a
@@ -282,6 +291,53 @@ instance forall t. (HasAnnotatedInputType t) => HasAnnotatedInputType (List t) w
 instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInputType (Enum ks enum) where
   getAnnotatedInputType = do
     let name = nameFromSymbol @ks
-        enums = sequenceA (enumValues @enum Proxy) :: Either NameError [Name]
+        enums = sequenceA (enumValues @enum) :: Either NameError [Name]
     let et = EnumTypeDefinition <$> name <*> map (map EnumValueDefinition) enums
     TypeNonNull . NonNullTypeNamed . DefinedInputType . InputTypeDefinitionEnum <$> et
+
+
+-- Generic getAnnotatedInputType function
+class GenericAnnotatedInputType (f :: Type -> Type) where
+  genericGetAnnotatedInputType :: Either NameError (AnnotatedType InputType)
+
+class GenericInputObjectFieldDefinitions (f :: Type -> Type) where
+  genericGetInputObjectFieldDefinitions :: Either NameError [InputObjectFieldDefinition]
+
+instance forall dataName consName records s l p.
+  ( KnownSymbol dataName
+  , KnownSymbol consName
+  , GenericInputObjectFieldDefinitions records
+  ) => GenericAnnotatedInputType (D1 ('MetaData dataName s l 'False)
+                                  (C1 ('MetaCons consName p 'True) records
+                                  )) where
+  genericGetAnnotatedInputType = do
+    name <- nameFromSymbol @dataName
+    map ( TypeNonNull
+          . NonNullTypeNamed
+          . DefinedInputType
+          . InputTypeDefinitionObject
+          . (InputObjectTypeDefinition name)
+          . NonEmptyList
+        ) (genericGetInputObjectFieldDefinitions @records)
+
+instance forall wrappedType fieldName rest u s l.
+  ( KnownSymbol fieldName
+  , HasAnnotatedInputType wrappedType
+  , GenericInputObjectFieldDefinitions rest
+  ) => GenericInputObjectFieldDefinitions (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType) :*: rest) where
+  genericGetInputObjectFieldDefinitions = do
+    name <- nameFromSymbol @fieldName
+    annotatedInputType <- getAnnotatedInputType @wrappedType
+    let l = InputObjectFieldDefinition name annotatedInputType Nothing
+    r <- genericGetInputObjectFieldDefinitions @rest
+    pure (l:r)
+
+instance forall wrappedType fieldName u s l.
+  ( KnownSymbol fieldName
+  , HasAnnotatedInputType wrappedType
+  ) => GenericInputObjectFieldDefinitions (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) where
+  genericGetInputObjectFieldDefinitions = do
+    name <- nameFromSymbol @fieldName
+    annotatedInputType <- getAnnotatedInputType @wrappedType
+    let l = InputObjectFieldDefinition name annotatedInputType Nothing
+    pure [l]

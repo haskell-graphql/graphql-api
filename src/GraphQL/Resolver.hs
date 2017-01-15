@@ -17,6 +17,7 @@ module GraphQL.Resolver
   , HasGraph(..)
   , (:<>)(..)
   , BuildFieldResolver(..)
+  , Defaultable(..)
   , Result(..)
   , unionValue
   ) where
@@ -42,6 +43,8 @@ import GraphQL.API
 import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
 import GraphQL.Value (Name, Value)
+import GraphQL.Value.FromValue (FromValue(..))
+import GraphQL.Value.ToValue (ToValue(..))
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (HasName(..))
@@ -125,7 +128,7 @@ data Result a = Result [ResolverError] a deriving (Show, Functor, Eq)
 -- Aggregating results keeps all errors and creates a ValueList
 -- containing the individual values.
 aggregateResults :: [Result Value] -> Result Value
-aggregateResults r = GValue.toValue <$> sequenceA r
+aggregateResults r = toValue <$> sequenceA r
 
 instance Applicative Result where
   pure v = Result [] v
@@ -176,18 +179,18 @@ instance forall m. (Functor m) => HasGraph m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  do
-    map (ok . GValue.toValue) handler
+    map (ok . toValue) handler
 
 
 instance forall m. (Functor m) => HasGraph m Double where
   type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . GValue.toValue) handler
+  buildResolver handler _ =  map (ok . toValue) handler
 
 instance forall m. (Functor m) => HasGraph m Text where
   type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . GValue.toValue) handler
+  buildResolver handler _ =  map (ok . toValue) handler
 
 
 instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
@@ -256,7 +259,7 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad
 instance forall ks t f m.
   ( KnownSymbol ks
   , BuildFieldResolver m f
-  , GValue.FromValue t
+  , FromValue t
   , Defaultable t
   , HasAnnotatedInputType t
   , Monad m
@@ -266,7 +269,7 @@ instance forall ks t f m.
     let argName = getName argument
     value <- case lookupArgument field argName of
       Nothing -> valueMissing @t argName
-      Just v -> first (InvalidValue argName) (GValue.fromValue @t v)
+      Just v -> first (InvalidValue argName) (fromValue @t v)
     buildFieldResolver @m @f (handler value) field
 
 

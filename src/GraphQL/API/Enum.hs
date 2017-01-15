@@ -101,12 +101,9 @@ instance forall conName p b sa sb f.
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
 class GraphQLEnum a where
-  -- Sadly we need the Proxy to constain the type enough on the call
-  -- site. TypeApplications fails here. This *might* be a GHC type
-  -- resolution bug but I'm not confident enough to tell ATM.
-  enumValues :: Proxy a -> [Either NameError Name]
-  default enumValues :: (Generic a, GenericEnumValues (Rep a)) => Proxy a -> [Either NameError Name]
-  enumValues _ = genericEnumValues @(Rep a)
+  enumValues :: [Either NameError Name]
+  default enumValues :: (Generic a, GenericEnumValues (Rep a)) => [Either NameError Name]
+  enumValues = genericEnumValues @(Rep a)
 
   enumFromValue :: Name -> Either Text a
   default enumFromValue :: (Generic a, GenericEnumValues (Rep a)) => Name -> Either Text a
