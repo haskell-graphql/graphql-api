@@ -19,4 +19,4 @@ test:
     - stack --no-terminal test
     - stack --no-terminal haddock
   post:
-    - mv .stack-work/dist/x86_64-linux/Cabal-1.24.0.0/doc/html/graphql-api $CIRCLE_ARTIFACTS/
+    - mv .stack-work/dist/x86_64-linux/Cabal-1.24.2.0/doc/html/graphql-api $CIRCLE_ARTIFACTS/
