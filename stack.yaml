@@ -1,4 +1,4 @@
-resolver: lts-7.13
+resolver: lts-7.15
 
 packages:
   - "."
@@ -6,3 +6,20 @@ packages:
 
 extra-deps:
   - graphql-0.3
+
+# temporary compiler until stack resolver has 8.0.2:
+# run "stack setup" first.
+compiler: ghc-8.0.2
+compiler-check: match-exact
+setup-info:
+  ghc:
+    linux64:
+      8.0.2:
+        url: https://downloads.haskell.org/~ghc/8.0.2/ghc-8.0.2-x86_64-deb8-linux.tar.xz
+        content-length: 114373576
+        sha1: f298b7d0f37cc9ded7ac66b2662b0fa5ac6d0809
+    macosx:
+      8.0.2:
+        url: https://downloads.haskell.org/~ghc/8.0.2/ghc-8.0.2-x86_64-apple-darwin.tar.xz
+        content-length: 113945284
+        sha1: 5bfd2cef149bd2936cc56bb4b526cbc56a0e7f28
