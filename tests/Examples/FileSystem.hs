@@ -39,11 +39,11 @@ directory (Just path) = do
     :<> pure (fromIntegral (length paths))
     :<> map (toS @_ @Text) (SD.canonicalizePath (toS path))
     where
-      filtered :: [FilePath] -> Maybe Text -> [Handler IO File]
+      filtered :: [FilePath] -> Maybe Text -> IO [Handler IO File]
       filtered paths (Just glob) =
-        map oneFile (filter (== (toS glob)) paths)
+        pure $ map oneFile (filter (== (toS glob)) paths)
       filtered paths Nothing =
-        map oneFile paths
+        pure $ map oneFile paths
 
 root :: Handler IO Query
 root = do

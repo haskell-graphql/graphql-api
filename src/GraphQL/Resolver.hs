@@ -193,11 +193,13 @@ instance forall m. (Functor m) => HasGraph m Text where
   buildResolver handler _ =  map (ok . toValue) handler
 
 
-instance forall m hg. (Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
-  type Handler m (API.List hg) = [Handler m hg]
-  buildResolver handler selectionSet = map aggregateResults a
-    where
-      a = traverse (flip (buildResolver @m @hg) selectionSet) handler
+instance forall m hg. (Monad m, Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
+  type Handler m (API.List hg) = m [Handler m hg]
+  buildResolver handler selectionSet = do
+    h <- handler
+    let a = traverse (flip (buildResolver @m @hg) selectionSet) h
+    map aggregateResults a
+
 
 instance forall m ks enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (API.Enum ks enum) where
   type Handler m (API.Enum ks enum) = enum
