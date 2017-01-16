@@ -8,17 +8,21 @@
 -- where to draw the lines and what to expose.
 module GraphQL
   ( QueryError
+  , Response(..)
   , SelectionSet
   , VariableValues
   , Value
-  , executeQuery
-  , getOperation
   , compileQuery
+  , executeQuery
+  , interpretQuery
+  , interpretAnonymousQuery
+  , getOperation
   ) where
 
 import Protolude
 
 import Data.Attoparsec.Text (parseOnly, endOfInput)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Execution
@@ -36,7 +40,12 @@ import GraphQL.Internal.Validation
   , getSelectionSet
   , VariableValue
   )
-import GraphQL.Internal.Output (GraphQLError(..), Response(..), singleError)
+import GraphQL.Internal.Output
+  ( GraphQLError(..)
+  , Error(..)
+  , Response(..)
+  , singleError
+  )
 import GraphQL.Resolver (HasGraph(..), Result(..))
 import GraphQL.Value (Name, Value, pattern ValueObject)
 
@@ -80,6 +89,26 @@ executeQuery handler document name variables =
             Nothing -> Success object
             Just errs -> PartialSuccess object (map toError errs)
         v -> ExecutionFailure (singleError (NonObjectResult v))
+
+-- | Interpet a GraphQL query.
+--
+-- Compiles then executes a GraphQL query.
+interpretQuery :: forall api m. (Applicative m, HasGraph m api) => Handler m api -> Text -> Maybe Name -> VariableValues -> m Response
+interpretQuery handler query name variables =
+  case parseQuery query of
+    Left err -> pure (PreExecutionFailure (Error err [] :| []))
+    Right parsed ->
+      case validate parsed of
+        Left errs -> pure (PreExecutionFailure (map toError errs))
+        Right document ->
+          executeQuery @api @m handler document name variables
+
+
+-- | Interpret an anonymous GraphQL query.
+--
+-- Anonymous queries have no name and take no variables.
+interpretAnonymousQuery :: forall api m. (Applicative m, HasGraph m api) => Handler m api -> Text -> m Response
+interpretAnonymousQuery handler query = interpretQuery @api @m handler query Nothing mempty
 
 -- | Turn some text into a valid query document.
 compileQuery :: Text -> Either QueryError (QueryDocument VariableValue)
