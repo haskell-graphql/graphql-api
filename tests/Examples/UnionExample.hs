@@ -27,7 +27,7 @@ catOrDog = do
   unionValue @MiniCat (miniCat name)
 
 catOrDogList :: Handler IO CatOrDogList
-catOrDogList =
+catOrDogList = pure
   [ unionValue @MiniCat (miniCat "Felix")
   , unionValue @MiniCat (miniCat "Mini")
   , unionValue @MiniDog miniDog
