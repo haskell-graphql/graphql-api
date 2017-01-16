@@ -1,3 +1,7 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | Interface for GraphQL API.
 --
 -- __Note__: This module is highly subject to change. We're still figuring
@@ -7,6 +11,7 @@ module GraphQL
   , SelectionSet
   , VariableValues
   , Value
+  , executeQuery
   , getOperation
   , compileQuery
   ) where
@@ -31,8 +36,9 @@ import GraphQL.Internal.Validation
   , getSelectionSet
   , VariableValue
   )
-import GraphQL.Internal.Output (GraphQLError(..))
-import GraphQL.Value (Value)
+import GraphQL.Internal.Output (GraphQLError(..), Response(..), singleError)
+import GraphQL.Resolver (HasGraph(..), Result(..))
+import GraphQL.Value (Name, Value, pattern ValueObject)
 
 -- | Errors that can happen while processing a query document.
 data QueryError
@@ -45,6 +51,8 @@ data QueryError
   | ValidationError ValidationErrors
   -- | Validated, but failed during execution.
   | ExecutionError ExecutionError
+  -- | Got a value that wasn't an object.
+  | NonObjectResult Value
   deriving (Eq, Show)
 
 instance GraphQLError QueryError where
@@ -54,6 +62,24 @@ instance GraphQLError QueryError where
     "Validation errors:\n" <> mconcat ["  " <> formatError e <> "\n" | e <- NonEmpty.toList es]
   formatError (ExecutionError e) =
     "Execution error: " <> show e
+  formatError (NonObjectResult v) =
+    "Query returned a value that is not an object: " <> show v
+
+-- | Execute a GraphQL query.
+executeQuery :: forall api m. (HasGraph m api, Applicative m) => Handler m api -> QueryDocument VariableValue -> Maybe Name -> VariableValues -> m Response
+executeQuery handler document name variables =
+  case getOperation document name variables of
+    Left e -> pure (ExecutionFailure (singleError e))
+    Right operation ->
+      toResult <$> buildResolver @m @api handler operation
+  where
+    toResult (Result errors result) =
+      case result of
+        ValueObject object ->
+          case NonEmpty.nonEmpty errors of
+            Nothing -> Success object
+            Just errs -> PartialSuccess object (map toError errs)
+        v -> ExecutionFailure (singleError (NonObjectResult v))
 
 -- | Turn some text into a valid query document.
 compileQuery :: Text -> Either QueryError (QueryDocument VariableValue)
@@ -69,7 +95,7 @@ parseQuery query = first toS (parseOnly (Parser.queryDocument <* endOfInput) que
 --
 -- TODO: Open question whether we want to export this to the end-user. If we
 -- do, it should probably not be in first position.
-getOperation :: QueryDocument VariableValue -> Maybe AST.Name -> VariableValues -> Either QueryError (SelectionSet Value)
+getOperation :: QueryDocument VariableValue -> Maybe Name -> VariableValues -> Either QueryError (SelectionSet Value)
 getOperation document name vars = first ExecutionError $ do
   op <- Execution.getOperation document name
   resolved <- substituteVariables op vars
