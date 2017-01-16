@@ -72,6 +72,7 @@ test-suite graphql-api-doctests
   other-modules:
       ASTTests
       Examples.FileSystem
+      Examples.InputObject
       Examples.UnionExample
       OrderedMapTests
       Spec
@@ -107,6 +108,7 @@ test-suite graphql-api-tests
       ASTTests
       Doctests
       Examples.FileSystem
+      Examples.InputObject
       Examples.UnionExample
       OrderedMapTests
       TypeApiTests
