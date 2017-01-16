@@ -34,16 +34,12 @@ root = pure (\dogStuff -> pure (show dogStuff))
 
 -- | Show input object usage
 --
--- >>> response <- example
+-- >>> response <- example "{ root(dogStuff: {toy: \"bone\", likesTreats: true}) }"
 -- >>> putStrLn $ encode $ toValue response
 -- {"data":{"root":"DogStuff {toy = \"bone\", likesTreats = True}"}}
-example :: IO Response
-example = interpretAnonymousQuery @Query root "{ root(dogStuff: {toy: \"bone\", likesTreats: true}) }"
-
--- | Show that example replacement works
 --
--- >>> response <- exampleDefault
+-- >>> response <- example "{ root }"
 -- >>> putStrLn $ encode $ toValue response
 -- {"data":{"root":"DogStuff {toy = \"shoe\", likesTreats = False}"}}
-exampleDefault :: IO Response
-exampleDefault = interpretAnonymousQuery @Query root "{ root }"
+example :: Text -> IO Response
+example = interpretAnonymousQuery @Query root
