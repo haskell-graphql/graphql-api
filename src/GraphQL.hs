@@ -9,14 +9,12 @@
 module GraphQL
   ( QueryError
   , Response(..)
-  , SelectionSet
   , VariableValues
   , Value
   , compileQuery
   , executeQuery
   , interpretQuery
   , interpretAnonymousQuery
-  , getOperation
   ) where
 
 import Protolude
@@ -75,7 +73,13 @@ instance GraphQLError QueryError where
     "Query returned a value that is not an object: " <> show v
 
 -- | Execute a GraphQL query.
-executeQuery :: forall api m. (HasGraph m api, Applicative m) => Handler m api -> QueryDocument VariableValue -> Maybe Name -> VariableValues -> m Response
+executeQuery
+  :: forall api m. (HasGraph m api, Applicative m)
+  => Handler m api -- ^ Handler for the query. This links the query to the code you've written to handle it.
+  -> QueryDocument VariableValue  -- ^ A validated query document. Build one with 'compileQuery'.
+  -> Maybe Name -- ^ An optional name. If 'Nothing', then executes the only operation in the query. If @Just "something"@, executes the query named @"something".
+  -> VariableValues -- ^ Values for variables defined in the query document. A map of 'Variable' to 'Value'.
+  -> m Response -- ^ The outcome of running the query.
 executeQuery handler document name variables =
   case getOperation document name variables of
     Left e -> pure (ExecutionFailure (singleError e))
@@ -84,6 +88,7 @@ executeQuery handler document name variables =
   where
     toResult (Result errors result) =
       case result of
+        -- TODO: Prevent this at compile time.
         ValueObject object ->
           case NonEmpty.nonEmpty errors of
             Nothing -> Success object
@@ -93,7 +98,13 @@ executeQuery handler document name variables =
 -- | Interpet a GraphQL query.
 --
 -- Compiles then executes a GraphQL query.
-interpretQuery :: forall api m. (Applicative m, HasGraph m api) => Handler m api -> Text -> Maybe Name -> VariableValues -> m Response
+interpretQuery
+  :: forall api m. (Applicative m, HasGraph m api)
+  => Handler m api -- ^ Handler for the query. This links the query to the code you've written to handle it.
+  -> Text -- ^ The text of a query document. Will be parsed and then executed.
+  -> Maybe Name -- ^ An optional name for the operation within document to run. If 'Nothing', execute the only operation in the document. If @Just "something"@, execute the query or mutation named @"something"@.
+  -> VariableValues -- ^ Values for variables defined in the query document. A map of 'Variable' to 'Value'.
+  -> m Response -- ^ The outcome of running the query.
 interpretQuery handler query name variables =
   case parseQuery query of
     Left err -> pure (PreExecutionFailure (Error err [] :| []))
@@ -107,7 +118,11 @@ interpretQuery handler query name variables =
 -- | Interpret an anonymous GraphQL query.
 --
 -- Anonymous queries have no name and take no variables.
-interpretAnonymousQuery :: forall api m. (Applicative m, HasGraph m api) => Handler m api -> Text -> m Response
+interpretAnonymousQuery
+  :: forall api m. (Applicative m, HasGraph m api)
+  => Handler m api -- ^ Handler for the anonymous query.
+  -> Text -- ^ The text of the anonymous query. Should defined only a single, unnamed query operation.
+  -> m Response -- ^ The result of running the query.
 interpretAnonymousQuery handler query = interpretQuery @api @m handler query Nothing mempty
 
 -- | Turn some text into a valid query document.
@@ -121,9 +136,6 @@ parseQuery :: Text -> Either Text AST.QueryDocument
 parseQuery query = first toS (parseOnly (Parser.queryDocument <* endOfInput) query)
 
 -- | Get an operation from a query document ready to be processed.
---
--- TODO: Open question whether we want to export this to the end-user. If we
--- do, it should probably not be in first position.
 getOperation :: QueryDocument VariableValue -> Maybe Name -> VariableValues -> Either QueryError (SelectionSet Value)
 getOperation document name vars = first ExecutionError $ do
   op <- Execution.getOperation document name
