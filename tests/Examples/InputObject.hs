@@ -19,27 +19,28 @@ instance Defaultable DogStuff where
   defaultFor _ = Just (DogStuff "shoe" False)
 
 type Query = Object "Query" '[]
-  '[ Argument "dogStuff" DogStuff :> Field "root" Text ]
+  '[ Argument "dogStuff" DogStuff :> Field "description" Text ]
 
 root :: Handler IO Query
-root = pure (\dogStuff -> pure (show dogStuff))
+root = pure description
+
+description :: DogStuff -> Handler IO Text
+description (DogStuff toy likesTreats)
+  | likesTreats = pure $ "likes treats and their favorite toy is a " <> toy
+  | otherwise = pure $ "their favorite toy is a " <> toy
 
 -- $setup
 -- >>> import Data.Aeson (encode)
 -- >>> import GraphQL.Value.ToValue (ToValue(..))
 
--- TODO: jml thinks it's a bit confusing to have `show` output in these
--- examples. Mixing between JSON syntax and Haskell's record syntax confuses
--- the point.
-
 -- | Show input object usage
 --
--- >>> response <- example "{ root(dogStuff: {toy: \"bone\", likesTreats: true}) }"
+-- >>> response <- example "{ description(dogStuff: {toy: \"bone\", likesTreats: true}) }"
 -- >>> putStrLn $ encode $ toValue response
--- {"data":{"root":"DogStuff {toy = \"bone\", likesTreats = True}"}}
+-- {"data":{"description":"likes treats and their favorite toy is a bone"}}
 --
--- >>> response <- example "{ root }"
+-- >>> response <- example "{ description }"
 -- >>> putStrLn $ encode $ toValue response
--- {"data":{"root":"DogStuff {toy = \"shoe\", likesTreats = False}"}}
+-- {"data":{"description":"their favorite toy is a shoe"}}
 example :: Text -> IO Response
 example = interpretAnonymousQuery @Query root
