@@ -35,16 +35,6 @@ import GraphQL.Internal.Validation
   , Type(..)
   )
 
--- Maybe we should have?
---
--- >>> data Request = Request Schema Document (Maybe Operation) (Maybe VariableValues) InitialValue
---
--- And then we can have:
---
--- execute :: Request -> m Response
---
--- Where 'Reponse' is from 'GraphQL.Internal.Output'.
-
 -- | Get an operation from a GraphQL document
 --
 -- <https://facebook.github.io/graphql/#sec-Executing-Requests>
@@ -92,7 +82,9 @@ replaceVariable vars value =
     allowNull (TypeNonNull _) = empty
     allowNull _ = pure ValueNull
 
-
+-- | An error that occurs while executing a query. Technically,
+-- 'ResolverError' also falls into the same category, but is separate to help
+-- our code be a bit better organized.
 data ExecutionError
   = MissingValue Variable
   | NoSuchOperation Name

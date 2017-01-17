@@ -7,8 +7,7 @@ import Protolude hiding (Enum)
 
 import GraphQL
 import GraphQL.API
-import GraphQL.Resolver (Handler, Result(..), (:<>)(..), buildResolver, Defaultable(..))
-import GraphQL.Value (Value)
+import GraphQL.Resolver (Handler, Defaultable(..))
 import GraphQL.Value.FromValue (FromValue)
 
 data DogStuff = DogStuff { toy :: Text, likesTreats :: Bool } deriving (Show, Generic)
@@ -20,32 +19,28 @@ instance Defaultable DogStuff where
   defaultFor _ = Just (DogStuff "shoe" False)
 
 type Query = Object "Query" '[]
-  '[ Argument "dogStuff" DogStuff :> Field "root" Text ]
+  '[ Argument "dogStuff" DogStuff :> Field "description" Text ]
 
 root :: Handler IO Query
-root = pure (\dogStuff -> pure (show dogStuff))
+root = pure description
+
+description :: DogStuff -> Handler IO Text
+description (DogStuff toy likesTreats)
+  | likesTreats = pure $ "likes treats and their favorite toy is a " <> toy
+  | otherwise = pure $ "their favorite toy is a " <> toy
 
 -- $setup
--- >>> import qualified GraphQL.Internal.Encoder as Encode
--- >>> import GraphQL.Value (valueToAST)
+-- >>> import Data.Aeson (encode)
+-- >>> import GraphQL.Value.ToValue (ToValue(..))
 
 -- | Show input object usage
 --
--- >>> (Result _ result) <- example
--- >>> putStrLn $ Encode.value (valueToAST result)
--- {root:"DogStuff {toy = \"bone\", likesTreats = True}"}
-example :: IO (Result Value)
-example = buildResolver @IO @Query root (query "{ root(dogStuff: {toy: \"bone\", likesTreats: true}) }")
-
--- | Show that example replacement works
+-- >>> response <- example "{ description(dogStuff: {toy: \"bone\", likesTreats: true}) }"
+-- >>> putStrLn $ encode $ toValue response
+-- {"data":{"description":"likes treats and their favorite toy is a bone"}}
 --
--- >>> (Result _ result) <- exampleDefault
--- >>> putStrLn $ Encode.value (valueToAST result)
--- {root:"DogStuff {toy = \"shoe\", likesTreats = False}"}
-exampleDefault :: IO (Result Value)
-exampleDefault = buildResolver @IO @Query root (query "{ root }")
-
-query :: Text -> SelectionSet Value
-query q = either (panic . show) identity $ do
-  document <- compileQuery q
-  getOperation document Nothing mempty
+-- >>> response <- example "{ description }"
+-- >>> putStrLn $ encode $ toValue response
+-- {"data":{"description":"their favorite toy is a shoe"}}
+example :: Text -> IO Response
+example = interpretAnonymousQuery @Query root

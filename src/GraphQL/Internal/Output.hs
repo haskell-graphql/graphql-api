@@ -7,10 +7,11 @@ module GraphQL.Internal.Output
   , Errors
   , Error(..)  -- XXX: Maybe export helper functions rather than constructors.
   , GraphQLError(..)
+  , singleError
   ) where
 
 import Protolude hiding (Location, Map)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import GraphQL.Value
   ( Object
   , objectFromList
@@ -82,6 +83,10 @@ instance ToValue Error where
   toValue (Error message locations) = unsafeMakeObject [("message", toValue message)
                                                        ,("locations", toValue locations)
                                                        ]
+
+-- | Make a list of errors containing a single error.
+singleError :: GraphQLError e => e -> Errors
+singleError e = toError e :| []
 
 data Location = Location Line Column deriving (Eq, Ord, Show)
 type Line = Int32  -- XXX: 1-indexed natural number
