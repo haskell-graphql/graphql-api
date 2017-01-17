@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
-module TypeTests (tests) where
+module SchemaTests (tests) where
 
 import Protolude hiding (Down, Enum)
 

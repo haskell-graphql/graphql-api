@@ -8,8 +8,8 @@ import Test.Tasty (defaultMain, testGroup)
 
 import qualified ASTTests
 import qualified OrderedMapTests
-import qualified TypeApiTests
-import qualified TypeTests
+import qualified ResolverTests
+import qualified SchemaTests
 import qualified ValidationTests
 import qualified ValueTests
 
@@ -25,8 +25,8 @@ main = do
     tests =
       [ ASTTests.tests
       , OrderedMapTests.tests
-      , TypeApiTests.tests
-      , TypeTests.tests
+      , ResolverTests.tests
+      , SchemaTests.tests
       , ValidationTests.tests
       , ValueTests.tests
       ]

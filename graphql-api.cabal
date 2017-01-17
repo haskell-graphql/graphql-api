@@ -74,9 +74,9 @@ test-suite graphql-api-doctests
       Examples.InputObject
       Examples.UnionExample
       OrderedMapTests
+      ResolverTests
+      SchemaTests
       Spec
-      TypeApiTests
-      TypeTests
       ValidationTests
       ValueTests
   default-language: Haskell2010
@@ -109,8 +109,8 @@ test-suite graphql-api-tests
       Examples.InputObject
       Examples.UnionExample
       OrderedMapTests
-      TypeApiTests
-      TypeTests
+      ResolverTests
+      SchemaTests
       ValidationTests
       ValueTests
   default-language: Haskell2010
