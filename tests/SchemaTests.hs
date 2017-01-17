@@ -9,15 +9,8 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.API
-  ( GraphQLEnum(..)
-  , Enum
-  , Object
-  , Field
-  , Argument
-  , Interface
-  , Union
+  ( Field
   , List
-  , (:>)
   , getAnnotatedType
   , getAnnotatedInputType
   , getDefinition
@@ -41,46 +34,7 @@ import GraphQL.Internal.Schema
   , Builtin(..)
   , InputType(..)
   )
-
--- Examples taken from the spec
-
-data DogCommandEnum = Sit | Down | Heel deriving (Show, Generic)
-
-instance GraphQLEnum DogCommandEnum
-
--- Alternative might be a sum type with deriving Generic and 0-arity constructors?
-type DogCommand = Enum "DogCommand" DogCommandEnum
-
-
-type Dog = Object "Dog" '[Pet]
-  '[ Field "name" Text
-   , Field "nickname" Text
-   , Field "barkVolume" Int
-   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
-   , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
-   , Field "owner" Human
-   ]
-
-type Sentient = Interface "Sentient" '[Field "name" Text]
-type Pet = Interface "Pet" '[Field "name" Text]
-
-type Human = Object "Human" '[Sentient] '[Field "name" Text]
-
-data CatCommandEnum = Jump deriving Generic
-
-instance GraphQLEnum CatCommandEnum
-
-type CatCommand = Enum "CatCommand" CatCommandEnum
-
-type Cat = Object "Cat" '[Pet]
-  '[ Field "name" Text
-   , Field "nickName" (Maybe Text)
-   , Argument "catCommand" CatCommand :> Field "doesKnowCommand" Bool
-   , Field "meowVolume" Int
-   ]
-
-type CatOrDog = Union "CatOrDog" '[Cat, Dog]
-
+import ExampleSchema
 
 tests :: IO TestTree
 tests = testSpec "Type" $ do
