@@ -7,6 +7,7 @@ import Protolude
 import Test.Tasty (defaultMain, testGroup)
 
 import qualified ASTTests
+import qualified EndToEndTests
 import qualified OrderedMapTests
 import qualified ResolverTests
 import qualified SchemaTests
@@ -24,6 +25,7 @@ main = do
   where
     tests =
       [ ASTTests.tests
+      , EndToEndTests.tests
       , OrderedMapTests.tests
       , ResolverTests.tests
       , SchemaTests.tests

@@ -71,6 +71,7 @@ test-suite graphql-api-doctests
     , doctest
   other-modules:
       ASTTests
+      EndToEndTests
       Examples.InputObject
       Examples.UnionExample
       ExampleSchema
@@ -107,6 +108,7 @@ test-suite graphql-api-tests
   other-modules:
       ASTTests
       Doctests
+      EndToEndTests
       Examples.InputObject
       Examples.UnionExample
       ExampleSchema

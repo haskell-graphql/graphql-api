@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | An example GraphQL schema, used in our end-to-end tests.
 --
@@ -85,6 +86,10 @@ import GraphQL.API
   , Union
   , (:>)
   )
+-- XXX: This really shouldn't be part of Resolver, since whether or not a
+-- thing has a default is part of the API / Schema definition.
+import GraphQL.Resolver (Defaultable(..))
+import GraphQL.Internal.AST (getNameText)
 
 -- | A command that can be given to a 'Dog'.
 --
@@ -99,7 +104,7 @@ import GraphQL.API
 --  2. Make it an instance of 'GraphQLEnum'
 --  3. Wrap the sum type in 'Enum', e.g. @Enum "DogCommand" DogCommandEnum@
 --     so it can be placed in a schema.
-data DogCommandEnum = Sit | Down | Heel deriving (Show, Eq, Generic)
+data DogCommandEnum = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
 
 instance GraphQLEnum DogCommandEnum
 
@@ -168,6 +173,12 @@ type Dog = Object "Dog" '[Pet]
    , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
    , Field "owner" Human
    ]
+
+instance Defaultable DogCommandEnum where
+  -- Explicitly want no default for dogCommand
+  defaultFor (getNameText -> "dogCommand") = Nothing
+  -- DogCommand shouldn't be used elsewhere in schema, but who can say?
+  defaultFor _ = Nothing
 
 -- | Sentient beings have names.
 --
