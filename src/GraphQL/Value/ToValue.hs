@@ -21,6 +21,12 @@ instance ToValue (Value' ConstScalar) where
 instance ToValue a => ToValue [a] where
   toValue = toValue . List' . map toValue
 
+-- TODO - tom still thinks that using Maybe for nullable is maybe not
+-- the best idea.
+instance ToValue a => ToValue (Maybe a) where
+  toValue Nothing = ValueNull
+  toValue (Just v) = toValue v
+
 instance ToValue a => ToValue (NonEmpty a) where
   toValue = toValue . makeList
 

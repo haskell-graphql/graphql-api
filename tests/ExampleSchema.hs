@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
 
+
 -- | An example GraphQL schema, used in our end-to-end tests.
 --
 -- Based on the example schema given in the GraphQL spec. See
@@ -99,7 +100,7 @@ import GraphQL.API
 --  2. Make it an instance of 'GraphQLEnum'
 --  3. Wrap the sum type in 'Enum', e.g. @Enum "DogCommand" DogCommandEnum@
 --     so it can be placed in a schema.
-data DogCommandEnum = Sit | Down | Heel deriving (Show, Eq, Generic)
+data DogCommandEnum = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
 
 instance GraphQLEnum DogCommandEnum
 
@@ -163,9 +164,9 @@ type DogCommand = Enum "DogCommand" DogCommandEnum
 type Dog = Object "Dog" '[Pet]
   '[ Field "name" Text
    , Field "nickname" (Maybe Text)
-   , Field "barkVolume" Int
-   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
-   , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
+   , Field "barkVolume" Int32
+--   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
+--   , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
    , Field "owner" Human
    ]
 

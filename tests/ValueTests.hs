@@ -20,6 +20,7 @@ import GraphQL.Value
   )
 import GraphQL.Value.FromValue (prop_roundtripValue)
 import GraphQL.Value.ToValue (toValue)
+import Data.List.NonEmpty (NonEmpty)
 
 
 tests :: IO TestTree
@@ -52,9 +53,9 @@ tests = testSpec "Value" $ do
     prop "Bool" $ prop_roundtripValue @Bool
     prop "Int32" $ prop_roundtripValue @Int32
     prop "Double" $ prop_roundtripValue @Double
-    prop "Text" $ forAll arbitraryText prop_roundtripValue
+    prop "Text" $ forAll arbitraryText (prop_roundtripValue @Text)
     prop "Lists" $ prop_roundtripValue @[Int32]
-    prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
+    prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) (prop_roundtripValue @(NonEmpty Int32))
   describe "AST" $ do
     it "Objects converted from AST have unique fields" $ do
       let input = AST.ObjectValue [ AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "bar"))

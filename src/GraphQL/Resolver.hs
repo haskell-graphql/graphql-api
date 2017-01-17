@@ -192,6 +192,11 @@ instance forall m. (Functor m) => HasGraph m Text where
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map (ok . toValue) handler
 
+instance forall m hg. (HasGraph m hg, Functor m, ToValue (Maybe hg)) => HasGraph m (Maybe hg) where
+  type Handler m (Maybe hg) = m (Maybe hg)
+  -- TODO check that selectionset is empty (we expect a terminal node)
+  buildResolver handler _ =  map (ok . toValue) handler
+
 
 instance forall m hg. (Monad m, Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
   type Handler m (API.List hg) = m [Handler m hg]
@@ -245,7 +250,12 @@ resolveField handler nextHandler field =
 -- type family: We don't want anyone else to extend this ever.
 type family FieldHandler m (a :: Type) :: Type where
   FieldHandler m (API.Field ks t) = Handler m t
-  FieldHandler m (API.Argument ks t :> f) = t -> FieldHandler m f
+  FieldHandler m (API.Argument ks t :> f) = ExtractFieldHandlerType t -> FieldHandler m f
+
+type family ExtractFieldHandlerType (t :: Type) = (r :: Type) where
+  ExtractFieldHandlerType (API.Enum name t) = t
+  ExtractFieldHandlerType t = t
+
 
 class BuildFieldResolver m a where
   buildFieldResolver :: FieldHandler m a -> Field Value -> Either ResolverError (NamedValueResolver m)
@@ -258,20 +268,21 @@ instance forall ks t m. (KnownSymbol ks, HasGraph m t, HasAnnotatedType t, Monad
     Right (NamedValueResolver name resolver)
 
 
-instance forall ks t f m.
+instance forall ks t f m x.
   ( KnownSymbol ks
   , BuildFieldResolver m f
-  , FromValue t
-  , Defaultable t
+  , FromValue x
+  , Defaultable x
   , HasAnnotatedInputType t
+  , x ~ ExtractFieldHandlerType t
   , Monad m
   ) => BuildFieldResolver m (API.Argument ks t :> f) where
   buildFieldResolver handler field = do
     argument <- first SchemaError (API.getArgumentDefinition @(API.Argument ks t))
     let argName = getName argument
     value <- case lookupArgument field argName of
-      Nothing -> valueMissing @t argName
-      Just v -> first (InvalidValue argName) (fromValue @t v)
+      Nothing -> valueMissing @x argName
+      Just v -> first (InvalidValue argName) (fromValue @x v)
     buildFieldResolver @m @f (handler value) field
 
 
