@@ -61,7 +61,7 @@
 
 module ExampleSchema
   ( DogCommand
-  , DogCommandEnum
+  , DogCommandEnum(..)
   , Dog
   , Sentient
   , Pet
@@ -86,6 +86,7 @@ import GraphQL.API
   , Union
   , (:>)
   )
+import GraphQL.Value.FromValue (FromValue)
 
 -- | A command that can be given to a 'Dog'.
 --
@@ -101,7 +102,6 @@ import GraphQL.API
 --  3. Wrap the sum type in 'Enum', e.g. @Enum "DogCommand" DogCommandEnum@
 --     so it can be placed in a schema.
 data DogCommandEnum = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
-
 instance GraphQLEnum DogCommandEnum
 
 type DogCommand = Enum "DogCommand" DogCommandEnum
@@ -165,8 +165,8 @@ type Dog = Object "Dog" '[Pet]
   '[ Field "name" Text
    , Field "nickname" (Maybe Text)
    , Field "barkVolume" Int32
---   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
---   , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
+   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
+   , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
    , Field "owner" Human
    ]
 

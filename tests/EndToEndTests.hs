@@ -11,13 +11,16 @@ import Protolude
 import Data.Aeson (Value(Null), toJSON)
 import GraphQL (interpretAnonymousQuery)
 import GraphQL.API (Object, Field)
-import GraphQL.Resolver ((:<>)(..), Handler)
+import GraphQL.Resolver ((:<>)(..), Handler, Defaultable(..))
 import GraphQL.Value.ToValue (ToValue(..))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 import Text.RawString.QQ (r)
 
 import ExampleSchema
+
+instance Defaultable DogCommandEnum where defaultFor _ = Just Sit
+
 
 -- | Example query root.
 --
@@ -63,8 +66,8 @@ viewDogConfig dog@(DogConfig{..}) = pure $
   pure name :<>
   pure nickname :<>
   pure barkVolume :<>
---  doesKnowCommand dog :<>
---  isHouseTrained dog :<>
+  doesKnowCommand dog :<>
+  isHouseTrained dog :<>
   viewHumanConfig owner
 
 -- | jml has a stuffed black dog called "Mortgage".
