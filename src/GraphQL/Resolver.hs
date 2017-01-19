@@ -43,7 +43,11 @@ import GraphQL.API
   )
 import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
-import GraphQL.Value (Name, Value)
+import GraphQL.Value
+  ( Name
+  , Value
+  , pattern ValueEnum
+  )
 import GraphQL.Value.FromValue (FromValue(..))
 import GraphQL.Value.ToValue (ToValue(..))
 import qualified GraphQL.Internal.AST as AST
@@ -309,9 +313,9 @@ instance forall ksK t f m name.
   buildFieldResolver handler field = do
     argName <- first SchemaError (AST.nameFromSymbol @ksK)
     value <- case lookupArgument field argName of
-      Nothing -> panic "No"
-      -- TODO: extract enum name and use instead of argName!
-      Just _ -> first (InvalidValue argName) (API.enumFromValue @t argName)
+      Nothing -> valueMissing @t argName
+      Just (ValueEnum enum) -> first (InvalidValue argName) (API.enumFromValue @t enum)
+      Just value -> Left (InvalidValue argName (show value <> " not an enum: " <> show (API.enumValues @t)))
     buildFieldResolver @m @f (handler value) field
 
 -- Note that we enumerate all ks variables with capital letters so we
