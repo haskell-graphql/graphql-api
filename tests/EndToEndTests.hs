@@ -89,8 +89,8 @@ jml = ServerHuman "jml"
 
 tests :: IO TestTree
 tests = testSpec "End-to-end tests" $ do
-  describe "Simple query" $ do
-    it "Returns what we expect" $ do
+  describe "interpretAnonymousQuery" $ do
+    it "Handles the simplest possible valid query" $ do
       let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
@@ -104,6 +104,26 @@ tests = testSpec "End-to-end tests" $ do
             [ "data" .= object
               [ "dog" .= object
                 [ "name" .= ("Mortgage" :: Text)
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Handles more than one field" $ do
+      let root = pure (viewServerDog mortgage)
+      let query = [r|{
+                      dog {
+                        name
+                        barkVolume
+                      }
+                    }
+                   |]
+      response <- interpretAnonymousQuery @QueryRoot root query
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "name" .= ("Mortgage" :: Text)
+                , "barkVolume" .= (0 :: Int32)
                 ]
               ]
             ]
