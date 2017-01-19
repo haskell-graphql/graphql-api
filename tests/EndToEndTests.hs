@@ -8,7 +8,7 @@ module EndToEndTests (tests) where
 
 import Protolude
 
-import Data.Aeson (toJSON, object, (.=))
+import Data.Aeson (Value(Null), toJSON, object, (.=))
 import GraphQL (interpretAnonymousQuery)
 import GraphQL.API (Object, Field)
 import GraphQL.Resolver ((:<>)(..), Handler)
@@ -124,6 +124,33 @@ tests = testSpec "End-to-end tests" $ do
               [ "dog" .= object
                 [ "name" .= ("Mortgage" :: Text)
                 , "barkVolume" .= (0 :: Int32)
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "TODO: Handles nested queries" $ do
+      let root = pure (viewServerDog mortgage)
+      let query = [r|{
+                      dog {
+                        name
+                        owner {
+                          name
+                        }
+                      }
+                    }
+                   |]
+      response <- interpretAnonymousQuery @QueryRoot root query
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "name" .= ("Mortgage" :: Text)
+                , "owner" .= Null
+                ]
+              ]
+            , "errors" .=
+              [ object
+                [ "message" .= ("No value provided for Name {getNameText = \"dogCommand\"}, and no default specified." :: Text)
                 ]
               ]
             ]
