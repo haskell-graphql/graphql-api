@@ -198,6 +198,10 @@ instance forall m. (Functor m) => HasGraph m Bool where
   -- TODO check that selectionset is empty (we expect a terminal node)
   buildResolver handler _ =  map (ok . toValue) handler
 
+instance forall m hg. (HasGraph m hg, Functor m, ToValue (Maybe hg)) => HasGraph m (Maybe hg) where
+  type Handler m (Maybe hg) = m (Maybe hg)
+  buildResolver handler _ =  map (ok . toValue) handler
+
 instance forall m hg. (Monad m, Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
   type Handler m (API.List hg) = m [Handler m hg]
   buildResolver handler selectionSet = do
