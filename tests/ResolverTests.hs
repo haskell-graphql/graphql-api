@@ -1,5 +1,7 @@
-{-# LANGUAGE DataKinds, TypeOperators, ScopedTypeVariables #-}
-module TypeApiTests (tests) where
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
+module ResolverTests (tests) where
 
 import Protolude hiding (Enum)
 
