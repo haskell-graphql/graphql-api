@@ -18,7 +18,7 @@ import GraphQL.API
   , getFieldDefinition
   , getInterfaceDefinition
   )
-import GraphQL.Internal.AST (unsafeMakeName)
+import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Internal.Schema
   ( EnumTypeDefinition(..)
   , EnumValueDefinition(..)

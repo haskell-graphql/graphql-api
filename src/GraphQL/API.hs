@@ -37,7 +37,7 @@ import Protolude hiding (Enum, TypeError)
 import GraphQL.Internal.Schema hiding (Type)
 import qualified GraphQL.Internal.Schema (Type)
 import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
-import GraphQL.Internal.AST (NameError, nameFromSymbol)
+import GraphQL.Internal.Name (NameError, nameFromSymbol)
 import GraphQL.API.Enum (GraphQLEnum(..))
 import GHC.Generics ((:*:)(..))
 

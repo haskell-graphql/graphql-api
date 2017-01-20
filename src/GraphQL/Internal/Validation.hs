@@ -69,12 +69,12 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Name (HasName(..), Name)
+import qualified GraphQL.Internal.Syntax.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
-import GraphQL.Internal.AST (Name, Alias, TypeCondition, Variable)
+import GraphQL.Internal.Syntax.AST (Alias, TypeCondition, Variable)
 import GraphQL.Internal.Output (GraphQLError(..))
-import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Value
   ( Value
   , Value'

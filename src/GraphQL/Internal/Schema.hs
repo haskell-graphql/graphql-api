@@ -9,8 +9,6 @@
 -- Equivalent representation of GraphQL /values/ is in "GraphQL.Value".
 module GraphQL.Internal.Schema
   ( Type(..)
-  -- * Getting names
-  , HasName(..)
   -- * Builtin types
   , Builtin(..)
   -- * Defining new types
@@ -39,19 +37,7 @@ module GraphQL.Internal.Schema
 import Protolude hiding (Type)
 
 import GraphQL.Value (Value)
-import GraphQL.Internal.AST (Name, unsafeMakeName)
-
--- | Types that implement this have values with canonical names in GraphQL.
---
--- e.g. a field @foo(bar: Int32)@ would have the name @\"foo\"@.
---
--- If a thing *might* have a name, or has a name that might not be valid,
--- don't use this.
---
--- If a thing is aliased, then return the *original* name.
-class HasName a where
-  -- | Get the name of the object.
-  getName :: a -> Name
+import GraphQL.Internal.Name (HasName(..), Name, unsafeMakeName)
 
 -- XXX: Use the built-in NonEmptyList in Haskell
 newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show)

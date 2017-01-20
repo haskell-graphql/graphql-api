@@ -13,18 +13,19 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Value (String(..))
-import qualified GraphQL.Internal.AST as AST
-import qualified GraphQL.Internal.Parser as Parser
-import qualified GraphQL.Internal.Encoder as Encoder
+import GraphQL.Internal.Name (Name, unsafeMakeName)
+import qualified GraphQL.Internal.Syntax.AST as AST
+import qualified GraphQL.Internal.Syntax.Parser as Parser
+import qualified GraphQL.Internal.Syntax.Encoder as Encoder
 
 kitchenSink :: Text
 kitchenSink = "query queryName($foo:ComplexType,$site:Site=MOBILE){whoever123is:node(id:[123,456]){id,... on User@defer{field2{id,alias:field1(first:10,after:$foo)@include(if:$foo){id,...frag}}}}}mutation likeStory{like(story:123)@defer{story{id}}}fragment frag on Friend{foo(size:$size,bar:$b,obj:{key:\"value\"})}\n"
 
-dog :: AST.Name
-dog = AST.unsafeMakeName "dog"
+dog :: Name
+dog = unsafeMakeName "dog"
 
-someName :: AST.Name
-someName = AST.unsafeMakeName "name"
+someName :: Name
+someName = unsafeMakeName "name"
 
 tests :: IO TestTree
 tests = testSpec "AST" $ do
@@ -61,9 +62,9 @@ tests = testSpec "AST" $ do
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue
-                     [ AST.ObjectField (AST.unsafeMakeName "s")
+                     [ AST.ObjectField (unsafeMakeName "s")
                        (AST.ValueString (AST.StringValue "\224\225v^6{FPDk\DC3\a")),
-                       AST.ObjectField (AST.unsafeMakeName "Hsr") (AST.ValueInt 0)
+                       AST.ObjectField (unsafeMakeName "Hsr") (AST.ValueInt 0)
                      ])
         let output = Encoder.value input
         parseOnly Parser.value output `shouldBe` Right input
@@ -120,11 +121,11 @@ tests = testSpec "AST" $ do
                          ])
                      , AST.DefinitionOperation
                        (AST.Query
-                        (AST.Node (AST.unsafeMakeName "getName") [] []
+                        (AST.Node (unsafeMakeName "getName") [] []
                          [ AST.SelectionField
                            (AST.Field Nothing dog [] []
                             [ AST.SelectionField
-                              (AST.Field Nothing (AST.unsafeMakeName "owner") [] []
+                              (AST.Field Nothing (unsafeMakeName "owner") [] []
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
                             ])
@@ -144,18 +145,18 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node (AST.unsafeMakeName "houseTrainedQuery")
+                           (AST.Node (unsafeMakeName "houseTrainedQuery")
                             [ AST.VariableDefinition
-                                (AST.Variable (AST.unsafeMakeName "atOtherHomes"))
-                                (AST.TypeNamed (AST.NamedType (AST.unsafeMakeName "Boolean")))
+                                (AST.Variable (unsafeMakeName "atOtherHomes"))
+                                (AST.TypeNamed (AST.NamedType (unsafeMakeName "Boolean")))
                                 (Just (AST.ValueBoolean True))
                             ] []
                             [ AST.SelectionField
                                 (AST.Field Nothing dog [] []
                                  [ AST.SelectionField
-                                     (AST.Field Nothing (AST.unsafeMakeName "isHousetrained")
-                                      [ AST.Argument (AST.unsafeMakeName "atOtherHomes")
-                                          (AST.ValueVariable (AST.Variable (AST.unsafeMakeName "atOtherHomes")))
+                                     (AST.Field Nothing (unsafeMakeName "isHousetrained")
+                                      [ AST.Argument (unsafeMakeName "atOtherHomes")
+                                          (AST.ValueVariable (AST.Variable (unsafeMakeName "atOtherHomes")))
                                       ] [] [])
                                  ])
                             ]))

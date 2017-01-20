@@ -13,7 +13,7 @@ module GraphQL.API.Enum
   ) where
 
 import Protolude hiding (Enum, TypeError)
-import GraphQL.Internal.AST (Name, nameFromSymbol, NameError)
+import GraphQL.Internal.Name (Name, nameFromSymbol, NameError)
 import GraphQL.Internal.Output (GraphQLError(..))
 import GHC.Generics (D, (:+:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))

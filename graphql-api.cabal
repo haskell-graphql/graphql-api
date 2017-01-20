@@ -40,14 +40,15 @@ library
       GraphQL.API
       GraphQL.API.Enum
       GraphQL.Internal.Arbitrary
-      GraphQL.Internal.AST
-      GraphQL.Internal.Encoder
       GraphQL.Internal.Execution
+      GraphQL.Internal.Name
       GraphQL.Internal.OrderedMap
       GraphQL.Internal.Output
-      GraphQL.Internal.Parser
       GraphQL.Internal.Schema
-      GraphQL.Internal.Tokens
+      GraphQL.Internal.Syntax.AST
+      GraphQL.Internal.Syntax.Encoder
+      GraphQL.Internal.Syntax.Parser
+      GraphQL.Internal.Syntax.Tokens
       GraphQL.Internal.Validation
       GraphQL.Resolver
       GraphQL.Value

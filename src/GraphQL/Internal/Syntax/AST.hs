@@ -4,13 +4,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module GraphQL.Internal.AST
+module GraphQL.Internal.Syntax.AST
   ( Name(unName)
-  , NameError(..)
   , nameParser
-  , makeName
-  , nameFromSymbol
-  , unsafeMakeName
   , QueryDocument(..)
   , SchemaDocument(..)
   , Definition(..)
@@ -56,14 +52,13 @@ module GraphQL.Internal.AST
 
 import Protolude hiding (Type)
 
-import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
 import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Tokens (tok)
+import GraphQL.Internal.Syntax.Tokens (tok)
 
 -- * Name
 
@@ -79,7 +74,7 @@ instance Arbitrary Name where
   arbitrary = do
     initial <- elements alpha
     rest <- listOf (elements (alpha <> numeric))
-    pure (unsafeMakeName (toS (initial:rest)))
+    pure (Name (toS (initial:rest)))
     where
       alpha = ['A'..'Z'] <> ['a'..'z'] <> ['_']
       numeric = ['0'..'9']
@@ -91,32 +86,6 @@ nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
   where
     -- `isAlpha` handles many more Unicode Chars
     isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
-
-newtype NameError = NameError Text deriving (Eq, Show)
-
--- | Create a 'Name'.
---
--- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
--- not match, return Nothing.
---
--- >>> makeName "foo"
--- Right (Name {unName = "foo"})
--- >>> makeName "9-bar"
--- Left (NameError "9-bar")
-makeName :: Text -> Either NameError Name
-makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
-
--- | Create a 'Name', panicking if the given text is invalid.
---
--- Prefer 'makeName' to this in all cases.
---
--- >>> unsafeMakeName "foo"
--- Name {unName = "foo"}
-unsafeMakeName :: HasCallStack => Text -> Name
-unsafeMakeName name =
-  case makeName name of
-    Left e -> panic (show e)
-    Right n -> n
 
 -- * Documents
 
@@ -146,10 +115,6 @@ data Node = Node Name [VariableDefinition] [Directive] SelectionSet
 -- TODO: Just make Node implement HasName.
 getNodeName :: Node -> Name
 getNodeName (Node name _ _ _) = name
-
--- | Convert a type-level 'Symbol' into a GraphQL 'Name'.
-nameFromSymbol :: forall (n :: Symbol). KnownSymbol n => Either NameError Name
-nameFromSymbol = makeName (toS (symbolVal @n Proxy))
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)

@@ -17,7 +17,7 @@ module GraphQL.Value.FromValue
   ) where
 
 import Protolude hiding (TypeError)
-import GraphQL.Internal.AST (nameFromSymbol)
+import GraphQL.Internal.Name (nameFromSymbol)
 import qualified GraphQL.Internal.OrderedMap as OM
 import GraphQL.Value
 import GraphQL.Value.ToValue (ToValue(..))

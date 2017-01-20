@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-module GraphQL.Internal.Parser
+module GraphQL.Internal.Syntax.Parser
   ( queryDocument
   , schemaDocument
   , value
@@ -26,8 +26,8 @@ import Data.Attoparsec.Text
   , sepBy1
   )
 
-import qualified GraphQL.Internal.AST as AST
-import GraphQL.Internal.Tokens (tok, whiteSpace)
+import qualified GraphQL.Internal.Syntax.AST as AST
+import GraphQL.Internal.Syntax.Tokens (tok, whiteSpace)
 
 -- * Document
 

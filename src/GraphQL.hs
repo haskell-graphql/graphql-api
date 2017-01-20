@@ -22,14 +22,14 @@ import Protolude
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
-import qualified GraphQL.Internal.AST as AST
 import GraphQL.Internal.Execution
   ( VariableValues
   , ExecutionError
   , substituteVariables
   )
 import qualified GraphQL.Internal.Execution as Execution
-import qualified GraphQL.Internal.Parser as Parser
+import qualified GraphQL.Internal.Syntax.AST as AST
+import qualified GraphQL.Internal.Syntax.Parser as Parser
 import GraphQL.Internal.Validation
   ( QueryDocument
   , SelectionSet
