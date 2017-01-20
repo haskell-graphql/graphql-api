@@ -128,7 +128,7 @@ tests = testSpec "End-to-end tests" $ do
               ]
             ]
       toJSON (toValue response) `shouldBe` expected
-    it "TODO: Handles nested queries" $ do
+    it "Handles nested queries" $ do
       let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
@@ -148,6 +148,50 @@ tests = testSpec "End-to-end tests" $ do
                 , "owner" .= object
                   [ "name" .= ("jml" :: Text)
                   ]
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "It aliases fields" $ do
+      let root = pure (viewServerDog mortgage)
+      let query = [r|{
+                      dog {
+                        name
+                        boss: owner {
+                          name
+                        }
+                      }
+                    }
+                   |]
+      response <- interpretAnonymousQuery @QueryRoot root query
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "name" .= ("Mortgage" :: Text)
+                , "boss" .= object
+                  [ "name" .= ("jml" :: Text)
+                  ]
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Passes arguments to functions" $ do
+      let root = pure (viewServerDog mortgage)
+      let query = [r|{
+                      dog {
+                        name
+                        doesKnowCommand(dogCommand: Sit)
+                      }
+                     }
+                    |]
+      response <- interpretAnonymousQuery @QueryRoot root query
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "name" .= ("Mortgage" :: Text)
+                , "doesKnowCommand" .= False
                 ]
               ]
             ]
