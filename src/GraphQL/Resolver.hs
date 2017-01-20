@@ -67,7 +67,7 @@ data ResolverError
   -- | There was a problem in the schema. Server-side problem.
   = SchemaError NameError
   -- | Couldn't find the requested field in the object. A client-side problem.
-  | FieldNotFoundError (Field Value)
+  | FieldNotFoundError Name
   -- | No value provided for name, and no default specified. Client-side problem.
   | ValueMissing Name
   -- | Could not translate value into Haskell. Probably a client-side problem.
@@ -85,7 +85,7 @@ instance GraphQLError ResolverError where
   formatError (SchemaError e) =
     "Schema error: " <> formatError e
   formatError (FieldNotFoundError field) =
-    "Could not find value for field: " <> show field
+    "Field not supported by the API: " <> show field
   formatError (ValueMissing name) =
     "No value provided for " <> show name <> ", and no default specified."
   formatError (InvalidValue name text) =
@@ -227,29 +227,44 @@ instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m 
 -- Maybe we can use advanced fallbacks like these:
 -- https://wiki.haskell.org/GHC/AdvancedOverlap
 
--- | Internal data type to capture a field's name + what to execute if
--- the name matches the query. Note that the name is *not* in monad m,
--- but the value is. This is necessary so we can skip execution if the
--- name doesn't match.
-data NamedValueResolver m = NamedValueResolver Name (m (Result Value))
 
 -- Iterate through handlers (zipped together with their type
 -- definition) and execute handler if the name matches.
+
+-- TODO: A parametrized `Result` is really not a good way to handle
+-- the "result" for resolveField, but not sure what to use either. I
+-- liked the tuple we had before more because it didn't imply any
+-- other structure or meaning. Maybe we can jsut create a new datatype.
 type ResolveFieldResult = Result (Maybe GValue.ObjectField)
 
-resolveField :: forall resolverType (m :: Type -> Type). (BuildFieldResolver m resolverType, Monad m)
-  => FieldHandler m resolverType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
+-- Extract field name from an argument type. TODO: ideally we'd run
+-- this directly on the "a :> b" argument structure, but that requires
+-- passing in the plain argument structure type into resolveField or
+-- resolving "name" in the buildFieldResolver. Both options duplicate
+-- code somwehere else.
+type family FieldName (a :: Type) = (r :: Symbol) where
+  FieldName (JustHandler (API.Field name t)) = name
+  FieldName (PlainArgument a f) = FieldName f
+  FieldName (EnumArgument a f) = FieldName f
+  FieldName x = TypeError ('Text "Unexpected branch in FieldName type family. Please file a bug!" ':<>: 'ShowType x)
+
+resolveField :: forall dispatchType (m :: Type -> Type).
+  (BuildFieldResolver m dispatchType, Monad m, KnownSymbol (FieldName dispatchType))
+  => FieldHandler m dispatchType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
 resolveField handler nextHandler field =
-  case buildFieldResolver @m @resolverType handler field of
-    -- TODO the fact that this doesn't fit together nicely makes me think that ObjectField is not a good idea)
-    Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
-    Right (NamedValueResolver name' resolver) -> runResolver name' resolver
+  -- check name before
+  case nameFromSymbol @(FieldName dispatchType) of
+    Left err -> pure (Result [SchemaError err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
+    Right name' -> runResolver name'
   where
-    runResolver :: Name -> m (Result Value) -> m ResolveFieldResult
-    runResolver name' resolver
-      | queryFieldName == name' = do
-          Result errs value <- resolver
-          pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
+    runResolver :: Name -> m ResolveFieldResult
+    runResolver name'
+      | queryFieldName == name' =
+          case buildFieldResolver @m @dispatchType handler field of
+            Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
+            Right resolver -> do
+              Result errs value <- resolver
+              pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
       | otherwise = nextHandler
     queryFieldName = getName field
 
@@ -257,33 +272,31 @@ resolveField handler nextHandler field =
 -- family to emulate a closed typeclass. The following are the
 -- universe of "allowed" class instances for field types:
 data JustHandler a
-data EnumField a b
-data PlainField a b
+data EnumArgument a b
+data PlainArgument a b
 
 -- injective helps with errors sometimes
 type family FieldResolverDispatchType (a :: Type) = (r :: Type) | r -> a where
   FieldResolverDispatchType (API.Field ksA t) = JustHandler (API.Field ksA t)
-  FieldResolverDispatchType (API.Argument ksB (API.Enum name t) :> f) = EnumField (API.Argument ksB (API.Enum name t)) (FieldResolverDispatchType f)
-  FieldResolverDispatchType (API.Argument ksC t :> f) = PlainField (API.Argument ksC t) (FieldResolverDispatchType f)
+  FieldResolverDispatchType (API.Argument ksB (API.Enum name t) :> f) = EnumArgument (API.Argument ksB (API.Enum name t)) (FieldResolverDispatchType f)
+  FieldResolverDispatchType (API.Argument ksC t :> f) = PlainArgument (API.Argument ksC t) (FieldResolverDispatchType f)
 
 -- | Derive the handler type from the Field/Argument type in a closed
 -- type family: We don't want anyone else to extend this ever.
 type family FieldHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
   FieldHandler m (JustHandler (API.Field ksD t)) = Handler m t
-  FieldHandler m (PlainField (API.Argument ksE t) f) = t -> FieldHandler m f
-  FieldHandler m (EnumField (API.Argument ksF (API.Enum name t)) f) = t -> FieldHandler m f
+  FieldHandler m (PlainArgument (API.Argument ksE t) f) = t -> FieldHandler m f
+  FieldHandler m (EnumArgument (API.Argument ksF (API.Enum name t)) f) = t -> FieldHandler m f
 
 class BuildFieldResolver m fieldResolverType where
-  buildFieldResolver :: FieldHandler m fieldResolverType -> Field Value -> Either ResolverError (NamedValueResolver m)
+  buildFieldResolver :: FieldHandler m fieldResolverType -> Field Value -> Either ResolverError (m (Result Value))
 
 instance forall ksG t m.
   ( KnownSymbol ksG, HasGraph m t, HasAnnotatedType t, Monad m
   ) => BuildFieldResolver m (JustHandler (API.Field ksG t)) where
   buildFieldResolver handler field = do
     let resolver = buildResolver @m @t handler (getFieldSelectionSet field)
-    field' <- first SchemaError (API.getFieldDefinition @(API.Field ksG t))
-    let name = getName field'
-    Right (NamedValueResolver name resolver)
+    pure resolver
 
 instance forall ksH t f m.
   ( KnownSymbol ksH
@@ -292,7 +305,7 @@ instance forall ksH t f m.
   , Defaultable t
   , HasAnnotatedInputType t
   , Monad m
-  ) => BuildFieldResolver m (PlainField (API.Argument ksH t) f) where
+  ) => BuildFieldResolver m (PlainArgument (API.Argument ksH t) f) where
   buildFieldResolver handler field = do
     argument <- first SchemaError (API.getArgumentDefinition @(API.Argument ksH t))
     let argName = getName argument
@@ -308,7 +321,7 @@ instance forall ksK t f m name.
   , Defaultable t
   , API.GraphQLEnum t
   , Monad m
-  ) => BuildFieldResolver m (EnumField (API.Argument ksK (API.Enum name t)) f) where
+  ) => BuildFieldResolver m (EnumArgument (API.Argument ksK (API.Enum name t)) f) where
   buildFieldResolver handler field = do
     argName <- first SchemaError (nameFromSymbol @ksK)
     value <- case lookupArgument field argName of
@@ -356,6 +369,7 @@ instance forall f fs m dispatchType.
          ( BuildFieldResolver m dispatchType
          , dispatchType ~ FieldResolverDispatchType f
          , RunFields m fs
+         , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (f :<> fs) where
   runFields (handler :<> nextHandlers) selection =
@@ -372,17 +386,18 @@ instance forall ksM t m dispatchType.
   runFields handler field =
     resolveField @dispatchType @m handler nextHandler field
     where
-      nextHandler = pure (Result [FieldNotFoundError field] Nothing)
+      nextHandler = pure (Result [FieldNotFoundError (getName field)] Nothing)
 
 instance forall m a b dispatchType.
          ( BuildFieldResolver m dispatchType
          , dispatchType ~ FieldResolverDispatchType (a :> b)
+         , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (a :> b) where
   runFields handler field =
     resolveField @dispatchType @m handler nextHandler field
     where
-      nextHandler = pure (Result [FieldNotFoundError field] Nothing)
+      nextHandler = pure (Result [FieldNotFoundError (getName field)] Nothing)
 
 instance forall typeName interfaces fields m.
          ( RunFields m (RunFieldsType m fields)
