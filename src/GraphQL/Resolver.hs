@@ -344,9 +344,13 @@ type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
 
 
 class RunFields m a where
-  -- runFields runs a a single AST.Selection over all possible fields
-  -- (as specified by the type), returing exactly one ObjectField when
-  -- a field matches, or an error otherwise.
+  -- | Run a single 'Selection' over all possible fields (as specified by the
+  -- type @a@), returning exactly one 'GValue.ObjectField' when a field
+  -- matches, or an error otherwise.
+  --
+  -- Individual implementations are responsible for calling 'runFields' if
+  -- they haven't matched the field and there are still candidate fields
+  -- within the handler.
   runFields :: RunFieldsHandler m a -> Field Value -> m ResolveFieldResult
 
 instance forall f fs m dispatchType.

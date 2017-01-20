@@ -10,6 +10,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.API
   ( Field
+  , Enum
   , List
   , getAnnotatedType
   , getAnnotatedInputType
@@ -57,7 +58,7 @@ tests = testSpec "Type" $ do
         (NonEmptyList [FieldDefinition (unsafeMakeName "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
   describe "output Enum" $
     it "encodes correctly" $ do
-    getAnnotatedType @DogCommand `shouldBe`
+    getAnnotatedType @(Enum "DogCommand" DogCommand) `shouldBe`
        Right (TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum (EnumTypeDefinition (unsafeMakeName "DogCommand")
          [ EnumValueDefinition (unsafeMakeName "Sit")
          , EnumValueDefinition (unsafeMakeName "Down")

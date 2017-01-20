@@ -61,7 +61,6 @@
 
 module ExampleSchema
   ( DogCommand
-  , DogCommandEnum
   , Dog
   , Sentient
   , Pet
@@ -104,11 +103,9 @@ import GraphQL.Internal.AST (getNameText)
 --  2. Make it an instance of 'GraphQLEnum'
 --  3. Wrap the sum type in 'Enum', e.g. @Enum "DogCommand" DogCommandEnum@
 --     so it can be placed in a schema.
-data DogCommandEnum = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
+data DogCommand = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
 
-instance GraphQLEnum DogCommandEnum
-
-type DogCommand = Enum "DogCommand" DogCommandEnum
+instance GraphQLEnum DogCommand
 
 -- | A dog.
 --
@@ -169,12 +166,12 @@ type Dog = Object "Dog" '[Pet]
   '[ Field "name" Text
    , Field "nickname" (Maybe Text)
    , Field "barkVolume" Int32
-   , Argument "dogCommand" DogCommand :> Field "doesKnowCommand" Bool
+   , Argument "dogCommand" (Enum "DogCommand" DogCommand) :> Field "doesKnowCommand" Bool
    , Argument "atOtherHomes" (Maybe Bool) :> Field "isHouseTrained" Bool
    , Field "owner" Human
    ]
 
-instance Defaultable DogCommandEnum where
+instance Defaultable DogCommand where
   -- Explicitly want no default for dogCommand
   defaultFor (getNameText -> "dogCommand") = Nothing
   -- DogCommand shouldn't be used elsewhere in schema, but who can say?
@@ -243,11 +240,9 @@ type Human = Object "Human" '[Sentient]
 -- @
 -- enum CatCommand { JUMP }
 -- @
-data CatCommandEnum = Jump deriving Generic
+data CatCommand = Jump deriving Generic
 
-instance GraphQLEnum CatCommandEnum
-
-type CatCommand = Enum "CatCommand" CatCommandEnum
+instance GraphQLEnum CatCommand
 
 -- | A cat.
 --
@@ -264,7 +259,7 @@ type CatCommand = Enum "CatCommand" CatCommandEnum
 type Cat = Object "Cat" '[Pet]
   '[ Field "name" Text
    , Field "nickName" (Maybe Text)
-   , Argument "catCommand" CatCommand :> Field "doesKnowCommand" Bool
+   , Argument "catCommand" (Enum "CatCommand" CatCommand) :> Field "doesKnowCommand" Bool
    , Field "meowVolume" Int32
    ]
 

@@ -38,14 +38,14 @@ data ServerDog
     { name :: Text
     , nickname :: Maybe Text
     , barkVolume :: Int32
-    , knownCommands :: Set DogCommandEnum
+    , knownCommands :: Set DogCommand
     , houseTrainedAtHome :: Bool
     , houseTrainedElsewhere :: Bool
     , owner :: ServerHuman
     }
 
 -- | Whether 'ServerDog' knows the given command.
-doesKnowCommand :: ServerDog -> DogCommandEnum -> Bool
+doesKnowCommand :: ServerDog -> DogCommand -> Bool
 doesKnowCommand dog command = command `elem` (knownCommands dog)
 
 -- | Whether 'ServerDog' is house-trained.
