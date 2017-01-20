@@ -130,10 +130,6 @@ type OperationType value = VariableDefinitions -> Directives value -> SelectionS
 
 type Operations value = Map Name (Operation value)
 
-type SelectionSet value = [Selection value]
-
-type Selection value = Selection' FragmentSpread value
-
 -- | Turn a parsed document into a known valid one.
 --
 -- The document is known to be syntactically valid, as we've got its AST.
@@ -244,6 +240,10 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 -- 'FragmentSpread', following this module's convention that unadorned names
 -- imply that everything is valid.
 
+type SelectionSet value = [Selection value]
+
+type Selection value = Selection' FragmentSpread value
+
 -- | A GraphQL selection.
 data Selection' (spread :: * -> *) value
   = SelectionField (Field' spread value)
@@ -259,7 +259,7 @@ data Selection' (spread :: * -> *) value
 -- TODO: At this point, we ought to know that field names are unique. As such,
 -- we should return an ordered map of Name to Fields, rather than a bland
 -- list.
-getFields :: SelectionSet value -> [Field value]
+getFields :: SelectionSet value -> [Field' FragmentSpread value]
 getFields ss = [field | SelectionField field <- ss]
 
 -- | A field in a selection set, which itself might have children which might
@@ -300,7 +300,7 @@ instance Traversable spread => Traversable (Field' spread) where
 type Field value = Field' FragmentSpread value
 
 -- | Get the value of an argument in a field.
-lookupArgument :: Field value -> Name -> Maybe value
+lookupArgument :: Field' spread value -> Name -> Maybe value
 lookupArgument (Field' _ _ (Arguments args) _ _) name = Map.lookup name args
 
 -- | Get the selection set within a field.
