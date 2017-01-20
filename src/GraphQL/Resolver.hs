@@ -502,7 +502,7 @@ findInlineFragmentForType name selectionSet =
     [x] -> Right x
     xs -> Left (MultipleInlineFragmentsForType name xs)
   where
-    getInlineFragment (SelectionInlineFragment frag@(InlineFragment (AST.NamedType name') _ _))
+    getInlineFragment (SelectionInlineFragment frag@(InlineFragment (Just (AST.NamedType name')) _ _))
       | name == name' = Just frag
       | otherwise = Nothing
     getInlineFragment _ = Nothing

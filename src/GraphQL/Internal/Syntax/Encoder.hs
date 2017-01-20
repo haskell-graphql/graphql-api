@@ -77,10 +77,13 @@ fragmentSpread (AST.FragmentSpread name ds) =
   "..." <> AST.unName name <> optempty directives ds
 
 inlineFragment :: AST.InlineFragment -> Text
-inlineFragment (AST.InlineFragment (AST.NamedType tc) ds ss) =
+inlineFragment (AST.InlineFragment (Just (AST.NamedType tc)) ds ss) =
   "... on " <> AST.unName tc
             <> optempty directives ds
             <> optempty selectionSet ss
+inlineFragment (AST.InlineFragment Nothing ds ss) =
+  "... " <> optempty directives ds
+         <> optempty selectionSet ss
 
 fragmentDefinition :: AST.FragmentDefinition -> Text
 fragmentDefinition (AST.FragmentDefinition name (AST.NamedType tc) ds ss) =

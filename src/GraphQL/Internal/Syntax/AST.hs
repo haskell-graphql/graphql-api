@@ -144,7 +144,7 @@ data FragmentSpread = FragmentSpread Name [Directive]
                       deriving (Eq,Show)
 
 data InlineFragment =
-  InlineFragment TypeCondition [Directive] SelectionSet
+  InlineFragment (Maybe TypeCondition) [Directive] SelectionSet
   deriving (Eq,Show)
 
 data FragmentDefinition =
