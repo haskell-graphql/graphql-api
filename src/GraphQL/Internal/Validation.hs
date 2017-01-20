@@ -326,7 +326,7 @@ instance Traversable FragmentSpread where
 
 -- | An inline fragment, which itself can contain fragment spreads.
 data InlineFragment spread value
-  = InlineFragment TypeCondition (Directives value) [Selection' spread value]
+  = InlineFragment (Maybe TypeCondition) (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
 instance Functor spread => Functor (InlineFragment spread) where

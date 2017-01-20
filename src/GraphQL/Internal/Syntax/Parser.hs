@@ -112,8 +112,7 @@ fragmentSpread = AST.FragmentSpread
 inlineFragment :: Parser AST.InlineFragment
 inlineFragment = AST.InlineFragment
   <$  tok "..."
-  <*  tok "on"
-  <*> typeCondition
+  <*> optional (tok "on" *> typeCondition)
   <*> optempty directives
   <*> selectionSet
 
