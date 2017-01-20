@@ -7,9 +7,9 @@ import Test.QuickCheck (forAll)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
-import qualified GraphQL.Internal.AST as AST
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
-import GraphQL.Internal.AST (unsafeMakeName)
+import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Value
   ( Object
   , ObjectField'(..)

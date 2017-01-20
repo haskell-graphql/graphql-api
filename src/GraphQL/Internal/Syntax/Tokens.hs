@@ -1,5 +1,5 @@
 -- | Basic tokenising used by parser.
-module GraphQL.Internal.Tokens
+module GraphQL.Internal.Syntax.Tokens
   ( tok
   , whiteSpace
   ) where

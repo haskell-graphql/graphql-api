@@ -44,13 +44,13 @@ import GraphQL.API
 import qualified GraphQL.API as API
 import qualified GraphQL.Value as GValue
 import GraphQL.Value
-  ( Name
-  , Value
+  ( Value
   , pattern ValueEnum
   )
 import GraphQL.Value.FromValue (FromValue(..))
 import GraphQL.Value.ToValue (ToValue(..))
-import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Name (Name, NameError(..), makeName, nameFromSymbol)
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Validation
@@ -66,7 +66,7 @@ import GraphQL.Internal.Validation
 
 data ResolverError
   -- | There was a problem in the schema. Server-side problem.
-  = SchemaError AST.NameError
+  = SchemaError NameError
   -- | Couldn't find the requested field in the object. A client-side problem.
   | FieldNotFoundError (Field Value)
   -- | No value provided for name, and no default specified. Client-side problem.
@@ -311,7 +311,7 @@ instance forall ksK t f m name.
   , Monad m
   ) => BuildFieldResolver m (EnumField (API.Argument ksK (API.Enum name t)) f) where
   buildFieldResolver handler field = do
-    argName <- first SchemaError (AST.nameFromSymbol @ksK)
+    argName <- first SchemaError (nameFromSymbol @ksK)
     value <- case lookupArgument field argName of
       Nothing -> valueMissing @t argName
       Just (ValueEnum enum) -> first (InvalidValue argName) (API.enumFromValue @t enum)
@@ -476,7 +476,7 @@ instance forall m unionName objects.
   -- we are currently implementing.
   buildResolver mHandler selectionSet = do
     duv@(DynamicUnionValue label _) <- mHandler
-    case AST.makeName label of
+    case makeName label of
       Left e -> pure (Result [SchemaError e] GValue.ValueNull)
       Right name ->
         -- we only need to look at the fragment that matches by name:

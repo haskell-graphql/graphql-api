@@ -1,4 +1,4 @@
-module GraphQL.Internal.Encoder
+module GraphQL.Internal.Syntax.Encoder
   ( queryDocument
   , schemaDocument
   , value
@@ -9,7 +9,7 @@ import Protolude hiding (Type, intercalate)
 import qualified Data.Aeson as Aeson
 import Data.Text (Text, cons, intercalate, pack, snoc)
 
-import qualified GraphQL.Internal.AST as AST
+import qualified GraphQL.Internal.Syntax.AST as AST
 
 -- * Document
 

@@ -10,18 +10,19 @@ import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Name (Name, unsafeMakeName)
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Validation
   ( ValidationError(..)
   , findDuplicates
   , getErrors
   )
 
-me :: AST.Name
-me = AST.unsafeMakeName "me"
+me :: Name
+me = unsafeMakeName "me"
 
-someName :: AST.Name
-someName = AST.unsafeMakeName "name"
+someName :: Name
+someName = unsafeMakeName "name"
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do

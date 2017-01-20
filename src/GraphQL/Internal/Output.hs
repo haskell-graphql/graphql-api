@@ -5,7 +5,7 @@
 module GraphQL.Internal.Output
   ( Response(..)
   , Errors
-  , Error(..)  -- XXX: Maybe export helper functions rather than constructors.
+  , Error(..)
   , GraphQLError(..)
   , singleError
   ) where
@@ -18,8 +18,9 @@ import GraphQL.Value
   , Value
   , pattern ValueObject
   , pattern ValueNull
+  , NameError(..)
   )
-import GraphQL.Internal.AST (NameError(..), unsafeMakeName)
+import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Value.ToValue (ToValue(..))
 
 -- | GraphQL response.

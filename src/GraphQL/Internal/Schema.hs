@@ -38,8 +38,8 @@ module GraphQL.Internal.Schema
 
 import Protolude hiding (Type)
 
-import GraphQL.Value (Value)
-import GraphQL.Internal.AST (Name, unsafeMakeName)
+import GraphQL.Value (Name, Value)
+import GraphQL.Internal.Name (unsafeMakeName)
 
 -- | Types that implement this have values with canonical names in GraphQL.
 --

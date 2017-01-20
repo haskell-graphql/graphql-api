@@ -24,7 +24,7 @@ import GraphQL.Resolver
   , ResolverError(..)
   , (:<>)(..)
   )
-import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Internal.Output (singleError)
 
 -- Test a custom error monad
@@ -48,7 +48,7 @@ tests = testSpec "TypeAPI" $ do
       Right (PartialSuccess _ errs) <- runExceptT (interpretAnonymousQuery @T tHandler "{ not_a_field }")
       -- TODO: jml thinks this is a really bad error message. Real problem is
       -- that `not_a_field` was provided.
-      errs `shouldBe` singleError (ValueMissing (AST.unsafeMakeName "x"))
+      errs `shouldBe` singleError (ValueMissing (unsafeMakeName "x"))
     it "complains about missing argument" $ do
       Right (PartialSuccess _ errs) <- runExceptT (interpretAnonymousQuery @T tHandler "{ t }")
-      errs `shouldBe` singleError (ValueMissing (AST.unsafeMakeName "x"))
+      errs `shouldBe` singleError (ValueMissing (unsafeMakeName "x"))

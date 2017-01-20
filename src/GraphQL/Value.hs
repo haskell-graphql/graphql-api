@@ -26,10 +26,12 @@ module GraphQL.Value
   , valueToAST
   , astToVariableValue
   , variableValueToAST
-  , Name(..)
   , List
   , List'(..)
   , String(..)
+    -- * Names
+  , Name(..)
+  , NameError(..)
     -- * Objects
   , Object
   , Object'(..)
@@ -52,8 +54,9 @@ import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.AST (Name(..), Variable)
-import qualified GraphQL.Internal.AST as AST
+import GraphQL.Internal.Name (Name(..), NameError(..))
+import GraphQL.Internal.Syntax.AST (Variable)
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 
