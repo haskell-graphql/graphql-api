@@ -8,10 +8,13 @@ module EndToEndTests (tests) where
 
 import Protolude
 
-import Data.Aeson (toJSON, object, (.=))
-import GraphQL (interpretAnonymousQuery)
+import Data.Aeson (Value(Null), toJSON, object, (.=))
+import qualified Data.Map as Map
+import GraphQL (compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
 import GraphQL.API (Object, Field)
+import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler)
+import GraphQL.Value (makeName)
 import GraphQL.Value.ToValue (ToValue(..))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
@@ -196,3 +199,93 @@ tests = testSpec "End-to-end tests" $ do
               ]
             ]
       toJSON (toValue response) `shouldBe` expected
+  describe "interpretQuery" $ do
+    it "Handles the simplest named query" $ do
+      let root = pure (viewServerDog mortgage)
+      let query = [r|query myQuery {
+                      dog {
+                        name
+                      }
+                    }
+                   |]
+      response <- interpretQuery @QueryRoot root query Nothing mempty
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "name" .= ("Mortgage" :: Text)
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Allows calling query by name" $ do
+      let root = pure (viewServerDog mortgage)
+      let query = [r|query myQuery {
+                      dog {
+                        name
+                      }
+                    }
+                   |]
+      let Right name = makeName "myQuery"
+      response <- interpretQuery @QueryRoot root query (Just name) mempty
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "name" .= ("Mortgage" :: Text)
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    describe "Handles variables" $ do
+      let root = pure (viewServerDog mortgage)
+      let Right query =
+            compileQuery [r|query myQuery($whichCommand: DogCommand) {
+                              dog {
+                                name
+                                doesKnowCommand(dogCommand: $whichCommand)
+                              }
+                            }
+                           |]
+      it "Errors when no variables provided" $ do
+        response <- executeQuery  @QueryRoot root query Nothing mempty
+        let expected =
+              object
+              [ "data" .= object
+                [ "dog" .= object
+                  [ "name" .= ("Mortgage" :: Text)
+                  , "doesKnowCommand" .= Null
+                  ]
+                ]
+              , "errors" .=
+                [
+                  object
+                  -- TODO: This error message is pretty bad. We should define
+                  -- a typeclass for client-friendly "Show" (separate from
+                  -- actual Show which remains extremely useful for debugging)
+                  -- and use that when including values in error messages.
+                  [ "message" .= ("Could not coerce Name {unName = \"dogCommand\"} to valid value: ValueScalar' ConstNull not an enum: [Right (Name {unName = \"Sit\"}),Right (Name {unName = \"Down\"}),Right (Name {unName = \"Heel\"})]" :: Text)
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Substitutes variables when they are provided" $ do
+        -- TODO: This is a crummy way to make a variable map. jml doesn't want
+        -- to come up with a new API in this PR, but probably we should have a
+        -- very simple function to turn a JSON value / object into the
+        -- variable map that we desire. Alternatively, we should have APIs
+        -- like Aeson does.
+        let Right varName = makeName "whichCommand"
+        let vars = Map.singleton (Variable varName) (toValue Sit)
+        response <- executeQuery  @QueryRoot root query Nothing vars
+        let expected =
+              object
+              [ "data" .= object
+                [ "dog" .= object
+                  [ "name" .= ("Mortgage" :: Text)
+                  , "doesKnowCommand" .= False
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+

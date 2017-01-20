@@ -32,6 +32,7 @@ module GraphQL.Value
     -- * Names
   , Name(..)
   , NameError(..)
+  , makeName
     -- * Objects
   , Object
   , Object'(..)
@@ -54,7 +55,7 @@ import qualified Data.Map as Map
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Name (Name(..), NameError(..))
+import GraphQL.Internal.Name (Name(..), NameError(..), makeName)
 import GraphQL.Internal.Syntax.AST (Variable)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.OrderedMap (OrderedMap)
