@@ -46,9 +46,7 @@ tests = testSpec "TypeAPI" $ do
       encode object `shouldBe` "{\"t\":12}"
     it "complains about missing field" $ do
       Right (PartialSuccess _ errs) <- runExceptT (interpretAnonymousQuery @T tHandler "{ not_a_field }")
-      -- TODO: jml thinks this is a really bad error message. Real problem is
-      -- that `not_a_field` was provided.
-      errs `shouldBe` singleError (ValueMissing (unsafeMakeName "x"))
+      errs `shouldBe` singleError (FieldNotFoundError (unsafeMakeName "not_a_field"))
     it "complains about missing argument" $ do
       Right (PartialSuccess _ errs) <- runExceptT (interpretAnonymousQuery @T tHandler "{ t }")
       errs `shouldBe` singleError (ValueMissing (unsafeMakeName "x"))

@@ -8,7 +8,7 @@ module EndToEndTests (tests) where
 
 import Protolude
 
-import Data.Aeson (Value(Null), toJSON, object, (.=))
+import Data.Aeson (toJSON, object, (.=))
 import GraphQL (interpretAnonymousQuery)
 import GraphQL.API (Object, Field)
 import GraphQL.Resolver ((:<>)(..), Handler)
@@ -145,12 +145,9 @@ tests = testSpec "End-to-end tests" $ do
             [ "data" .= object
               [ "dog" .= object
                 [ "name" .= ("Mortgage" :: Text)
-                , "owner" .= Null
-                ]
-              ]
-            , "errors" .=
-              [ object
-                [ "message" .= ("No value provided for Name {unName = \"dogCommand\"}, and no default specified." :: Text)
+                , "owner" .= object
+                  [ "name" .= ("jml" :: Text)
+                  ]
                 ]
               ]
             ]
