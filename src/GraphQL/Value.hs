@@ -26,7 +26,7 @@ module GraphQL.Value
   , valueToAST
   , astToVariableValue
   , variableValueToAST
-  , Name
+  , Name(..)
   , List
   , List'(..)
   , String(..)
@@ -294,8 +294,8 @@ unionObjects objects = Object' <$> OrderedMap.unions [obj | Object' obj <- objec
 
 instance ToJSON scalar => ToJSON (Object' scalar) where
   -- Direct encoding to preserve order of keys / values
-  toJSON (Object' xs) = toJSON (Map.fromList [(getNameText k, v) | (k, v) <- OrderedMap.toList xs])
-  toEncoding (Object' xs) = pairs (foldMap (\(k, v) -> toS (getNameText k) .= v) (OrderedMap.toList xs))
+  toJSON (Object' xs) = toJSON (Map.fromList [(unName k, v) | (k, v) <- OrderedMap.toList xs])
+  toEncoding (Object' xs) = pairs (foldMap (\(k, v) -> toS (unName k) .= v) (OrderedMap.toList xs))
 
 
 

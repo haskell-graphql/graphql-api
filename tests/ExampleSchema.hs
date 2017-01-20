@@ -88,7 +88,7 @@ import GraphQL.API
 -- XXX: This really shouldn't be part of Resolver, since whether or not a
 -- thing has a default is part of the API / Schema definition.
 import GraphQL.Resolver (Defaultable(..))
-import GraphQL.Internal.AST (getNameText)
+import GraphQL.Value (unName)
 
 -- | A command that can be given to a 'Dog'.
 --
@@ -173,7 +173,7 @@ type Dog = Object "Dog" '[Pet]
 
 instance Defaultable DogCommand where
   -- Explicitly want no default for dogCommand
-  defaultFor (getNameText -> "dogCommand") = Nothing
+  defaultFor (unName -> "dogCommand") = Nothing
   -- DogCommand shouldn't be used elsewhere in schema, but who can say?
   defaultFor _ = Nothing
 
