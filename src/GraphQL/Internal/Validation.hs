@@ -209,7 +209,7 @@ validateOperation (Mutation vars directives selectionSet) = do
 -- | The set of arguments for a given field, directive, etc.
 --
 -- Note that the 'value' can be a variable.
-newtype Arguments value = Arguments (Map Name value) deriving (Eq, Show, Functor, Foldable, Traversable)
+newtype Arguments value = Arguments (Map Name value) deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 -- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
 --
@@ -561,7 +561,7 @@ resolveVariables definitions = traverse resolveVariableValue
 -- * Directives
 
 -- | A directive is a way of changing the run-time behaviour
-newtype Directives value = Directives (Map Name (Arguments value)) deriving (Eq, Show, Foldable, Functor, Traversable)
+newtype Directives value = Directives (Map Name (Arguments value)) deriving (Eq, Ord, Show, Foldable, Functor, Traversable)
 
 emptyDirectives :: Directives value
 emptyDirectives = Directives Map.empty
