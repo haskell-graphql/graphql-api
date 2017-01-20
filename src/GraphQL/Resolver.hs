@@ -49,10 +49,9 @@ import GraphQL.Value
   )
 import GraphQL.Value.FromValue (FromValue(..))
 import GraphQL.Value.ToValue (ToValue(..))
-import GraphQL.Internal.Name (Name, NameError(..), makeName, nameFromSymbol)
+import GraphQL.Internal.Name (Name, NameError(..), HasName(..), makeName, nameFromSymbol)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Output (GraphQLError(..))
-import GraphQL.Internal.Schema (HasName(..))
 import GraphQL.Internal.Validation
   ( SelectionSet
   , Selection'(..)

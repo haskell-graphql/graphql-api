@@ -9,6 +9,8 @@ module GraphQL.Internal.Name
   , NameError(..)
   , makeName
   , nameFromSymbol
+  -- * Named things
+  , HasName(..)
   -- * Unsafe functions
   , unsafeMakeName
   ) where
@@ -52,3 +54,16 @@ unsafeMakeName name =
   case makeName name of
     Left e -> panic (show e)
     Right n -> n
+
+-- | Types that implement this have values with a single canonical name in a
+-- GraphQL schema.
+--
+-- e.g. a field @foo(bar: Int32)@ would have the name @\"foo\"@.
+--
+-- If a thing *might* have a name, or has a name that might not be valid,
+-- don't use this.
+--
+-- If a thing is aliased, then return the *original* name.
+class HasName a where
+  -- | Get the name of the object.
+  getName :: a -> Name
