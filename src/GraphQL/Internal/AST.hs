@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module GraphQL.Internal.AST
-  ( Name(getNameText)
+  ( Name(unName)
   , NameError(..)
   , nameParser
   , makeName
@@ -70,10 +70,10 @@ import GraphQL.Internal.Tokens (tok)
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { getNameText :: Text } deriving (Eq, Ord, Show)
+newtype Name = Name { unName :: Text } deriving (Eq, Ord, Show)
 
 instance Aeson.ToJSON Name where
-  toJSON = Aeson.toJSON . getNameText
+  toJSON = Aeson.toJSON . unName
 
 instance Arbitrary Name where
   arbitrary = do
@@ -100,7 +100,7 @@ newtype NameError = NameError Text deriving (Eq, Show)
 -- not match, return Nothing.
 --
 -- >>> makeName "foo"
--- Right (Name {getNameText = "foo"})
+-- Right (Name {unName = "foo"})
 -- >>> makeName "9-bar"
 -- Left (NameError "9-bar")
 makeName :: Text -> Either NameError Name
@@ -111,7 +111,7 @@ makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
 -- Prefer 'makeName' to this in all cases.
 --
 -- >>> unsafeMakeName "foo"
--- Name {getNameText = "foo"}
+-- Name {unName = "foo"}
 unsafeMakeName :: HasCallStack => Text -> Name
 unsafeMakeName name =
   case makeName name of

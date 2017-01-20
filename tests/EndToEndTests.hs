@@ -150,7 +150,7 @@ tests = testSpec "End-to-end tests" $ do
               ]
             , "errors" .=
               [ object
-                [ "message" .= ("No value provided for Name {getNameText = \"dogCommand\"}, and no default specified." :: Text)
+                [ "message" .= ("No value provided for Name {unName = \"dogCommand\"}, and no default specified." :: Text)
                 ]
               ]
             ]
