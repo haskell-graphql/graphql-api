@@ -17,7 +17,6 @@ module GraphQL.Resolver
   ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
   , HasResolver(..)
   , (:<>)(..)
-  , BuildFieldResolver(..)
   , Defaultable(..)
   , Result(..)
   , unionValue
