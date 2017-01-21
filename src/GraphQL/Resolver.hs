@@ -15,7 +15,7 @@
 
 module GraphQL.Resolver
   ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
-  , HasGraph(..)
+  , HasResolver(..)
   , (:<>)(..)
   , BuildFieldResolver(..)
   , Defaultable(..)
@@ -143,9 +143,9 @@ ok :: Value -> Result Value
 ok = pure
 
 
-class HasGraph m a where
+class HasResolver m a where
   type Handler m a
-  buildResolver :: Handler m a -> SelectionSet Value -> m (Result Value)
+  resolve :: Handler m a -> SelectionSet Value -> m (Result Value)
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -180,43 +180,43 @@ instance Defaultable (Maybe a) where
   -- | The default for @Maybe a@ is @Nothing@.
   defaultFor _ = pure Nothing
 
-instance forall m. (Functor m) => HasGraph m Int32 where
+instance forall m. (Functor m) => HasResolver m Int32 where
   type Handler m Int32 = m Int32
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  do
+  resolve handler _ =  do
     map (ok . toValue) handler
 
 
-instance forall m. (Functor m) => HasGraph m Double where
+instance forall m. (Functor m) => HasResolver m Double where
   type Handler m Double = m Double
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . toValue) handler
+  resolve handler _ =  map (ok . toValue) handler
 
-instance forall m. (Functor m) => HasGraph m Text where
+instance forall m. (Functor m) => HasResolver m Text where
   type Handler m Text = m Text
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . toValue) handler
+  resolve handler _ =  map (ok . toValue) handler
 
-instance forall m. (Functor m) => HasGraph m Bool where
+instance forall m. (Functor m) => HasResolver m Bool where
   type Handler m Bool = m Bool
   -- TODO check that selectionset is empty (we expect a terminal node)
-  buildResolver handler _ =  map (ok . toValue) handler
+  resolve handler _ =  map (ok . toValue) handler
 
-instance forall m hg. (HasGraph m hg, Functor m, ToValue (Maybe hg)) => HasGraph m (Maybe hg) where
+instance forall m hg. (HasResolver m hg, Functor m, ToValue (Maybe hg)) => HasResolver m (Maybe hg) where
   type Handler m (Maybe hg) = m (Maybe hg)
-  buildResolver handler _ =  map (ok . toValue) handler
+  resolve handler _ =  map (ok . toValue) handler
 
-instance forall m hg. (Monad m, Applicative m, HasGraph m hg) => HasGraph m (API.List hg) where
+instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver m (API.List hg) where
   type Handler m (API.List hg) = m [Handler m hg]
-  buildResolver handler selectionSet = do
+  resolve handler selectionSet = do
     h <- handler
-    let a = traverse (flip (buildResolver @m @hg) selectionSet) h
+    let a = traverse (flip (resolve @m @hg) selectionSet) h
     map aggregateResults a
 
 
-instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasGraph m (API.Enum ksN enum) where
+instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver m (API.Enum ksN enum) where
   type Handler m (API.Enum ksN enum) = enum
-  buildResolver handler _ = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
+  resolve handler _ = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
 
 
 -- TODO: variables should error, they should have been resolved already.
@@ -291,10 +291,10 @@ class BuildFieldResolver m fieldResolverType where
   buildFieldResolver :: FieldHandler m fieldResolverType -> Field Value -> Either ResolverError (m (Result Value))
 
 instance forall ksG t m.
-  ( KnownSymbol ksG, HasGraph m t, HasAnnotatedType t, Monad m
+  ( KnownSymbol ksG, HasResolver m t, HasAnnotatedType t, Monad m
   ) => BuildFieldResolver m (JustHandler (API.Field ksG t)) where
   buildFieldResolver handler field = do
-    let resolver = buildResolver @m @t handler (getFieldSelectionSet field)
+    let resolver = resolve @m @t handler (getFieldSelectionSet field)
     pure resolver
 
 instance forall ksH t f m.
@@ -401,10 +401,10 @@ instance forall m a b dispatchType.
 instance forall typeName interfaces fields m.
          ( RunFields m (RunFieldsType m fields)
          , Monad m
-         ) => HasGraph m (API.Object typeName interfaces fields) where
+         ) => HasResolver m (API.Object typeName interfaces fields) where
   type Handler m (API.Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
-  buildResolver mHandler selectionSet = do
+  resolve mHandler selectionSet = do
     -- First we run the actual handler function itself in IO.
     handler <- mHandler
     let fields = getFields selectionSet
@@ -425,7 +425,7 @@ instance forall typeName interfaces fields m.
 -- | For unions we need a way to have type-safe, open sum types based
 -- on the possible 'API.Object's of a union. The following closed type
 -- family selects one Object from the union and returns the matching
--- 'HasGraph' 'Handler' type. If the object @o@ is not a member of
+-- 'HasResolver' 'Handler' type. If the object @o@ is not a member of
 -- 'API.Union' then the user code won't compile.
 --
 -- This type family is an implementation detail but its TypeError
@@ -465,7 +465,7 @@ instance forall m union objects name interfaces fields.
   ) => RunUnion m union (API.Object name interfaces fields:objects) where
   runUnion duv fragment@(InlineFragment _ _ selection) =
     case extractUnionValue @(API.Object name interfaces fields) @union @m duv of
-      Just handler -> buildResolver @m @(API.Object name interfaces fields) handler selection
+      Just handler -> resolve @m @(API.Object name interfaces fields) handler selection
       Nothing -> runUnion @m @union @objects duv fragment
 
 -- AFAICT it should not be possible to ever hit the empty case because
@@ -483,11 +483,11 @@ instance forall m unionName objects.
   ( Monad m
   , KnownSymbol unionName
   , RunUnion m (API.Union unionName objects) objects
-  ) => HasGraph m (API.Union unionName objects) where
+  ) => HasResolver m (API.Union unionName objects) where
   type Handler m (API.Union unionName objects) = m (DynamicUnionValue (API.Union unionName objects) m)
   -- 'label' is the name of the GraphQL type of the branch of the union that
   -- we are currently implementing.
-  buildResolver mHandler selectionSet = do
+  resolve mHandler selectionSet = do
     duv@(DynamicUnionValue label _) <- mHandler
     case makeName label of
       Left e -> pure (Result [SchemaError e] GValue.ValueNull)

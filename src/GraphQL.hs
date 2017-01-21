@@ -44,7 +44,7 @@ import GraphQL.Internal.Output
   , Response(..)
   , singleError
   )
-import GraphQL.Resolver (HasGraph(..), Result(..))
+import GraphQL.Resolver (HasResolver(..), Result(..))
 import GraphQL.Value (Name, Value, pattern ValueObject)
 
 -- | Errors that can happen while processing a query document.
@@ -74,7 +74,7 @@ instance GraphQLError QueryError where
 
 -- | Execute a GraphQL query.
 executeQuery
-  :: forall api m. (HasGraph m api, Applicative m)
+  :: forall api m. (HasResolver m api, Applicative m)
   => Handler m api -- ^ Handler for the query. This links the query to the code you've written to handle it.
   -> QueryDocument VariableValue  -- ^ A validated query document. Build one with 'compileQuery'.
   -> Maybe Name -- ^ An optional name. If 'Nothing', then executes the only operation in the query. If @Just "something"@, executes the query named @"something".
@@ -83,8 +83,7 @@ executeQuery
 executeQuery handler document name variables =
   case getOperation document name variables of
     Left e -> pure (ExecutionFailure (singleError e))
-    Right operation ->
-      toResult <$> buildResolver @m @api handler operation
+    Right operation -> toResult <$> resolve @m @api handler operation
   where
     toResult (Result errors result) =
       case result of
@@ -99,7 +98,7 @@ executeQuery handler document name variables =
 --
 -- Compiles then executes a GraphQL query.
 interpretQuery
-  :: forall api m. (Applicative m, HasGraph m api)
+  :: forall api m. (Applicative m, HasResolver m api)
   => Handler m api -- ^ Handler for the query. This links the query to the code you've written to handle it.
   -> Text -- ^ The text of a query document. Will be parsed and then executed.
   -> Maybe Name -- ^ An optional name for the operation within document to run. If 'Nothing', execute the only operation in the document. If @Just "something"@, execute the query or mutation named @"something"@.
@@ -119,7 +118,7 @@ interpretQuery handler query name variables =
 --
 -- Anonymous queries have no name and take no variables.
 interpretAnonymousQuery
-  :: forall api m. (Applicative m, HasGraph m api)
+  :: forall api m. (Applicative m, HasResolver m api)
   => Handler m api -- ^ Handler for the anonymous query.
   -> Text -- ^ The text of the anonymous query. Should defined only a single, unnamed query operation.
   -> m Response -- ^ The result of running the query.
