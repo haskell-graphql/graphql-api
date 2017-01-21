@@ -75,6 +75,8 @@ import qualified GraphQL.Internal.Syntax.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
 import GraphQL.Internal.Syntax.AST (Alias, TypeCondition, Variable)
+import GraphQL.Internal.OrderedMap (OrderedMap)
+import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Value
   ( Value
@@ -240,9 +242,113 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 -- 'FragmentSpread', following this module's convention that unadorned names
 -- imply that everything is valid.
 
+
+-- https://facebook.github.io/graphql/#sec-Field-Selection-Merging
+-- https://facebook.github.io/graphql/#sec-Executing-Selection-Sets
+--   1. the selection set is turned into a grouped field set;
+--   2. each represented field in the grouped field set produces an entry into
+--      a response map.
+-- https://facebook.github.io/graphql/#sec-Field-Collection
+
+
 type SelectionSet value = [Selection value]
 
 type Selection value = Selection' FragmentSpread value
+
+newtype SelectionSetByResponseKey value
+  = SelectionSetByResponseKey (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value))) deriving (Eq, Ord, Show)
+
+type ResponseKey = Name
+
+data ExecutionField value
+  = ExecutionField
+  { name :: Name
+  , arguments :: Arguments value
+  , subSelectionField :: Maybe (SelectionSetByResponseKey value)
+  } deriving (Eq, Ord, Show)
+
+-- | Merge two execution fields. Assumes that they are fields for the same
+-- response key on the same type (i.e. that they are fields we would actually
+-- rationally want to merge).
+mergeFields :: Eq value => ExecutionField value -> ExecutionField value -> Validation (ExecutionField value)
+mergeFields field1 field2 = do
+  unless (name field1 == name field2) $ throwE (MismatchedNames (name field1) (name field2))
+  unless (arguments field1 == arguments field2) $ throwE (MismatchedArguments (name field1))
+  case (subSelectionField field1, subSelectionField field2) of
+    (Nothing, Nothing) ->
+      pure ExecutionField { name = name field1
+                          , arguments = arguments field1
+                          , subSelectionField = Nothing
+                          }
+    (Just ss1, Just ss2) -> do
+      mergedSet <- mergeSelectionSets ss1 ss2
+      pure ExecutionField { name = name field1
+                          , arguments = arguments field1
+                          , subSelectionField = Just mergedSet
+                          }
+    _ -> throwE (IncompatibleFields (name field1))
+
+  where
+    mergeSelectionSets :: Eq value
+                       => SelectionSetByResponseKey value
+                       -> SelectionSetByResponseKey value
+                       -> Validation (SelectionSetByResponseKey value)
+    mergeSelectionSets (SelectionSetByResponseKey ss1) (SelectionSetByResponseKey ss2) =
+      SelectionSetByResponseKey <$> OrderedMap.unionWithM (OrderedMap.unionWithM mergeFields) ss1 ss2
+
+-- TODO: Take the result of `_groupByResponseKey` and filter by type
+--   - Have a single function for taking a type and a set of type
+--     conditions and seeing if they apply
+--   - Create new output type for the result of this
+-- TODO: Function for getting the response key for a type-filtered list
+-- TODO: Use these functions in resolver
+--   - Wire up `_groupByResponseKey` into core validation functions
+-- TODO: Rename `SelectionSetByResponseKey` so that it's just selection set.
+-- TODO: Define error values for `_groupByResponseKey` and use them
+
+-- | Flatten the selection and group it by response key and then type
+-- conditions.
+--
+-- Doesn't do any validation at all. Just provides a list of "execution
+-- values" which are the possible things that might be executed, depending on
+-- the type.
+--
+-- XXX: This is so incredibly complex. No doubt there's a way to simplify, but
+-- jml can't see it right now.
+_groupByResponseKey :: Eq value => [Selection' FragmentSpread value] -> Validation (SelectionSetByResponseKey value)
+_groupByResponseKey selectionSet = SelectionSetByResponseKey <$>
+  flattenSelectionSet mempty selectionSet
+  where
+    -- | Given a currently "active" type condition, and a single selection,
+    -- return a map of response keys to validated fields, grouped by types:
+    -- essentially a SelectionSetByResponseKey without the wrapping
+    -- constructor.
+    --
+    -- The "active" type condition is the type condition of the selection set
+    -- that contains the selection.
+    byKey :: Eq value
+          => Set TypeCondition
+          -> Selection' FragmentSpread value
+          -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value)))
+    byKey typeConds (SelectionField field@(Field' _ name arguments _ ss))
+      = case ss of
+          [] -> pure $ OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds .  ExecutionField name arguments $ Nothing
+          _ -> OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds . ExecutionField name arguments . Just <$> _groupByResponseKey ss
+    byKey typeConds (SelectionFragmentSpread (FragmentSpread _ _ (FragmentDefinition _ typeCond _ ss)))
+      = flattenSelectionSet (typeConds <> Set.singleton typeCond) ss
+    byKey typeConds (SelectionInlineFragment (InlineFragment (Just typeCond) _ ss))
+      = flattenSelectionSet (typeConds <> Set.singleton typeCond) ss
+    byKey typeConds (SelectionInlineFragment (InlineFragment Nothing _ ss))
+      = flattenSelectionSet typeConds ss
+
+    flattenSelectionSet :: Eq value
+                        => Set TypeCondition
+                        -> [Selection' FragmentSpread value]
+                        -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value)))
+    flattenSelectionSet typeConds ss = do
+      groupedByKey <- traverse (byKey typeConds) ss
+      OrderedMap.unionsWithM (OrderedMap.unionWithM mergeFields) groupedByKey
+
 
 -- | A GraphQL selection.
 data Selection' (spread :: * -> *) value
@@ -634,6 +740,12 @@ data ValidationError
   | InvalidValue AST.Value
   -- | Default value in AST contained variables.
   | InvalidDefaultValue AST.Value
+  -- | Two different names given for the same response key.
+  | MismatchedNames Name Name
+  -- | Two different sets of arguments given for the same response key.
+  | MismatchedArguments Name
+  -- | Two fields had the same response key, one was a leaf, the other was not.
+  | IncompatibleFields Name
   deriving (Eq, Show)
 
 instance GraphQLError ValidationError where
@@ -652,6 +764,9 @@ instance GraphQLError ValidationError where
   formatError (UndefinedVariable variable) = "No definition for variable: " <> show variable
   formatError (InvalidValue value) = "Invalid value (maybe an object has duplicate field names?): " <> show value
   formatError (InvalidDefaultValue value) = "Invalid default value, contains variables: " <> show value
+  formatError (MismatchedNames name1 name2) = "Two different names given for same response key: " <> show name1 <> ", " <> show name2
+  formatError (MismatchedArguments name) = "Two different sets of arguments given for same response key: " <> show name
+  formatError (IncompatibleFields name) = "Field " <> show name <> " has a leaf in one place and a non-leaf in another."
 
 type ValidationErrors = NonEmpty ValidationError
 
