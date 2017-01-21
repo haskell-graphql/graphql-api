@@ -100,7 +100,11 @@ instance forall conName p b sa sb f.
 
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.
+--
+-- TODO: Update this comment to explain what a GraphQLEnum is, why you might
+-- want an instance, and any laws that apply to method relations.
 class GraphQLEnum a where
+  -- TODO: Document each of these methods.
   enumValues :: [Either NameError Name]
   default enumValues :: (Generic a, GenericEnumValues (Rep a)) => [Either NameError Name]
   enumValues = genericEnumValues @(Rep a)

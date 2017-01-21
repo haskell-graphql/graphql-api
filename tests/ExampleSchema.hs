@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -60,13 +61,13 @@
 -- Haskell as we go.
 
 module ExampleSchema
-  ( DogCommand
+  ( DogCommand(..)
   , Dog
   , Sentient
   , Pet
   , Alien
   , Human
-  , CatCommand
+  , CatCommand(..)
   , Cat
   , CatOrDog
   , DogOrHuman
@@ -88,7 +89,8 @@ import GraphQL.API
 -- XXX: This really shouldn't be part of Resolver, since whether or not a
 -- thing has a default is part of the API / Schema definition.
 import GraphQL.Resolver (Defaultable(..))
-import GraphQL.Value (unName)
+import GraphQL.Value (pattern ValueEnum, unName)
+import GraphQL.Value.ToValue (ToValue(..))
 
 -- | A command that can be given to a 'Dog'.
 --
@@ -106,6 +108,10 @@ import GraphQL.Value (unName)
 data DogCommand = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
 
 instance GraphQLEnum DogCommand
+
+-- TODO: Probably shouldn't have to do this for enums.
+instance ToValue DogCommand where
+  toValue = ValueEnum . enumToValue
 
 -- | A dog.
 --

@@ -56,6 +56,7 @@ module GraphQL.Internal.Validation
   , getFields
   , Field
   , getFieldSelectionSet
+  , getResponseKey
   , FragmentSpread
   , lookupArgument
   , VariableValue
@@ -266,6 +267,15 @@ getFields ss = [field | SelectionField field <- ss]
 data Field' spread value
   = Field' (Maybe Alias) Name (Arguments value) (Directives value) [Selection' spread value]
   deriving (Eq, Show)
+
+-- | Get the response key of a field.
+--
+-- \"A field’s response key is its alias if an alias is provided, and it is
+-- otherwise the field’s name.\"
+--
+-- <https://facebook.github.io/graphql/#sec-Field-Alias>
+getResponseKey :: Field' spread value -> Name
+getResponseKey (Field' alias name _ _ _) = fromMaybe name alias
 
 instance HasName (Field' spread value) where
   getName (Field' _ name _ _ _) = name

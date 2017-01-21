@@ -60,6 +60,7 @@ import GraphQL.Internal.Validation
   , Field
   , getFields
   , getFieldSelectionSet
+  , getResponseKey
   , lookupArgument
   )
 
@@ -254,19 +255,17 @@ resolveField :: forall dispatchType (m :: Type -> Type).
 resolveField handler nextHandler field =
   -- check name before
   case nameFromSymbol @(FieldName dispatchType) of
-    Left err -> pure (Result [SchemaError err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
-    Right name' -> runResolver name'
-  where
-    runResolver :: Name -> m ResolveFieldResult
-    runResolver name'
-      | queryFieldName == name' =
+    Left err -> pure (Result [SchemaError err] (Just (GValue.ObjectField responseKey GValue.ValueNull)))
+    Right name'
+      | getName field == name' ->
           case buildFieldResolver @m @dispatchType handler field of
-            Left err -> pure (Result [err] (Just (GValue.ObjectField queryFieldName GValue.ValueNull)))
+            Left err -> pure (Result [err] (Just (GValue.ObjectField responseKey GValue.ValueNull)))
             Right resolver -> do
               Result errs value <- resolver
-              pure (Result errs (Just (GValue.ObjectField queryFieldName value)))
-      | otherwise = nextHandler
-    queryFieldName = getName field
+              pure (Result errs (Just (GValue.ObjectField responseKey value)))
+      | otherwise -> nextHandler
+  where
+    responseKey = getResponseKey field
 
 -- We're using our usual trick of rewriting a type in a closed type
 -- family to emulate a closed typeclass. The following are the
