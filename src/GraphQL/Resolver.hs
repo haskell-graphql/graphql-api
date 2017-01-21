@@ -14,7 +14,7 @@
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
 module GraphQL.Resolver
-  ( ResolverError(..) -- XXX: Exporting constructor for tests. Not sure if that's what we really want.
+  ( ResolverError(..)
   , HasResolver(..)
   , (:<>)(..)
   , Defaultable(..)
@@ -217,24 +217,11 @@ instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver
   type Handler m (API.Enum ksN enum) = enum
   resolve handler _ = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
 
-
--- TODO: variables should error, they should have been resolved already.
---
--- TODO: Objects. Maybe implement some Generic object reader? I.e. if I do
--- data Greet = Greet { name :: Text, score :: Int } deriving Generic
--- then "instance ReadValue Greet" would fall back on a default reader that
--- expects Objects?
--- Maybe we can use advanced fallbacks like these:
--- https://wiki.haskell.org/GHC/AdvancedOverlap
-
-
--- Iterate through handlers (zipped together with their type
--- definition) and execute handler if the name matches.
-
--- TODO: A parametrized `Result` is really not a good way to handle
--- the "result" for resolveField, but not sure what to use either. I
--- liked the tuple we had before more because it didn't imply any
--- other structure or meaning. Maybe we can jsut create a new datatype.
+-- TODO: A parametrized `Result` is really not a good way to handle the
+-- "result" for resolveField, but not sure what to use either. Tom liked the
+-- tuple we had before more because it didn't imply any other structure or
+-- meaning. Maybe we can just create a new datatype. jml thinks we should
+-- extract some helpful generic monad, ala `Validator`.
 type ResolveFieldResult = Result (Maybe GValue.ObjectField)
 
 -- Extract field name from an argument type. TODO: ideally we'd run
