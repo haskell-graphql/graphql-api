@@ -3,25 +3,59 @@
 [![CircleCI](https://circleci.com/gh/jml/graphql-api.svg?style=shield)](https://circleci.com/gh/jml/graphql-api)
 [![Documentation Status](https://readthedocs.org/projects/haskell-graphql-api/badge/?version=latest)](http://haskell-graphql-api.readthedocs.io/en/latest/?badge=latest)
 
-Sketch of GraphQL stuff
+This library provides type combinators to create a GraphQL schema, and functions to parse and evaluate queries against the schema. It is inspired by [servant](http://haskell-servant.readthedocs.io/en/stable/) but the two projects don't share any code.
 
-## What it is
+More specifically, `graphql-api` helps with implementing a robust GraphQL API in Haskell. By the time a query makes it to your handler you are dealing with strong, static types. All handlers are normal Haskell functions because we derive their type signature from the schema.
 
-Aim is to be [servant](http://haskell-servant.readthedocs.io/) for GraphQL.
+You can find the latest release on [hackage](https://hackage.haskell.org/package/graphql-api).
 
-To do this, we're going to need:
+Note that we're trying to implement the GraphQL standard as best as we can in Haskell. I.e. even if an alternative API or behaviour looks nicer we will defer to the standard.
 
-* Type-level definition of queries and schemas
-* Evaluation of GraphQL queries (and mutations) according to those types.
+## Hello world example
 
-We can build off the
-existing [graphql](http://hackage.haskell.org/package/graphql) library for
-parsing & representing queries.
+Below we define a `Hello` Schema that contains a single field, `greeting`, that takes a single, required argument `who`:
 
-## Why you might want it
+```haskell
+import Data.Text (Text)
+import Data.Monoid ((<>))
 
-Right now, you don't. We're working on it. Please feel free to contribute by
-filing issues & submitting PRs.
+import GraphQL
+import GraphQL.API
+import GraphQL.Resolver (Handler)
+
+type Hello = Object "Hello" '[]
+  '[ Argument "who" Text :> Field "greeting" Text ]
+
+hello :: Handler IO Hello
+hello = pure (\who -> pure ("Hello " <> who))
+
+run :: Text -> IO Response
+run = interpretAnonymousQuery @Hello hello
+```
+
+Note that we require GHC 8.0.2 or later for features like the `@Hello` type application, and for certain bug fixes.
+
+With the code above we can now run a query:
+
+```haskell
+run "{ greeting(who: \"mort\") }"
+```
+
+## Current status
+
+This first release's goal is to gather feedback. We make **no** guarantees about API stability, or anything at all really.
+
+We are tracking open problem, missing features & wishlist-items in [GitHub's issue tracker](https://github.com/jml/graphql-api/issues).
+
+## Roadmap
+
+* Near future:
+  - Complete lose ends in current implementation & gather feedback.
+* Medium future:
+  - Implement introspection
+* Long term:
+  - Derive client implementations from types
+  - Allow users to implement their own type combinators
 
 ## References
 
