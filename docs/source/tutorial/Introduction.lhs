@@ -6,13 +6,15 @@ First some imports:
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Introduction where
 
 import Protolude
 
 import GraphQL
-import GraphQL.API (Object, Field, Argument, (:>))
-import GraphQL.Resolver (Handler, (:<>)(..))
+import GraphQL.API (Object, Field, Argument, (:>), Union, Enum)
+import GraphQL.Resolver (Handler, (:<>)(..), unionValue)
 ```
 
 The core idea for this library is that we define a composite type that
@@ -66,7 +68,7 @@ present in the query.
 
 ## Combining field handlers with :<>
 
-Let's implement a simple calculator that cann add and subtract integers:
+Let's implement a simple calculator that can add and subtract integers:
 
 ``` haskell
 type Calculator = Object "Calculator" '[]
@@ -91,4 +93,59 @@ calculator = pure (add :<> subtract)
 Note that we still need `pure` for each individual handler.
 
 
-##
+## Nesting Objects
+
+Objects can be used as a type in fields. This allows us to implement a
+server for the classic GraphQL example query:
+
+
+```
+{
+  me { name }
+}
+```
+
+The Haskell schema for that looks like this:
+
+``` haskell
+type User = Object "User" '[] '[Field "name" Text]
+type Query = Object "Query" '[] '[Field "me" User]
+```
+
+Note the type `User` for `me`.
+
+
+We write nested handlers the same way we write the top-level handler:
+
+``` haskell
+user :: Handler IO User
+user = pure (pure "mort")
+
+query :: Handler IO Query
+query = pure user
+```
+
+## Unions
+
+Union handlers require special treatment in Haskell because we need to
+return the same type for each possible, different type in the union.
+
+Let's define a union:
+
+``` haskell
+type UserOrCalcualtor = Union "UserOrCalcualtor" '[User, Calculator]
+type UnionQuery = Object "UnionQuery" '[] '[Field "union" UserOrCalcualtor]
+```
+
+and a handler that returns a user:
+
+``` haskell
+unionQuery :: Handler IO UnionQuery
+unionQuery = pure (unionValue @User user)
+```
+
+Note that, while `unionValue` looks a bit like `unsafeCoerce` by
+forcing one type to become another type, it's actually type-safe
+because we use a *type-index* to pick the correct type from the
+union. Using e.g. `unionValue @HelloWorld handler` will not compile
+because `HelloWorld` is not in the union.
