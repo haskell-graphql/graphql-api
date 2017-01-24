@@ -13,7 +13,7 @@ module Introduction where
 import Protolude
 
 import GraphQL
-import GraphQL.API (Object, Field, Argument, (:>), Union, Enum)
+import GraphQL.API (Object, Field, Argument, (:>), Union)
 import GraphQL.Resolver (Handler, (:<>)(..), unionValue)
 ```
 
@@ -84,10 +84,10 @@ called birdface, is based on the operator for monoids, `<>`.
 
 ``` haskell
 calculator :: Handler IO Calculator
-calculator = pure (add :<> subtract)
+calculator = pure (add :<> subtract')
   where
   add a b = pure (a + b)
-  subtract a b = pure (a - b)
+  subtract' a b = pure (a - b)
 ```
 
 Note that we still need `pure` for each individual handler.
@@ -150,10 +150,36 @@ because we use a *type-index* to pick the correct type from the
 union. Using e.g. `unionValue @HelloWorld handler` will not compile
 because `HelloWorld` is not in the union.
 
-## Enums, Lists
+## Running a query
 
-TODO
+```haskell
+hello :: IO Response
+hello = interpretAnonymousQuery @HelloWorld handler "{ me(greeting: \"hey ho\") }"
+```
 
-## What next?
+But our output is pretty long:
 
-TODO
+```
+λ hello
+Success (Object' (OrderedMap {keys = [Name {unName = "me"}], toMap = fromList [(Name {unName = "me"},ValueScalar' (ConstString (String "hey ho  to me")))]}))
+```
+
+The output object `Object'` has a `ToJSON` instance:
+
+```
+λ map (\(Success o) -> Aeson.encode o) hello
+"{\"me\":\"hey ho to me\"}"
+```
+
+
+## Where next?
+
+We have an
+[examples](https://github.com/jml/graphql-api/tree/master/tests/Examples)
+directory showing full code examples.
+
+If you want to try the examples in this tutorial you can run:
+
+```bash
+stack repl tutorial
+```

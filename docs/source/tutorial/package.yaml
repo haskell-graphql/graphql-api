@@ -7,6 +7,9 @@ maintainer:    tehunger@gmail.com, Jonathan M. Lange <jml@mumak.net>
 
 ghc-options: -Wall -pgmL markdown-unlit
 
+default-extensions:
+  - NoImplicitPrelude
+
 library:
   exposed-modules:
     - Introduction
@@ -15,3 +18,4 @@ library:
     - protolude
     - graphql-api
     - markdown-unlit >= 0.4
+    - aeson
