@@ -149,3 +149,11 @@ forcing one type to become another type, it's actually type-safe
 because we use a *type-index* to pick the correct type from the
 union. Using e.g. `unionValue @HelloWorld handler` will not compile
 because `HelloWorld` is not in the union.
+
+## Enums, Lists
+
+TODO
+
+## What next?
+
+TODO
