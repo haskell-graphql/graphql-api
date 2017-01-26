@@ -74,10 +74,11 @@ import GraphQL.Internal.Name (HasName(..), Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
-import GraphQL.Internal.Syntax.AST (Alias, TypeCondition, Variable)
+import GraphQL.Internal.Syntax.AST (Alias, TypeCondition, Variable, NamedType(..))
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
+import GraphQL.Internal.Schema (TypeDefinition, ObjectTypeDefinition, doesFragmentTypeApply)
 import GraphQL.Value
   ( Value
   , Value'
@@ -295,6 +296,32 @@ mergeFields field1 field2 = do
                        -> Validation (SelectionSetByResponseKey value)
     mergeSelectionSets (SelectionSetByResponseKey ss1) (SelectionSetByResponseKey ss2) =
       SelectionSetByResponseKey <$> OrderedMap.unionWithM (OrderedMap.unionWithM mergeFields) ss1 ss2
+
+
+newtype RealSelectionSet value = RealSelectionSet (OrderedMap ResponseKey (ExecutionField value)) deriving (Eq, Ord, Show)
+
+getSelectionSet'
+  :: Eq value
+  => (Name -> Maybe TypeDefinition)
+  -> ObjectTypeDefinition
+  -> SelectionSetByResponseKey value
+  -> Validation (RealSelectionSet value)
+getSelectionSet' lookupTypeDefn objectType (SelectionSetByResponseKey ss) =
+  RealSelectionSet . OrderedMap.catMaybes <$> traverse mergeFieldsForType ss
+  where
+    mergeFieldsForType fieldMap = do
+      matching <- filterM (allElements satisfiesType . fst) (OrderedMap.toList fieldMap)
+      case map snd matching of
+        [] -> pure Nothing
+        x:xs -> Just <$> foldlM mergeFields x xs
+
+    allElements predM set = and <$> traverse predM (Set.toList set)
+
+    satisfiesType (NamedType cond) =
+      case lookupTypeDefn cond of
+        Nothing -> throwE (TypeConditionNotFound cond)
+        Just fragmentType -> pure (doesFragmentTypeApply objectType fragmentType)
+
 
 -- TODO: Take the result of `_groupByResponseKey` and filter by type
 --   - Have a single function for taking a type and a set of type
@@ -746,6 +773,8 @@ data ValidationError
   | MismatchedArguments Name
   -- | Two fields had the same response key, one was a leaf, the other was not.
   | IncompatibleFields Name
+  -- | There's a type condition that's not present in the schema.
+  | TypeConditionNotFound Name
   deriving (Eq, Show)
 
 instance GraphQLError ValidationError where
@@ -767,6 +796,7 @@ instance GraphQLError ValidationError where
   formatError (MismatchedNames name1 name2) = "Two different names given for same response key: " <> show name1 <> ", " <> show name2
   formatError (MismatchedArguments name) = "Two different sets of arguments given for same response key: " <> show name
   formatError (IncompatibleFields name) = "Field " <> show name <> " has a leaf in one place and a non-leaf in another."
+  formatError (TypeConditionNotFound name) = "Type condition " <> show name <> " not found in schema."
 
 type ValidationErrors = NonEmpty ValidationError
 
