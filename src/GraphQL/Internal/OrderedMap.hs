@@ -39,6 +39,10 @@ module GraphQL.Internal.OrderedMap
   -- * Combine
   -- ** Union
   , unions
+  , unionWith
+  , unionsWith
+  , unionWithM
+  , unionsWithM
   -- * Conversion
   , toList
   , toMap
@@ -119,6 +123,50 @@ values = map snd . toList
 -- the largest map.
 unions :: forall key value. Ord key => [OrderedMap key value] -> Maybe (OrderedMap key value)
 unions orderedMaps = orderedMap (orderedMaps >>= toList)
+
+-- | Append the second ordered map to the first, combining any shared elements
+-- with the given function.
+unionWith :: Ord key
+          => (value -> value -> value)
+          -> OrderedMap key value
+          -> OrderedMap key value
+          -> OrderedMap key value
+unionWith f x y =
+  OrderedMap
+  { toMap = Map.unionWith f (toMap x) (toMap y)
+  , keys = keys x <> [k | k <- keys y, k `Map.notMember` toMap x]
+  }
+
+-- | Append together a list of ordered maps, preserving ordering of keys.
+-- Combine any shared elements with the given function.
+unionsWith :: Ord key
+           => (value -> value -> value)
+           -> [OrderedMap key value]
+           -> OrderedMap key value
+unionsWith f = foldl' (unionWith f) empty
+
+-- | Take two ordered maps, append the second one to the first. If the second
+-- contains any keys that also appear in the first, combine the two values
+-- with the given function.
+unionWithM :: (Monad m, Ord key)
+           => (value -> value -> m value)
+           -> OrderedMap key value
+           -> OrderedMap key value
+           -> m (OrderedMap key value)
+unionWithM f x y = sequenceA (unionWith (liftMM f) (map pure x) (map pure y))
+
+-- | Take a list of ordered maps and append them together. Any shared elements
+-- are combined using the given function.
+unionsWithM :: (Monad m, Ord key)
+            => (value -> value -> m value)
+            -> [OrderedMap key value]
+            -> m (OrderedMap key value)
+unionsWithM f xs = sequenceA (unionsWith (liftMM f) (map (map pure) xs))
+
+liftMM :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
+liftMM f a' b' = do
+  (a, b) <- (,) <$> a' <*> b'
+  f a b
 
 -- | Construct an ordered map from a list.
 --
