@@ -32,6 +32,8 @@ module GraphQL.Internal.Schema
   , AnnotatedType(..)
   , ListType(..)
   , NonNullType(..)
+  , DefinesTypes(..)
+  , doesFragmentTypeApply
   ) where
 
 import Protolude hiding (Type)
@@ -196,3 +198,28 @@ instance HasName InputTypeDefinition where
 -- 'InputObjectFieldDefinition') can have default values. These are allowed to
 -- be any kind of literal.
 type DefaultValue = Value
+
+
+-- | Does the given object type match the given type condition.
+--
+-- See <https://facebook.github.io/graphql/#sec-Field-Collection>
+--
+-- @
+-- DoesFragmentTypeApply(objectType, fragmentType)
+--   If fragmentType is an Object Type:
+--     if objectType and fragmentType are the same type, return true, otherwise return false.
+--   If fragmentType is an Interface Type:
+--     if objectType is an implementation of fragmentType, return true otherwise return false.
+--   If fragmentType is a Union:
+--     if objectType is a possible type of fragmentType, return true otherwise return false.
+-- @
+doesFragmentTypeApply :: ObjectTypeDefinition -> TypeDefinition -> Bool
+doesFragmentTypeApply objectType fragmentType =
+  case fragmentType of
+    TypeDefinitionObject obj -> obj == objectType
+    TypeDefinitionInterface interface -> objectType `implements` interface
+    TypeDefinitionUnion union -> objectType `branchOf` union
+    _ -> False
+  where
+    implements (ObjectTypeDefinition _ interfaces _) int = int `elem` interfaces
+    branchOf obj (UnionTypeDefinition _ (NonEmptyList branches)) = obj `elem` branches
