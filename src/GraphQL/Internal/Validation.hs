@@ -227,6 +227,15 @@ validateOperation (Mutation vars directives selectionSet) = do
 type SelectionSet value = [Selection value]
 
 validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSet AST.Value)
+-- | Resolve all the fragments in a selection set and make sure the names,
+-- arguments, and directives are all valid.
+--
+-- Runs in 'StateT', collecting a set of names of 'FragmentDefinition' that
+-- have been used by this selection set.
+--
+-- We do this /before/ validating the values (since that's much easier once
+-- everything is in a nice structure and away from the AST), which means we
+-- can't yet evaluate directives.
 validateSelectionSet fragments selections = do
   unresolved <- lift (traverse validateSelection selections)
   resolved <- traverse (resolveSelection fragments) unresolved
