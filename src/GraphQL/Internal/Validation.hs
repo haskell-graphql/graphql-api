@@ -207,42 +207,8 @@ validateOperation (Mutation vars directives selectionSet) = do
   unless (Set.null unusedVariables) $ throwE (UnusedVariables unusedVariables)
   resolveVariables vars validValues
 
--- * Arguments
 
--- | The set of arguments for a given field, directive, etc.
---
--- Note that the 'value' can be a variable.
-newtype Arguments value = Arguments (Map Name value) deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
-
--- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
---
--- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
-validateArguments :: [AST.Argument] -> Validation (Arguments AST.Value)
-validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
-
--- * Selections
-
--- $fragmentSpread
---
--- The @spread@ type variable is for the type used to "fragment spreads", i.e.
--- references to fragments. It's a variable because we do multiple traversals
--- of the selection graph.
---
--- The first pass (see 'validateSelection') ensures all the arguments and
--- directives are valid. This is applied to all selections, including those
--- that make up fragment definitions (see 'validateFragmentDefinitions'). At
--- this stage, @spread@ will be 'UnresolvedFragmentSpread'.
---
--- Once we have a known-good map of fragment definitions, we can do the next
--- phase of validation, which checks that references to fragments exist, that
--- all fragments are used, and that we don't have circular references.
---
--- This is encoded as a type variable because we want to provide evidence that
--- references in fragment spreads can be resolved, and what better way to do
--- so than including the resolved fragment in the type. Thus, @spread@ will be
--- 'FragmentSpread', following this module's convention that unadorned names
--- imply that everything is valid.
-
+-- * Selection sets
 
 -- https://facebook.github.io/graphql/#sec-Field-Selection-Merging
 -- https://facebook.github.io/graphql/#sec-Executing-Selection-Sets
@@ -251,21 +217,37 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 --      a response map.
 -- https://facebook.github.io/graphql/#sec-Field-Collection
 
+-- TODO: Function for getting the response key for a type-filtered list
+-- TODO: Use these functions in resolver
+--   - Wire up `_groupByResponseKey` into core validation functions
+-- TODO: Rename `RealSelectionSet` so that it's just selection set.
+
+
 
 type SelectionSet value = [Selection value]
 
+validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSet AST.Value)
+validateSelectionSet fragments selections = do
+  unresolved <- lift (traverse validateSelection selections)
+  resolved <- traverse (resolveSelection fragments) unresolved
+  -- TODO: Check that the fields are mergable.
+  pure resolved
+
 type Selection value = Selection' FragmentSpread value
 
-newtype SelectionSetByResponseKey value
-  = SelectionSetByResponseKey (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value))) deriving (Eq, Ord, Show)
+newtype SelectionSetByType value
+  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value))) deriving (Eq, Ord, Show)
 
+-- | A 'ResponseKey' is the key under which a field appears in a response. If
+-- there's an alias, it's the alias, if not, it's the field name.
 type ResponseKey = Name
 
+-- XXX: Rename this?
 data ExecutionField value
   = ExecutionField
   { name :: Name
   , arguments :: Arguments value
-  , subSelectionField :: Maybe (SelectionSetByResponseKey value)
+  , subSelectionField :: Maybe (SelectionSetByType value)
   } deriving (Eq, Ord, Show)
 
 -- | Merge two execution fields. Assumes that they are fields for the same
@@ -291,11 +273,11 @@ mergeFields field1 field2 = do
 
   where
     mergeSelectionSets :: Eq value
-                       => SelectionSetByResponseKey value
-                       -> SelectionSetByResponseKey value
-                       -> Validation (SelectionSetByResponseKey value)
-    mergeSelectionSets (SelectionSetByResponseKey ss1) (SelectionSetByResponseKey ss2) =
-      SelectionSetByResponseKey <$> OrderedMap.unionWithM (OrderedMap.unionWithM mergeFields) ss1 ss2
+                       => SelectionSetByType value
+                       -> SelectionSetByType value
+                       -> Validation (SelectionSetByType value)
+    mergeSelectionSets (SelectionSetByType ss1) (SelectionSetByType ss2) =
+      SelectionSetByType <$> OrderedMap.unionWithM (OrderedMap.unionWithM mergeFields) ss1 ss2
 
 
 newtype RealSelectionSet value = RealSelectionSet (OrderedMap ResponseKey (ExecutionField value)) deriving (Eq, Ord, Show)
@@ -304,9 +286,9 @@ getSelectionSet'
   :: Eq value
   => (Name -> Maybe TypeDefinition)
   -> ObjectTypeDefinition
-  -> SelectionSetByResponseKey value
+  -> SelectionSetByType value
   -> Validation (RealSelectionSet value)
-getSelectionSet' lookupTypeDefn objectType (SelectionSetByResponseKey ss) =
+getSelectionSet' lookupTypeDefn objectType (SelectionSetByType ss) =
   RealSelectionSet . OrderedMap.catMaybes <$> traverse mergeFieldsForType ss
   where
     mergeFieldsForType fieldMap = do
@@ -323,16 +305,6 @@ getSelectionSet' lookupTypeDefn objectType (SelectionSetByResponseKey ss) =
         Just fragmentType -> pure (doesFragmentTypeApply objectType fragmentType)
 
 
--- TODO: Take the result of `_groupByResponseKey` and filter by type
---   - Have a single function for taking a type and a set of type
---     conditions and seeing if they apply
---   - Create new output type for the result of this
--- TODO: Function for getting the response key for a type-filtered list
--- TODO: Use these functions in resolver
---   - Wire up `_groupByResponseKey` into core validation functions
--- TODO: Rename `SelectionSetByResponseKey` so that it's just selection set.
--- TODO: Define error values for `_groupByResponseKey` and use them
-
 -- | Flatten the selection and group it by response key and then type
 -- conditions.
 --
@@ -342,13 +314,13 @@ getSelectionSet' lookupTypeDefn objectType (SelectionSetByResponseKey ss) =
 --
 -- XXX: This is so incredibly complex. No doubt there's a way to simplify, but
 -- jml can't see it right now.
-_groupByResponseKey :: Eq value => [Selection' FragmentSpread value] -> Validation (SelectionSetByResponseKey value)
-_groupByResponseKey selectionSet = SelectionSetByResponseKey <$>
+_groupByResponseKey :: Eq value => [Selection' FragmentSpread value] -> Validation (SelectionSetByType value)
+_groupByResponseKey selectionSet = SelectionSetByType <$>
   flattenSelectionSet mempty selectionSet
   where
     -- | Given a currently "active" type condition, and a single selection,
     -- return a map of response keys to validated fields, grouped by types:
-    -- essentially a SelectionSetByResponseKey without the wrapping
+    -- essentially a SelectionSetByType without the wrapping
     -- constructor.
     --
     -- The "active" type condition is the type condition of the selection set
@@ -376,6 +348,28 @@ _groupByResponseKey selectionSet = SelectionSetByResponseKey <$>
       groupedByKey <- traverse (byKey typeConds) ss
       OrderedMap.unionsWithM (OrderedMap.unionWithM mergeFields) groupedByKey
 
+-- * Selections
+
+-- $fragmentSpread
+--
+-- The @spread@ type variable is for the type used to "fragment spreads", i.e.
+-- references to fragments. It's a variable because we do multiple traversals
+-- of the selection graph.
+--
+-- The first pass (see 'validateSelection') ensures all the arguments and
+-- directives are valid. This is applied to all selections, including those
+-- that make up fragment definitions (see 'validateFragmentDefinitions'). At
+-- this stage, @spread@ will be 'UnresolvedFragmentSpread'.
+--
+-- Once we have a known-good map of fragment definitions, we can do the next
+-- phase of validation, which checks that references to fragments exist, that
+-- all fragments are used, and that we don't have circular references.
+--
+-- This is encoded as a type variable because we want to provide evidence that
+-- references in fragment spreads can be resolved, and what better way to do
+-- so than including the resolved fragment in the type. Thus, @spread@ will be
+-- 'FragmentSpread', following this module's convention that unadorned names
+-- imply that everything is valid.
 
 -- | A GraphQL selection.
 data Selection' (spread :: * -> *) value
@@ -535,13 +529,6 @@ resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
           modify (Set.insert name)
           pure (FragmentSpread name directive fragment)
 
-validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSet AST.Value)
-validateSelectionSet fragments selections = do
-  unresolved <- lift (traverse validateSelection selections)
-  resolved <- traverse (resolveSelection fragments) unresolved
-  -- TODO: Check that the fields are mergable.
-  pure resolved
-
 -- * Fragment definitions
 
 -- | A validated fragment definition.
@@ -616,6 +603,19 @@ resolveFragmentDefinitions allFragments =
         Just definition -> do
           modify (Set.insert name)
           FragmentSpread name directives <$> resolveFragment' definition
+
+-- * Arguments
+
+-- | The set of arguments for a given field, directive, etc.
+--
+-- Note that the 'value' can be a variable.
+newtype Arguments value = Arguments (Map Name value) deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+-- | Turn a set of arguments from the AST into a guaranteed unique set of arguments.
+--
+-- <https://facebook.github.io/graphql/#sec-Argument-Uniqueness>
+validateArguments :: [AST.Argument] -> Validation (Arguments AST.Value)
+validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(name, value) | AST.Argument name value <- args])
 
 -- * Variables
 
