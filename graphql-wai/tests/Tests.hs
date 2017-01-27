@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds #-} -- , FlexibleContexts, TypeFamilies, AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 module Main where
 
 import Protolude

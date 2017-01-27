@@ -1,4 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, AllowAmbiguousTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module GraphQL.Wai
   ( toApplication
