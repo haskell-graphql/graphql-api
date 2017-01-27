@@ -15,10 +15,6 @@
 -- type-level validation, as we attempt to defer all of that to the Haskell
 -- type checker.
 --
--- Still missing:
---
---   * field selection merging <https://facebook.github.io/graphql/#sec-Field-Selection-Merging>
---
 -- Deliberately not going to do:
 --
 --   * field selections on compound types <https://facebook.github.io/graphql/#sec-Field-Selections-on-Objects-Interfaces-and-Unions-Types>
@@ -39,27 +35,25 @@ module GraphQL.Internal.Validation
   ( ValidationError(..)
   , ValidationErrors
   , QueryDocument(..)
-  , Selection'(..) -- TODO, can we hide this again?
-  , Selection
-  , InlineFragment(..)
   , validate
   , getErrors
   -- * Operating on validated documents
   , Operation
-  , getVariableDefinitions
   , getSelectionSet
-  , VariableDefinitions
+  -- * Executing validated documents
   , VariableDefinition(..)
-  , AST.Type(..)
-  , Variable
-  , SelectionSet
-  , getFields
-  , Field
-  , getFieldSelectionSet
-  , getResponseKey
-  , FragmentSpread
-  , lookupArgument
   , VariableValue
+  , Variable
+  , AST.Type(..)
+  -- * Resolving queries
+  , SelectionSetByType
+  , SelectionSet(..)
+  , getSelectionSetForType
+  , ExecutionField
+  , lookupArgument
+  , getSubSelectionSet
+  , ResponseKey
+  , getResponseKey
   -- * Exported for testing
   , findDuplicates
   ) where
@@ -98,38 +92,29 @@ data QueryDocument value
   deriving (Eq, Show)
 
 data Operation value
-  = Query VariableDefinitions (Directives value) (SelectionSet value)
-  | Mutation VariableDefinitions (Directives value) (SelectionSet value)
+  = Query VariableDefinitions (Directives value) (SelectionSetByType value)
+  | Mutation VariableDefinitions (Directives value) (SelectionSetByType value)
   deriving (Eq, Show)
 
 instance Functor Operation where
-  fmap f (Query vars directives selectionSet) = Query vars (fmap f directives) (map (fmap f) selectionSet)
-  fmap f (Mutation vars directives selectionSet) = Mutation vars (fmap f directives) (map (fmap f) selectionSet)
+  fmap f (Query vars directives selectionSet) = Query vars (fmap f directives) (fmap f selectionSet)
+  fmap f (Mutation vars directives selectionSet) = Mutation vars (fmap f directives) (fmap f selectionSet)
 
 instance Foldable Operation where
-  foldMap f (Query _ directives selectionSet) = foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
-  foldMap f (Mutation _ directives selectionSet) = foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
+  foldMap f (Query _ directives selectionSet) = foldMap f directives `mappend` foldMap f selectionSet
+  foldMap f (Mutation _ directives selectionSet) = foldMap f directives `mappend` foldMap f selectionSet
 
 instance Traversable Operation where
-  traverse f (Query vars directives selectionSet) = Query vars <$> traverse f directives <*> traverse (traverse f) selectionSet
-  traverse f (Mutation vars directives selectionSet) = Mutation vars <$> traverse f directives <*> traverse (traverse f) selectionSet
-
-
--- | Get the variable definitions for an operation.
-getVariableDefinitions :: Operation value -> VariableDefinitions
-getVariableDefinitions (Query vars _ _) = vars
-getVariableDefinitions (Mutation vars _ _) = vars
+  traverse f (Query vars directives selectionSet) = Query vars <$> traverse f directives <*> traverse f selectionSet
+  traverse f (Mutation vars directives selectionSet) = Mutation vars <$> traverse f directives <*> traverse f selectionSet
 
 -- | Get the selection set for an operation.
---
--- TODO: This doesn't return the *actual* selection set we need, because it
--- hasn't substituted variables or applied directives.
-getSelectionSet :: Operation value -> SelectionSet value
+getSelectionSet :: Operation value -> SelectionSetByType value
 getSelectionSet (Query _ _ ss) = ss
 getSelectionSet (Mutation _ _ ss) = ss
 
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
-type OperationType value = VariableDefinitions -> Directives value -> SelectionSet value -> Operation value
+type OperationType value = VariableDefinitions -> Directives value -> SelectionSetByType value -> Operation value
 
 type Operations value = Map Name (Operation value)
 
@@ -151,8 +136,8 @@ validate (AST.QueryDocument defns) = runValidator $ do
     ([x], []) -> do
       (ss, usedFrags) <- runStateT (validateSelectionSet frags x) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
-      validValuesSS <- traverse validateValues ss
-      resolvedValuesSS <- traverse (resolveVariables emptyVariableDefinitions) validValuesSS
+      validValuesSS <- validateValues ss
+      resolvedValuesSS <- resolveVariables emptyVariableDefinitions validValuesSS
       pure (LoneAnonymousOperation (Query emptyVariableDefinitions emptyDirectives resolvedValuesSS))
     _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
 
@@ -189,7 +174,7 @@ validateOperations fragments ops = do
 -- driving me batty.
 validateOperation :: Operation AST.Value -> Validation (Operation VariableValue)
 validateOperation (Query vars directives selectionSet) = do
-  validValues <- Query vars <$> validateValues directives <*> traverse validateValues selectionSet
+  validValues <- Query vars <$> validateValues directives <*> validateValues selectionSet
   -- Instead of doing this, we could build up a list of used variables as we
   -- resolve them.
   let usedVariables = getVariables validValues
@@ -198,7 +183,7 @@ validateOperation (Query vars directives selectionSet) = do
   unless (Set.null unusedVariables) $ throwE (UnusedVariables unusedVariables)
   resolveVariables vars validValues
 validateOperation (Mutation vars directives selectionSet) = do
-  validValues <- Mutation vars <$> validateValues directives <*> traverse validateValues selectionSet
+  validValues <- Mutation vars <$> validateValues directives <*> validateValues selectionSet
   -- Instead of doing this, we could build up a list of used variables as we
   -- resolve them.
   let usedVariables = getVariables validValues
@@ -217,16 +202,7 @@ validateOperation (Mutation vars directives selectionSet) = do
 --      a response map.
 -- https://facebook.github.io/graphql/#sec-Field-Collection
 
--- TODO: Function for getting the response key for a type-filtered list
--- TODO: Use these functions in resolver
---   - Wire up `_groupByResponseKey` into core validation functions
--- TODO: Rename `RealSelectionSet` so that it's just selection set.
 
-
-
-type SelectionSet value = [Selection value]
-
-validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSet AST.Value)
 -- | Resolve all the fragments in a selection set and make sure the names,
 -- arguments, and directives are all valid.
 --
@@ -236,28 +212,44 @@ validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Na
 -- We do this /before/ validating the values (since that's much easier once
 -- everything is in a nice structure and away from the AST), which means we
 -- can't yet evaluate directives.
+validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSetByType AST.Value)
 validateSelectionSet fragments selections = do
   unresolved <- lift (traverse validateSelection selections)
   resolved <- traverse (resolveSelection fragments) unresolved
-  -- TODO: Check that the fields are mergable.
-  pure resolved
+  lift $ groupByResponseKey resolved
 
-type Selection value = Selection' FragmentSpread value
+-- | A selection set, almost fully validated.
+--
+-- Sub-selection sets might not be validated.
+newtype SelectionSet value = SelectionSet (OrderedMap ResponseKey (ExecutionField value)) deriving (Eq, Ord, Show)
 
 newtype SelectionSetByType value
-  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value))) deriving (Eq, Ord, Show)
+  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value)))
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 -- | A 'ResponseKey' is the key under which a field appears in a response. If
 -- there's an alias, it's the alias, if not, it's the field name.
 type ResponseKey = Name
 
--- XXX: Rename this?
+-- | A field ready to be executed.
+-- XXX: Reviewer, the 'Field' name has been freed up. Should I rename this to 'Field'.
 data ExecutionField value
   = ExecutionField
   { name :: Name
   , arguments :: Arguments value
-  , subSelectionField :: Maybe (SelectionSetByType value)
-  } deriving (Eq, Ord, Show)
+  , subSelectionSet :: Maybe (SelectionSetByType value)
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+instance HasName (ExecutionField value) where
+  getName = name
+
+-- | Get the value of an argument in a field.
+lookupArgument :: ExecutionField value -> Name -> Maybe value
+lookupArgument (ExecutionField _ (Arguments args) _) name = Map.lookup name args
+
+-- | Get the selection set within a field.
+getSubSelectionSet :: ExecutionField value -> Maybe (SelectionSetByType value)
+getSubSelectionSet = subSelectionSet
 
 -- | Merge two execution fields. Assumes that they are fields for the same
 -- response key on the same type (i.e. that they are fields we would actually
@@ -266,17 +258,17 @@ mergeFields :: Eq value => ExecutionField value -> ExecutionField value -> Valid
 mergeFields field1 field2 = do
   unless (name field1 == name field2) $ throwE (MismatchedNames (name field1) (name field2))
   unless (arguments field1 == arguments field2) $ throwE (MismatchedArguments (name field1))
-  case (subSelectionField field1, subSelectionField field2) of
+  case (subSelectionSet field1, subSelectionSet field2) of
     (Nothing, Nothing) ->
       pure ExecutionField { name = name field1
                           , arguments = arguments field1
-                          , subSelectionField = Nothing
+                          , subSelectionSet = Nothing
                           }
     (Just ss1, Just ss2) -> do
       mergedSet <- mergeSelectionSets ss1 ss2
       pure ExecutionField { name = name field1
                           , arguments = arguments field1
-                          , subSelectionField = Just mergedSet
+                          , subSelectionSet = Just mergedSet
                           }
     _ -> throwE (IncompatibleFields (name field1))
 
@@ -288,17 +280,20 @@ mergeFields field1 field2 = do
     mergeSelectionSets (SelectionSetByType ss1) (SelectionSetByType ss2) =
       SelectionSetByType <$> OrderedMap.unionWithM (OrderedMap.unionWithM mergeFields) ss1 ss2
 
-
-newtype RealSelectionSet value = RealSelectionSet (OrderedMap ResponseKey (ExecutionField value)) deriving (Eq, Ord, Show)
-
-getSelectionSet'
+-- | Once we know the GraphQL type of the object that a selection set (i.e. a
+-- 'SelectionSetByType') is for, we can eliminate all the irrelevant types and
+-- present a single, flattened map of 'ResponseKey' to 'ExecutionField'.
+getSelectionSetForType
   :: Eq value
-  => (Name -> Maybe TypeDefinition)
-  -> ObjectTypeDefinition
-  -> SelectionSetByType value
-  -> Validation (RealSelectionSet value)
-getSelectionSet' lookupTypeDefn objectType (SelectionSetByType ss) =
-  RealSelectionSet . OrderedMap.catMaybes <$> traverse mergeFieldsForType ss
+  => (Name -> Maybe TypeDefinition) -- ^ A function that given a name of a type returns the definition of that type
+  -> ObjectTypeDefinition -- ^ The type of the object that the selection set is for
+  -> SelectionSetByType value -- ^ A selection set with type conditions, obtained from the validation process
+  -> Either ValidationErrors (SelectionSet value) -- ^ A flattened
+  -- selection set without type conditions. It's possible that some of the
+  -- fields in various types are not mergeable, in which case, we'll return a
+  -- validation error.
+getSelectionSetForType lookupTypeDefn objectType (SelectionSetByType ss) = runValidator $
+  SelectionSet . OrderedMap.catMaybes <$> traverse mergeFieldsForType ss
   where
     mergeFieldsForType fieldMap = do
       matching <- filterM (allElements satisfiesType . fst) (OrderedMap.toList fieldMap)
@@ -323,8 +318,8 @@ getSelectionSet' lookupTypeDefn objectType (SelectionSetByType ss) =
 --
 -- XXX: This is so incredibly complex. No doubt there's a way to simplify, but
 -- jml can't see it right now.
-_groupByResponseKey :: Eq value => [Selection' FragmentSpread value] -> Validation (SelectionSetByType value)
-_groupByResponseKey selectionSet = SelectionSetByType <$>
+groupByResponseKey :: Eq value => [Selection' FragmentSpread value] -> Validation (SelectionSetByType value)
+groupByResponseKey selectionSet = SelectionSetByType <$>
   flattenSelectionSet mempty selectionSet
   where
     -- | Given a currently "active" type condition, and a single selection,
@@ -341,7 +336,7 @@ _groupByResponseKey selectionSet = SelectionSetByType <$>
     byKey typeConds (SelectionField field@(Field' _ name arguments _ ss))
       = case ss of
           [] -> pure $ OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds .  ExecutionField name arguments $ Nothing
-          _ -> OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds . ExecutionField name arguments . Just <$> _groupByResponseKey ss
+          _ -> OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds . ExecutionField name arguments . Just <$> groupByResponseKey ss
     byKey typeConds (SelectionFragmentSpread (FragmentSpread _ _ (FragmentDefinition _ typeCond _ ss)))
       = flattenSelectionSet (typeConds <> Set.singleton typeCond) ss
     byKey typeConds (SelectionInlineFragment (InlineFragment (Just typeCond) _ ss))
@@ -387,17 +382,6 @@ data Selection' (spread :: * -> *) value
   | SelectionInlineFragment (InlineFragment spread value)
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
--- | Get all of the fields directly inside the given selection set.
---
--- TODO: This ignores fragments, whereas it should actually do something with
--- them.
---
--- TODO: At this point, we ought to know that field names are unique. As such,
--- we should return an ordered map of Name to Fields, rather than a bland
--- list.
-getFields :: SelectionSet value -> [Field' FragmentSpread value]
-getFields ss = [field | SelectionField field <- ss]
-
 -- | A field in a selection set, which itself might have children which might
 -- have fragment spreads.
 data Field' spread value
@@ -410,7 +394,7 @@ data Field' spread value
 -- otherwise the field’s name.\"
 --
 -- <https://facebook.github.io/graphql/#sec-Field-Alias>
-getResponseKey :: Field' spread value -> Name
+getResponseKey :: Field' spread value -> ResponseKey
 getResponseKey (Field' alias name _ _ _) = fromMaybe name alias
 
 instance HasName (Field' spread value) where
@@ -432,16 +416,6 @@ instance Traversable spread => Traversable (Field' spread) where
     Field' alias name <$> traverse f arguments
                       <*> traverse f directives
                       <*> traverse (traverse f) selectionSet
-
-type Field value = Field' FragmentSpread value
-
--- | Get the value of an argument in a field.
-lookupArgument :: Field' spread value -> Name -> Maybe value
-lookupArgument (Field' _ _ (Arguments args) _ _) name = Map.lookup name args
-
--- | Get the selection set within a field.
-getFieldSelectionSet :: Field' spread value -> [Selection' spread value]
-getFieldSelectionSet (Field' _ _ _ _ ss) = ss
 
 -- | A fragment spread that has a valid set of directives, but may or may not
 -- refer to a fragment that actually exists.

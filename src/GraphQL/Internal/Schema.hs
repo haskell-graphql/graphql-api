@@ -38,16 +38,40 @@ module GraphQL.Internal.Schema
 
 import Protolude hiding (Type)
 
+import qualified Data.Map as Map
 import GraphQL.Value (Value)
 import GraphQL.Internal.Name (HasName(..), Name, unsafeMakeName)
 
 -- XXX: Use the built-in NonEmptyList in Haskell
-newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show)
+newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show, Functor, Foldable)
+
+-- | A thing that defines types. Excludes definitions of input types.
+class DefinesTypes t where
+  -- | Get the types defined by @t@
+  --
+  -- TODO: This ignores whether a value can define multiple types with the
+  -- same name, and further admits the possibility that the name embedded in
+  -- the type definition does not match the name in the returned dictionary.
+  -- jml would like to have a schema validation phase that eliminates one or
+  -- both of these possibilities.
+  --
+  -- Also pretty much works because we've inlined all our type definitions.
+  getDefinedTypes :: t -> Map Name TypeDefinition
 
 data AnnotatedType t = TypeNamed t
                      | TypeList (ListType t)
                      | TypeNonNull (NonNullType t)
                      deriving (Eq,Show)
+
+-- | Get the type that is being annotated.
+getAnnotatedType :: AnnotatedType t -> t
+getAnnotatedType (TypeNamed t) = t
+getAnnotatedType (TypeList (ListType t)) = getAnnotatedType t
+getAnnotatedType (TypeNonNull (NonNullTypeNamed t)) = t
+getAnnotatedType (TypeNonNull (NonNullTypeList (ListType t))) = getAnnotatedType t
+
+instance HasName t => HasName (AnnotatedType t) where
+  getName = getName . getAnnotatedType
 
 newtype ListType t = ListType (AnnotatedType t) deriving (Eq, Show)
 
@@ -56,6 +80,10 @@ data NonNullType t = NonNullTypeNamed t
                    deriving (Eq,Show)
 
 data Type = DefinedType TypeDefinition | BuiltinType Builtin deriving (Eq, Show)
+
+instance DefinesTypes Type where
+  getDefinedTypes (BuiltinType _) = mempty
+  getDefinedTypes (DefinedType t) = getDefinedTypes t
 
 instance HasName Type where
   getName (DefinedType x) = getName x
@@ -79,11 +107,29 @@ instance HasName TypeDefinition where
   getName (TypeDefinitionInputObject x) = getName x
   getName (TypeDefinitionTypeExtension x) = getName x
 
+instance DefinesTypes TypeDefinition where
+  getDefinedTypes defn =
+    case defn of
+      TypeDefinitionObject x -> getDefinedTypes x
+      TypeDefinitionInterface x -> getDefinedTypes x
+      TypeDefinitionUnion x -> getDefinedTypes x
+      TypeDefinitionScalar x  -> getDefinedTypes x
+      TypeDefinitionEnum x -> getDefinedTypes x
+      TypeDefinitionInputObject _ -> mempty
+      TypeDefinitionTypeExtension _ ->
+        panic "TODO: we should remove the 'extend' behaviour entirely"
+
 data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces (NonEmptyList FieldDefinition)
                             deriving (Eq, Show)
 
 instance HasName ObjectTypeDefinition where
   getName (ObjectTypeDefinition name _ _) = name
+
+instance DefinesTypes ObjectTypeDefinition where
+  getDefinedTypes obj@(ObjectTypeDefinition name interfaces fields) =
+    Map.singleton name (TypeDefinitionObject obj) <>
+    foldMap getDefinedTypes interfaces <>
+    foldMap getDefinedTypes fields
 
 type Interfaces = [InterfaceTypeDefinition]
 
@@ -92,6 +138,9 @@ data FieldDefinition = FieldDefinition Name [ArgumentDefinition] (AnnotatedType 
 
 instance HasName FieldDefinition where
   getName (FieldDefinition name _ _) = name
+
+instance DefinesTypes FieldDefinition where
+  getDefinedTypes (FieldDefinition _ _ retVal) = getDefinedTypes (getAnnotatedType retVal)
 
 data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                           deriving (Eq, Show)
@@ -105,17 +154,28 @@ data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmptyList FieldD
 instance HasName InterfaceTypeDefinition where
   getName (InterfaceTypeDefinition name _) = name
 
+instance DefinesTypes InterfaceTypeDefinition where
+  getDefinedTypes i@(InterfaceTypeDefinition name fields) = Map.singleton name (TypeDefinitionInterface i) <> foldMap getDefinedTypes fields
+
 data UnionTypeDefinition = UnionTypeDefinition Name (NonEmptyList ObjectTypeDefinition)
                            deriving (Eq, Show)
 
 instance HasName UnionTypeDefinition where
   getName (UnionTypeDefinition name _) = name
 
+instance DefinesTypes UnionTypeDefinition where
+  getDefinedTypes defn@(UnionTypeDefinition name objs) =
+    Map.singleton name (TypeDefinitionUnion defn) <>
+    foldMap getDefinedTypes objs
+
 newtype ScalarTypeDefinition = ScalarTypeDefinition Name
                              deriving (Eq, Show)
 
 instance HasName ScalarTypeDefinition where
   getName (ScalarTypeDefinition name) = name
+
+instance DefinesTypes ScalarTypeDefinition where
+  getDefinedTypes defn = Map.singleton (getName defn) (TypeDefinitionScalar defn)
 
 -- | Types that are built into GraphQL.
 --
@@ -147,6 +207,9 @@ data EnumTypeDefinition = EnumTypeDefinition Name [EnumValueDefinition]
 
 instance HasName EnumTypeDefinition where
   getName (EnumTypeDefinition name _) = name
+
+instance DefinesTypes EnumTypeDefinition where
+  getDefinedTypes enum = Map.singleton (getName enum) (TypeDefinitionEnum enum)
 
 newtype EnumValueDefinition = EnumValueDefinition Name
                               deriving (Eq, Show)

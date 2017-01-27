@@ -49,7 +49,7 @@ data ServerDog
 
 -- | Whether 'ServerDog' knows the given command.
 doesKnowCommand :: ServerDog -> DogCommand -> Bool
-doesKnowCommand dog command = command `elem` (knownCommands dog)
+doesKnowCommand dog command = command `elem` knownCommands dog
 
 -- | Whether 'ServerDog' is house-trained.
 isHouseTrained :: ServerDog -> Maybe Bool -> Bool
@@ -195,6 +195,41 @@ tests = testSpec "End-to-end tests" $ do
               [ "dog" .= object
                 [ "name" .= ("Mortgage" :: Text)
                 , "doesKnowCommand" .= False
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Handles fairly complex queries" $ do
+      let root = pure (viewServerDog mortgage)
+      -- TODO: jml would like to put some union checks in here, but we don't
+      -- have any unions reachable from Dog!
+      let query = [r|{
+                      dog {
+                        callsign: name
+                        ... on Dog {
+                          callsign: name
+                          me: owner {
+                            ... on Sentient {
+                              name
+                            }
+                            ... on Human {
+                              name
+                            }
+                            name
+                          }
+                        }
+                      }
+                     }
+                    |]
+      response <- interpretAnonymousQuery @QueryRoot root query
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "callsign" .= ("Mortgage" :: Text)
+                , "me" .= object
+                  [ "name" .= ("jml" :: Text)
+                  ]
                 ]
               ]
             ]
