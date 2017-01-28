@@ -36,6 +36,8 @@ module GraphQL.Internal.OrderedMap
   , orderedMap
   -- * Querying
   , lookup
+  -- * Filtering
+  , GraphQL.Internal.OrderedMap.catMaybes
   -- * Combine
   -- ** Union
   , unions
@@ -73,7 +75,7 @@ data OrderedMap key value
 --
 -- /O(n log n)/
 toList :: forall key value. Ord key => OrderedMap key value -> [(key, value)]
-toList (OrderedMap keys entries) = catMaybes (foreach keys $ \k -> (,) k <$> Map.lookup k entries)
+toList (OrderedMap keys entries) = Protolude.catMaybes (foreach keys $ \k -> (,) k <$> Map.lookup k entries)
 
 instance Foldable (OrderedMap key) where
   foldr f z (OrderedMap _ entries) = foldr f z entries
@@ -167,6 +169,17 @@ liftMM :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
 liftMM f a' b' = do
   (a, b) <- (,) <$> a' <*> b'
   f a b
+
+-- | Take an ordered map with 'Maybe' values and return the same map with all
+-- the 'Nothing' values removed.
+catMaybes :: Ord key => OrderedMap key (Maybe value) -> OrderedMap key value
+catMaybes xs =
+  OrderedMap
+  { keys = [ k | k <- keys xs, k `Map.member` newMap ]
+  , toMap = newMap
+  }
+  where
+    newMap = Map.mapMaybe identity (toMap xs)
 
 -- | Construct an ordered map from a list.
 --
