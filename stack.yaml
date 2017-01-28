@@ -3,3 +3,4 @@ resolver: nightly-2017-01-25
 packages:
   - "."
   - "./docs/source/tutorial"
+  - "./graphql-wai"
