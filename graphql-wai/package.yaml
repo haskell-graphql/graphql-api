@@ -1,0 +1,34 @@
+name: graphql-wai
+version: 0.1.0
+synopsis: A simple wai adapter
+license: Apache
+github: jml/graphql-api
+category: Web
+
+# NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
+ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+default-extensions:
+  - NoImplicitPrelude
+  - OverloadedStrings
+  - RecordWildCards
+  - TypeApplications
+
+dependencies:
+  - base >= 4.9 && < 5
+  - protolude
+  - exceptions
+  - wai
+  - http-types
+  - graphql-api
+  - aeson
+
+library:
+  source-dirs: src
+
+tests:
+  wai-tests:
+    main: Tests.hs
+    source-dirs: tests
+    dependencies:
+      - wai-extra
+      - graphql-wai

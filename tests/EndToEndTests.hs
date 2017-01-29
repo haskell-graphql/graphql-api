@@ -10,7 +10,7 @@ import Protolude
 
 import Data.Aeson (Value(Null), toJSON, object, (.=))
 import qualified Data.Map as Map
-import GraphQL (compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
+import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
 import GraphQL.API (Object, Field)
 import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler)
@@ -49,7 +49,7 @@ data ServerDog
 
 -- | Whether 'ServerDog' knows the given command.
 doesKnowCommand :: ServerDog -> DogCommand -> Bool
-doesKnowCommand dog command = command `elem` (knownCommands dog)
+doesKnowCommand dog command = command `elem` knownCommands dog
 
 -- | Whether 'ServerDog' is house-trained.
 isHouseTrained :: ServerDog -> Maybe Bool -> Bool
@@ -199,6 +199,41 @@ tests = testSpec "End-to-end tests" $ do
               ]
             ]
       toJSON (toValue response) `shouldBe` expected
+    it "Handles fairly complex queries" $ do
+      let root = pure (viewServerDog mortgage)
+      -- TODO: jml would like to put some union checks in here, but we don't
+      -- have any unions reachable from Dog!
+      let query = [r|{
+                      dog {
+                        callsign: name
+                        ... on Dog {
+                          callsign: name
+                          me: owner {
+                            ... on Sentient {
+                              name
+                            }
+                            ... on Human {
+                              name
+                            }
+                            name
+                          }
+                        }
+                      }
+                     }
+                    |]
+      response <- interpretAnonymousQuery @QueryRoot root query
+      let expected =
+            object
+            [ "data" .= object
+              [ "dog" .= object
+                [ "callsign" .= ("Mortgage" :: Text)
+                , "me" .= object
+                  [ "name" .= ("jml" :: Text)
+                  ]
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
   describe "interpretQuery" $ do
     it "Handles the simplest named query" $ do
       let root = pure (viewServerDog mortgage)
@@ -239,14 +274,16 @@ tests = testSpec "End-to-end tests" $ do
       toJSON (toValue response) `shouldBe` expected
     describe "Handles variables" $ do
       let root = pure (viewServerDog mortgage)
+      let Right schema = makeSchema @Dog
       let Right query =
-            compileQuery [r|query myQuery($whichCommand: DogCommand) {
-                              dog {
-                                name
-                                doesKnowCommand(dogCommand: $whichCommand)
-                              }
-                            }
-                           |]
+            compileQuery schema
+            [r|query myQuery($whichCommand: DogCommand) {
+                 dog {
+                   name
+                   doesKnowCommand(dogCommand: $whichCommand)
+                 }
+               }
+              |]
       it "Errors when no variables provided" $ do
         response <- executeQuery  @QueryRoot root query Nothing mempty
         let expected =

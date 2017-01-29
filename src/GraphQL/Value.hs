@@ -41,6 +41,7 @@ module GraphQL.Value
     -- ** Constructing
   , makeObject
   , objectFromList
+  , objectFromOrderedMap
     -- ** Combining
   , unionObjects
     -- ** Querying
@@ -288,6 +289,10 @@ instance Arbitrary scalar => Arbitrary (ObjectField' scalar) where
 -- | Make an object from a list of object fields.
 makeObject :: [ObjectField' scalar] -> Maybe (Object' scalar)
 makeObject fields = objectFromList [(name, value) | ObjectField' name value <- fields]
+
+-- | Make an object from an ordered map.
+objectFromOrderedMap :: OrderedMap Name (Value' scalar) -> Object' scalar
+objectFromOrderedMap = Object'
 
 -- | Create an object from a list of (name, value) pairs.
 objectFromList :: [(Name, Value' scalar)] -> Maybe (Object' scalar)

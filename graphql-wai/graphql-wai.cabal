@@ -1,0 +1,53 @@
+-- This file has been generated from package.yaml by hpack version 0.15.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           graphql-wai
+version:        0.1.0
+synopsis:       A simple wai adapter
+category:       Web
+homepage:       https://github.com/jml/graphql-api#readme
+bug-reports:    https://github.com/jml/graphql-api/issues
+license:        Apache
+build-type:     Simple
+cabal-version:  >= 1.10
+
+source-repository head
+  type: git
+  location: https://github.com/jml/graphql-api
+
+library
+  hs-source-dirs:
+      src
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  build-depends:
+      base >= 4.9 && < 5
+    , protolude
+    , exceptions
+    , wai
+    , http-types
+    , graphql-api
+    , aeson
+  exposed-modules:
+      GraphQL.Wai
+  default-language: Haskell2010
+
+test-suite wai-tests
+  type: exitcode-stdio-1.0
+  main-is: Tests.hs
+  hs-source-dirs:
+      tests
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
+  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  build-depends:
+      base >= 4.9 && < 5
+    , protolude
+    , exceptions
+    , wai
+    , http-types
+    , graphql-api
+    , aeson
+    , wai-extra
+    , graphql-wai
+  default-language: Haskell2010

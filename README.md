@@ -3,19 +3,33 @@
 [![CircleCI](https://circleci.com/gh/jml/graphql-api.svg?style=shield)](https://circleci.com/gh/jml/graphql-api)
 [![Documentation Status](https://readthedocs.org/projects/haskell-graphql-api/badge/?version=latest)](http://haskell-graphql-api.readthedocs.io/en/latest/?badge=latest)
 
-This library provides type combinators to create a GraphQL schema, and functions to parse and evaluate queries against the schema. It is inspired by [servant](http://haskell-servant.readthedocs.io/en/stable/) but the two projects don't share any code.
+`graphql-api` helps you implement a robust [GraphQL](http://graphql.org/) API in Haskell. By the time a query makes it to your handler you are dealing with strong, static types that make sense for your problem domain. All your handlers are normal Haskell functions because we derive their type signature from the schema. If you have used [servant](http://haskell-servant.readthedocs.io/en/stable/), this will sound familiar.
 
-More specifically, `graphql-api` helps with implementing a robust GraphQL API in Haskell. By the time a query makes it to your handler you are dealing with strong, static types. All handlers are normal Haskell functions because we derive their type signature from the schema.
+The library provides type combinators to create a GraphQL schema, and functions to parse and evaluate queries against the schema.
 
 You can find the latest release on [hackage](https://hackage.haskell.org/package/graphql-api).
 
-Note that we're trying to implement the GraphQL standard as best as we can in Haskell. I.e. even if an alternative API or behaviour looks nicer we will defer to the standard.
+We implement the [GraphQL specification](https://facebook.github.io/graphql/) as best as we can in Haskell. We figure they know what they're doing. Even if an alternative API or behaviour looks nicer, we will defer to the spec.
 
-## Hello world example
+## Example
 
-Below we define a `Hello` Schema that contains a single field, `greeting`, that takes a single, required argument `who`:
+Say we have a simple GraphQL schema like:
+
+```graphql
+type Hello {
+  greeting(who: String!): String!
+}
+```
+
+which defines a single top-level type `Hello` which contains a single field, `greeting`, that takes a single, required argument `who`.
+
+We can define this schema in Haskell and implement a simple handler like so:
 
 ```haskell
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+
 import Data.Text (Text)
 import Data.Monoid ((<>))
 
@@ -33,7 +47,7 @@ run :: Text -> IO Response
 run = interpretAnonymousQuery @Hello hello
 ```
 
-Note that we require GHC 8.0.2 or later for features like the `@Hello` type application, and for certain bug fixes.
+We require GHC 8.0.2 or later for features like the `@Hello` type application, and for certain bug fixes.
 
 With the code above we can now run a query:
 
@@ -41,18 +55,34 @@ With the code above we can now run a query:
 run "{ greeting(who: \"mort\") }"
 ```
 
-## Current status
+Which will produce the following GraphQL response:
 
-This first release's goal is to gather feedback. We make **no** guarantees about API stability, or anything at all really.
+```json
+{
+  data: {
+    greeting: "Hello mort"
+  }
+}
+```
 
-We are tracking open problem, missing features & wishlist-items in [GitHub's issue tracker](https://github.com/jml/graphql-api/issues).
+## Status
+
+Our current goal is to gather feedback. We have learned a lot about GraphQL in the course of making this library, but we don't know what a good GraphQL library looks like in Haskell. Please [let us know](https://github.com/jml/graphql-api/issues/new) what you think. We won't mind if you file a bug telling us how good the library is.
+
+Because we're still learning, we make **no** guarantees about API stability, or anything at all really.
+
+We are tracking open problems, missing features & wishlist items in [GitHub's issue tracker](https://github.com/jml/graphql-api/issues).
 
 ## Roadmap
 
 * Near future:
-  - Complete lose ends in current implementation & gather feedback.
+  - Better error messages (this is really important to us)
+  - Full support for recursive data types
+  - Close off lose ends in current implementation & gather feedback
 * Medium future:
-  - Implement introspection
+  - Full schema validation
+  - Schema introspection
+  - Stabilize public API
 * Long term:
   - Derive client implementations from types
   - Allow users to implement their own type combinators
