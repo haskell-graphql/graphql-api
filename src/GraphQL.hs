@@ -41,11 +41,10 @@ import GraphQL.Internal.Validation
   )
 import GraphQL.Internal.Output
   ( GraphQLError(..)
-  , Error(..)
   , Response(..)
   , singleError
   )
-import GraphQL.Internal.Schema (DefinesTypes(..))
+import GraphQL.Internal.Schema (makeSchema)
 import GraphQL.Resolver (HasResolver(..), Result(..))
 import GraphQL.Value (Name, NameError, Value, pattern ValueObject)
 
@@ -108,7 +107,7 @@ executeQuery handler document name variables =
             Just errs -> PartialSuccess object (map toError errs)
         v -> ExecutionFailure (singleError (NonObjectResult v))
 
-    getAllTypes = getDefinedTypes <$> getDefinition @api
+    getAllTypes = makeSchema <$> getDefinition @api
 
 -- | Interpet a GraphQL query.
 --
@@ -121,13 +120,10 @@ interpretQuery
   -> VariableValues -- ^ Values for variables defined in the query document. A map of 'Variable' to 'Value'.
   -> m Response -- ^ The outcome of running the query.
 interpretQuery handler query name variables =
-  case parseQuery query of
-    Left err -> pure (PreExecutionFailure (Error err [] :| []))
-    Right parsed ->
-      case validate parsed of
-        Left errs -> pure (PreExecutionFailure (map toError errs))
-        Right document ->
-          executeQuery @api @m handler document name variables
+  case compileQuery query of
+    Left err -> pure (PreExecutionFailure (toError err :| []))
+    Right document ->
+      executeQuery @api @m handler document name variables
 
 
 -- | Interpret an anonymous GraphQL query.

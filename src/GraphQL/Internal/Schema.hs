@@ -34,6 +34,10 @@ module GraphQL.Internal.Schema
   , NonNullType(..)
   , DefinesTypes(..)
   , doesFragmentTypeApply
+  -- * The schema
+  , Schema
+  , makeSchema
+  , lookupType
   ) where
 
 import Protolude hiding (Type)
@@ -41,6 +45,23 @@ import Protolude hiding (Type)
 import qualified Data.Map as Map
 import GraphQL.Value (Value)
 import GraphQL.Internal.Name (HasName(..), Name, unsafeMakeName)
+
+-- | An entire GraphQL schema.
+--
+-- This is very much a work in progress. Currently, the only thing we provide
+-- is a dictionary mapping type names to their definitions.
+newtype Schema = Schema (Map Name TypeDefinition) deriving (Eq, Show)
+
+-- | Create a schema from the root object.
+--
+-- This is technically an insufficient API, since not all types in a schema
+-- need to be reachable from a single root object. However, it's a start.
+makeSchema :: ObjectTypeDefinition -> Schema
+makeSchema = Schema . getDefinedTypes
+
+-- | Find the type with the given name in the schema.
+lookupType :: Schema -> Name -> Maybe TypeDefinition
+lookupType (Schema schema) name = Map.lookup name schema
 
 -- XXX: Use the built-in NonEmptyList in Haskell
 newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show, Functor, Foldable)

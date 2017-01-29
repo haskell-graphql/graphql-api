@@ -32,7 +32,6 @@ module GraphQL.Resolver
 
 import Protolude hiding (Enum, TypeError)
 
-import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.List.NonEmpty as NonEmpty
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..), Symbol, symbolVal)
@@ -55,7 +54,7 @@ import GraphQL.Value.ToValue (ToValue(..))
 import GraphQL.Internal.Name (Name, NameError(..), HasName(..), nameFromSymbol)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
-import GraphQL.Internal.Schema (TypeDefinition)
+import GraphQL.Internal.Schema (Schema, lookupType)
 import GraphQL.Internal.Validation
   ( SelectionSetByType
   , SelectionSet(..)
@@ -143,14 +142,12 @@ instance Applicative Result where
 ok :: Value -> Result Value
 ok = pure
 
-type AllTypes = Map Name TypeDefinition
-
 class HasResolver m a where
   type Handler m a
-  -- XXX: Might be nicer to make AllTypes a ReaderT -- easier to ignore when
+  -- XXX: Might be nicer to make Schema a ReaderT -- easier to ignore when
   -- not wanted, and wouldn't have required me to change so many call sites.
   -- OTOH, with all our type weirdness, I got bored trying to figure it out.
-  resolve :: AllTypes -> Handler m a -> Maybe (SelectionSetByType Value) -> m (Result Value)
+  resolve :: Schema -> Handler m a -> Maybe (SelectionSetByType Value) -> m (Result Value)
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -212,9 +209,9 @@ instance forall m hg. (HasResolver m hg, Functor m, ToValue (Maybe hg)) => HasRe
 
 instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver m (API.List hg) where
   type Handler m (API.List hg) = m [Handler m hg]
-  resolve allTypes handler selectionSet = do
+  resolve schema handler selectionSet = do
     h <- handler
-    let a = traverse (flip (resolve @m @hg allTypes) selectionSet) h
+    let a = traverse (flip (resolve @m @hg schema) selectionSet) h
     map aggregateResults a
 
 
@@ -243,14 +240,14 @@ type family FieldName (a :: Type) = (r :: Symbol) where
 
 resolveField :: forall dispatchType (m :: Type -> Type).
   (BuildFieldResolver m dispatchType, Monad m, KnownSymbol (FieldName dispatchType))
-  => AllTypes -> FieldHandler m dispatchType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
-resolveField allTypes handler nextHandler field =
+  => Schema -> FieldHandler m dispatchType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
+resolveField schema handler nextHandler field =
   -- check name before
   case nameFromSymbol @(FieldName dispatchType) of
     Left err -> pure (Result [SchemaError err] (Just GValue.ValueNull))
     Right name'
       | getName field == name' ->
-          case buildFieldResolver @m @dispatchType allTypes handler field of
+          case buildFieldResolver @m @dispatchType schema handler field of
             Left err -> pure (Result [err] (Just GValue.ValueNull))
             Right resolver -> do
               Result errs value <- resolver
@@ -278,13 +275,13 @@ type family FieldHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
   FieldHandler m (EnumArgument (API.Argument ksF (API.Enum name t)) f) = t -> FieldHandler m f
 
 class BuildFieldResolver m fieldResolverType where
-  buildFieldResolver :: AllTypes -> FieldHandler m fieldResolverType -> Field Value -> Either ResolverError (m (Result Value))
+  buildFieldResolver :: Schema -> FieldHandler m fieldResolverType -> Field Value -> Either ResolverError (m (Result Value))
 
 instance forall ksG t m.
   ( KnownSymbol ksG, HasResolver m t, HasAnnotatedType t, Monad m
   ) => BuildFieldResolver m (JustHandler (API.Field ksG t)) where
-  buildFieldResolver allTypes handler field = do
-    pure (resolve @m @t allTypes handler (getSubSelectionSet field))
+  buildFieldResolver schema handler field = do
+    pure (resolve @m @t schema handler (getSubSelectionSet field))
 
 instance forall ksH t f m.
   ( KnownSymbol ksH
@@ -294,13 +291,13 @@ instance forall ksH t f m.
   , HasAnnotatedInputType t
   , Monad m
   ) => BuildFieldResolver m (PlainArgument (API.Argument ksH t) f) where
-  buildFieldResolver allTypes handler field = do
+  buildFieldResolver schema handler field = do
     argument <- first SchemaError (API.getArgumentDefinition @(API.Argument ksH t))
     let argName = getName argument
     value <- case lookupArgument field argName of
       Nothing -> valueMissing @t argName
       Just v -> first (InvalidValue argName) (fromValue @t v)
-    buildFieldResolver @m @f allTypes (handler value) field
+    buildFieldResolver @m @f schema (handler value) field
 
 instance forall ksK t f m name.
   ( KnownSymbol ksK
@@ -310,13 +307,13 @@ instance forall ksK t f m name.
   , API.GraphQLEnum t
   , Monad m
   ) => BuildFieldResolver m (EnumArgument (API.Argument ksK (API.Enum name t)) f) where
-  buildFieldResolver allTypes handler field = do
+  buildFieldResolver schema handler field = do
     argName <- first SchemaError (nameFromSymbol @ksK)
     value <- case lookupArgument field argName of
       Nothing -> valueMissing @t argName
       Just (ValueEnum enum) -> first (InvalidValue argName) (API.enumFromValue @t enum)
       Just value -> Left (InvalidValue argName (show value <> " not an enum: " <> show (API.enumValues @t)))
-    buildFieldResolver @m @f allTypes (handler value) field
+    buildFieldResolver @m @f schema (handler value) field
 
 -- Note that we enumerate all ks variables with capital letters so we
 -- can figure out error messages like the following that don't come
@@ -351,7 +348,7 @@ class RunFields m a where
   -- Individual implementations are responsible for calling 'runFields' if
   -- they haven't matched the field and there are still candidate fields
   -- within the handler.
-  runFields :: AllTypes -> RunFieldsHandler m a -> Field Value -> m ResolveFieldResult
+  runFields :: Schema -> RunFieldsHandler m a -> Field Value -> m ResolveFieldResult
 
 instance forall f fs m dispatchType.
          ( BuildFieldResolver m dispatchType
@@ -360,10 +357,10 @@ instance forall f fs m dispatchType.
          , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (f :<> fs) where
-  runFields allTypes (handler :<> nextHandlers) field =
-    resolveField @dispatchType @m allTypes handler nextHandler field
+  runFields schema (handler :<> nextHandlers) field =
+    resolveField @dispatchType @m schema handler nextHandler field
     where
-      nextHandler = runFields @m @fs allTypes nextHandlers field
+      nextHandler = runFields @m @fs schema nextHandlers field
 
 instance forall ksM t m dispatchType.
          ( BuildFieldResolver m dispatchType
@@ -371,8 +368,8 @@ instance forall ksM t m dispatchType.
          , dispatchType ~ FieldResolverDispatchType (API.Field ksM t)
          , Monad m
          ) => RunFields m (API.Field ksM t) where
-  runFields allTypes handler field =
-    resolveField @dispatchType @m allTypes handler nextHandler field
+  runFields schema handler field =
+    resolveField @dispatchType @m schema handler nextHandler field
     where
       nextHandler = pure (Result [FieldNotFoundError (getName field)] Nothing)
 
@@ -382,8 +379,8 @@ instance forall m a b dispatchType.
          , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (a :> b) where
-  runFields allTypes handler field =
-    resolveField @dispatchType @m allTypes handler nextHandler field
+  runFields schema handler field =
+    resolveField @dispatchType @m schema handler nextHandler field
     where
       nextHandler = pure (Result [FieldNotFoundError (getName field)] Nothing)
 
@@ -395,7 +392,7 @@ instance forall typeName interfaces fields m.
   type Handler m (API.Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
   resolve _ _ Nothing = throwE MissingSelectionSet
-  resolve allTypes mHandler (Just selectionSet) =
+  resolve schema mHandler (Just selectionSet) =
     case getSelectionSet of
       Left err -> throwE err
       Right ss -> do
@@ -403,7 +400,7 @@ instance forall typeName interfaces fields m.
         -- This (and other places, including field resolvers) is where user
         -- code can do things like look up something in a database.
         handler <- mHandler
-        r <- traverse (runFields @m @(RunFieldsType m fields) allTypes handler) ss
+        r <- traverse (runFields @m @(RunFieldsType m fields) schema handler) ss
         let (Result errs obj)  = GValue.objectFromOrderedMap . OrderedMap.catMaybes <$> sequenceA r
         pure (Result errs (GValue.ValueObject obj))
 
@@ -420,7 +417,7 @@ instance forall typeName interfaces fields m.
         --
         -- See <https://facebook.github.io/graphql/#sec-Field-Collection> for
         -- more details.
-        (SelectionSet ss') <- first ValidationError $ getSelectionSetForType (flip Map.lookup allTypes) defn selectionSet
+        (SelectionSet ss') <- first ValidationError $ getSelectionSetForType (lookupType schema) defn selectionSet
         pure ss'
 
 -- TODO(tom): we're getting to a point where it might make sense to
@@ -459,7 +456,7 @@ type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 class RunUnion m union objects where
-  runUnion :: AllTypes -> DynamicUnionValue union m -> SelectionSetByType Value -> m (Result Value)
+  runUnion :: Schema -> DynamicUnionValue union m -> SelectionSetByType Value -> m (Result Value)
 
 instance forall m union objects name interfaces fields.
   ( Monad m
@@ -469,10 +466,10 @@ instance forall m union objects name interfaces fields.
   , API.HasObjectDefinition (API.Object name interfaces fields)
   , RunUnion m union objects
   ) => RunUnion m union (API.Object name interfaces fields:objects) where
-  runUnion allTypes duv selectionSet =
+  runUnion schema duv selectionSet =
     case extractUnionValue @(API.Object name interfaces fields) @union @m duv of
-      Just handler -> resolve @m @(API.Object name interfaces fields) allTypes handler (Just selectionSet)
-      Nothing -> runUnion @m @union @objects allTypes duv selectionSet
+      Just handler -> resolve @m @(API.Object name interfaces fields) schema handler (Just selectionSet)
+      Nothing -> runUnion @m @union @objects schema duv selectionSet
 
 -- AFAICT it should not be possible to ever hit the empty case because
 -- the compiler doesn't allow constructing a unionValue that's not in
@@ -492,9 +489,9 @@ instance forall m unionName objects.
   ) => HasResolver m (API.Union unionName objects) where
   type Handler m (API.Union unionName objects) = m (DynamicUnionValue (API.Union unionName objects) m)
   resolve _ _ Nothing = throwE MissingSelectionSet
-  resolve allTypes mHandler (Just selectionSet) = do
+  resolve schema mHandler (Just selectionSet) = do
     duv <- mHandler
-    runUnion @m @(API.Union unionName objects) @objects allTypes duv selectionSet
+    runUnion @m @(API.Union unionName objects) @objects schema duv selectionSet
 
 symbolText :: forall ks. KnownSymbol ks => Text
 symbolText = toS (symbolVal @ks Proxy)
