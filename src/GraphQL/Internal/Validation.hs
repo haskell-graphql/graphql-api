@@ -68,7 +68,7 @@ import GraphQL.Internal.Name (HasName(..), Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
 -- Directly import things from the AST that do not need validation, so that
 -- @AST.Foo@ in a type signature implies that something hasn't been validated.
-import GraphQL.Internal.Syntax.AST (Alias, TypeCondition, Variable, NamedType(..))
+import GraphQL.Internal.Syntax.AST (Alias, Variable, NamedType(..))
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
@@ -77,6 +77,7 @@ import GraphQL.Internal.Schema
   , ObjectTypeDefinition
   , Schema
   , doesFragmentTypeApply
+  , lookupType
   )
 import GraphQL.Value
   ( Value
@@ -128,18 +129,18 @@ type Operations value = Map Name (Operation value)
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
 validate :: Schema -> AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument VariableValue)
-validate _ (AST.QueryDocument defns) = runValidator $ do
+validate schema (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
-  (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions fragments
+  (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions schema fragments
   case (anonymous, named) of
     ([], ops) -> do
-      (validOps, usedFrags) <- runStateT (validateOperations frags ops) mempty
+      (validOps, usedFrags) <- runStateT (validateOperations schema frags ops) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
       resolvedOps <- traverse validateOperation validOps
       pure (MultipleOperations resolvedOps)
     ([x], []) -> do
-      (ss, usedFrags) <- runStateT (validateSelectionSet frags x) mempty
+      (ss, usedFrags) <- runStateT (validateSelectionSet schema frags x) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
       validValuesSS <- validateValues ss
       resolvedValuesSS <- resolveVariables emptyVariableDefinitions validValuesSS
@@ -164,15 +165,15 @@ validate _ (AST.QueryDocument defns) = runValidator $ do
 
 -- * Operations
 
-validateOperations :: Fragments AST.Value -> [(Name, (OperationType AST.Value, AST.Node))] -> StateT (Set Name) Validation (Operations AST.Value)
-validateOperations fragments ops = do
+validateOperations :: Schema -> Fragments AST.Value -> [(Name, (OperationType AST.Value, AST.Node))] -> StateT (Set Name) Validation (Operations AST.Value)
+validateOperations schema fragments ops = do
   deduped <- lift (mapErrors DuplicateOperation (makeMap ops))
   traverse validateNode deduped
   where
     validateNode (operationType, AST.Node _ vars directives ss) =
       operationType <$> lift (validateVariableDefinitions vars)
                     <*> lift (validateDirectives directives)
-                    <*> validateSelectionSet fragments ss
+                    <*> validateSelectionSet schema fragments ss
 
 -- TODO: Either make operation type (Query, Mutation) a parameter of an
 -- Operation constructor or give all the fields accessors. This duplication is
@@ -217,9 +218,9 @@ validateOperation (Mutation vars directives selectionSet) = do
 -- We do this /before/ validating the values (since that's much easier once
 -- everything is in a nice structure and away from the AST), which means we
 -- can't yet evaluate directives.
-validateSelectionSet :: Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSetByType AST.Value)
-validateSelectionSet fragments selections = do
-  unresolved <- lift (traverse validateSelection selections)
+validateSelectionSet :: Schema -> Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSetByType AST.Value)
+validateSelectionSet schema fragments selections = do
+  unresolved <- lift $ traverse (validateSelection schema) selections
   resolved <- traverse (resolveSelection fragments) unresolved
   lift $ groupByResponseKey resolved
 
@@ -229,7 +230,7 @@ validateSelectionSet fragments selections = do
 newtype SelectionSet value = SelectionSet (OrderedMap ResponseKey (Field value)) deriving (Eq, Ord, Show)
 
 newtype SelectionSetByType value
-  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (Field value)))
+  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeDefinition) (Field value)))
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 -- | A 'ResponseKey' is the key under which a field appears in a response. If
@@ -289,28 +290,22 @@ mergeFields field1 field2 = do
 -- present a single, flattened map of 'ResponseKey' to 'Field'.
 getSelectionSetForType
   :: Eq value
-  => (Name -> Maybe TypeDefinition) -- ^ A function that given a name of a type returns the definition of that type
-  -> ObjectTypeDefinition -- ^ The type of the object that the selection set is for
+  => ObjectTypeDefinition -- ^ The type of the object that the selection set is for
   -> SelectionSetByType value -- ^ A selection set with type conditions, obtained from the validation process
   -> Either ValidationErrors (SelectionSet value) -- ^ A flattened
   -- selection set without type conditions. It's possible that some of the
   -- fields in various types are not mergeable, in which case, we'll return a
   -- validation error.
-getSelectionSetForType lookupTypeDefn objectType (SelectionSetByType ss) = runValidator $
+getSelectionSetForType objectType (SelectionSetByType ss) = runValidator $
   SelectionSet . OrderedMap.catMaybes <$> traverse mergeFieldsForType ss
   where
     mergeFieldsForType fieldMap = do
-      matching <- filterM (allElements satisfiesType . fst) (OrderedMap.toList fieldMap)
+      let matching = filter (satisfiesType . fst) (OrderedMap.toList fieldMap)
       case map snd matching of
         [] -> pure Nothing
         x:xs -> Just <$> foldlM mergeFields x xs
 
-    allElements predM set = and <$> traverse predM (Set.toList set)
-
-    satisfiesType (NamedType cond) =
-      case lookupTypeDefn cond of
-        Nothing -> throwE (TypeConditionNotFound cond)
-        Just fragmentType -> pure (doesFragmentTypeApply objectType fragmentType)
+    satisfiesType = all (doesFragmentTypeApply objectType) . Set.toList
 
 
 -- | Flatten the selection and group it by response key and then type
@@ -334,9 +329,9 @@ groupByResponseKey selectionSet = SelectionSetByType <$>
     -- The "active" type condition is the type condition of the selection set
     -- that contains the selection.
     byKey :: Eq value
-          => Set TypeCondition
+          => Set TypeDefinition
           -> Selection' FragmentSpread value
-          -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (Field value)))
+          -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeDefinition) (Field value)))
     byKey typeConds (SelectionField field@(Field' _ name arguments _ ss))
       = case ss of
           [] -> pure $ OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds .  Field name arguments $ Nothing
@@ -349,9 +344,9 @@ groupByResponseKey selectionSet = SelectionSetByType <$>
       = flattenSelectionSet typeConds ss
 
     flattenSelectionSet :: Eq value
-                        => Set TypeCondition
+                        => Set TypeDefinition
                         -> [Selection' FragmentSpread value]
-                        -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (Field value)))
+                        -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeDefinition) (Field value)))
     flattenSelectionSet typeConds ss = do
       groupedByKey <- traverse (byKey typeConds) ss
       OrderedMap.unionsWithM (OrderedMap.unionWithM mergeFields) groupedByKey
@@ -450,20 +445,20 @@ instance Traversable FragmentSpread where
 
 -- | An inline fragment, which itself can contain fragment spreads.
 data InlineFragment spread value
-  = InlineFragment (Maybe TypeCondition) (Directives value) [Selection' spread value]
+  = InlineFragment (Maybe TypeDefinition) (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
 instance Functor spread => Functor (InlineFragment spread) where
-  fmap f (InlineFragment typeCond directives selectionSet) =
-    InlineFragment typeCond (fmap f directives) (map (fmap f) selectionSet)
+  fmap f (InlineFragment typeDefn directives selectionSet) =
+    InlineFragment typeDefn (fmap f directives) (map (fmap f) selectionSet)
 
 instance Foldable spread => Foldable (InlineFragment spread) where
   foldMap f (InlineFragment _ directives selectionSet) =
     foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
 
 instance Traversable spread => Traversable (InlineFragment spread) where
-  traverse f (InlineFragment typeCond directives selectionSet) =
-    InlineFragment typeCond <$> traverse f directives
+  traverse f (InlineFragment typeDefn directives selectionSet) =
+    InlineFragment typeDefn <$> traverse f directives
                             <*> traverse (traverse f) selectionSet
 
 -- | Traverse through every fragment spread in a selection.
@@ -488,17 +483,25 @@ traverseFragmentSpreads f selection =
     childSegments = traverse (traverseFragmentSpreads f)
 
 -- | Ensure a selection has valid arguments and directives.
-validateSelection :: AST.Selection -> Validation (Selection' UnresolvedFragmentSpread AST.Value)
-validateSelection selection =
+validateSelection :: Schema -> AST.Selection -> Validation (Selection' UnresolvedFragmentSpread AST.Value)
+validateSelection schema selection =
   case selection of
     AST.SelectionField (AST.Field alias name args directives ss) ->
-      SelectionField <$> (Field' alias name <$> validateArguments args <*> validateDirectives directives <*> childSegments ss)
+      SelectionField <$> (Field' alias name
+                           <$> validateArguments args
+                           <*> validateDirectives directives
+                           <*> childSegments ss)
     AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
       SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)
     AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
-      SelectionInlineFragment <$> (InlineFragment typeCond <$> validateDirectives directives <*> childSegments ss)
+      SelectionInlineFragment <$> (InlineFragment  -- TODO: fix the case statement
+                                    <$> (case typeCond of
+                                           Nothing -> pure Nothing
+                                           Just tC -> Just <$> validateTypeCondition schema tC)
+                                    <*> validateDirectives directives
+                                    <*> childSegments ss)
   where
-    childSegments = traverse validateSelection
+    childSegments = traverse (validateSelection schema)
 
 -- | Resolve the fragment references in a selection, accumulating a set of
 -- the fragment names that we have resolved.
@@ -523,35 +526,45 @@ resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
 -- @spread@ indicates whether references to other fragment definitions have
 -- been resolved.
 data FragmentDefinition spread value
-  = FragmentDefinition Name TypeCondition (Directives value) [Selection' spread value]
+  = FragmentDefinition Name TypeDefinition (Directives value) [Selection' spread value]
   deriving (Eq, Show)
 
 type Fragments value = Map Name (FragmentDefinition FragmentSpread value)
 
 instance Functor spread => Functor (FragmentDefinition spread) where
-  fmap f (FragmentDefinition name typeCond directives selectionSet) =
-    FragmentDefinition name typeCond (fmap f directives) (map (fmap f) selectionSet)
+  fmap f (FragmentDefinition name typeDefn directives selectionSet) =
+    FragmentDefinition name typeDefn (fmap f directives) (map (fmap f) selectionSet)
 
 instance Foldable spread => Foldable (FragmentDefinition spread) where
   foldMap f (FragmentDefinition _ _ directives selectionSet) =
     foldMap f directives `mappend` mconcat (map (foldMap f) selectionSet)
 
 instance Traversable spread => Traversable (FragmentDefinition spread) where
-  traverse f (FragmentDefinition name typeCond directives selectionSet) =
-    FragmentDefinition name typeCond <$> traverse f directives
+  traverse f (FragmentDefinition name typeDefn directives selectionSet) =
+    FragmentDefinition name typeDefn <$> traverse f directives
                                      <*> traverse (traverse f) selectionSet
 
 -- | Ensure fragment definitions are uniquely named, and that their arguments
 -- and directives are sane.
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-Name-Uniqueness>
-validateFragmentDefinitions :: [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition UnresolvedFragmentSpread AST.Value))
-validateFragmentDefinitions frags = do
+validateFragmentDefinitions :: Schema -> [AST.FragmentDefinition] -> Validation (Map Name (FragmentDefinition UnresolvedFragmentSpread AST.Value))
+validateFragmentDefinitions schema frags = do
   defns <- traverse validateFragmentDefinition frags
   mapErrors DuplicateFragmentDefinition (makeMap [(name, value) | value@(FragmentDefinition name _ _ _) <- defns])
   where
-    validateFragmentDefinition (AST.FragmentDefinition name cond directives ss) =
-      FragmentDefinition name cond <$> validateDirectives directives <*> traverse validateSelection ss
+    validateFragmentDefinition (AST.FragmentDefinition name typeCond directives ss) = do
+      FragmentDefinition name
+        <$> validateTypeCondition schema typeCond
+        <*> validateDirectives directives
+        <*> traverse (validateSelection schema) ss
+
+-- | Validate a type condition that appears in a query.
+validateTypeCondition :: Schema -> AST.TypeCondition -> Validation TypeDefinition
+validateTypeCondition schema (NamedType typeCond) =
+  case lookupType schema typeCond of
+    Nothing -> throwE (TypeConditionNotFound typeCond)
+    Just typeDefn -> pure typeDefn
 
 -- | Resolve all references to fragments inside fragment definitions.
 --

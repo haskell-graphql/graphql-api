@@ -54,7 +54,7 @@ import GraphQL.Value.ToValue (ToValue(..))
 import GraphQL.Internal.Name (Name, NameError(..), HasName(..), nameFromSymbol)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
-import GraphQL.Internal.Schema (Schema, lookupType)
+import GraphQL.Internal.Schema (Schema)
 import GraphQL.Internal.Validation
   ( SelectionSetByType
   , SelectionSet(..)
@@ -417,7 +417,7 @@ instance forall typeName interfaces fields m.
         --
         -- See <https://facebook.github.io/graphql/#sec-Field-Collection> for
         -- more details.
-        (SelectionSet ss') <- first ValidationError $ getSelectionSetForType (lookupType schema) defn selectionSet
+        (SelectionSet ss') <- first ValidationError $ getSelectionSetForType defn selectionSet
         pure ss'
 
 -- TODO(tom): we're getting to a point where it might make sense to
