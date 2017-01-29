@@ -11,6 +11,7 @@ module GraphQL.Internal.Output
   ) where
 
 import Protolude hiding (Location, Map)
+import Data.Aeson (ToJSON(..))
 import Data.List.NonEmpty (NonEmpty(..))
 import GraphQL.Value
   ( Object
@@ -74,6 +75,9 @@ instance ToValue Response where
   toValue (PartialSuccess x e) = unsafeMakeObject [("data", toValue x)
                                                   ,("errors", toValue e)
                                                   ]
+
+instance ToJSON Response where
+  toJSON = toJSON . toValue
 
 type Errors = NonEmpty Error
 
