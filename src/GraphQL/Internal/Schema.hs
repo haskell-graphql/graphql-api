@@ -50,7 +50,7 @@ import GraphQL.Internal.Name (HasName(..), Name, unsafeMakeName)
 --
 -- This is very much a work in progress. Currently, the only thing we provide
 -- is a dictionary mapping type names to their definitions.
-newtype Schema = Schema (Map Name TypeDefinition) deriving (Eq, Show)
+newtype Schema = Schema (Map Name TypeDefinition) deriving (Eq, Ord, Show)
 
 -- | Create a schema from the root object.
 --
@@ -64,7 +64,7 @@ lookupType :: Schema -> Name -> Maybe TypeDefinition
 lookupType (Schema schema) name = Map.lookup name schema
 
 -- XXX: Use the built-in NonEmptyList in Haskell
-newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Show, Functor, Foldable)
+newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Ord, Show, Functor, Foldable)
 
 -- | A thing that defines types. Excludes definitions of input types.
 class DefinesTypes t where
@@ -82,7 +82,7 @@ class DefinesTypes t where
 data AnnotatedType t = TypeNamed t
                      | TypeList (ListType t)
                      | TypeNonNull (NonNullType t)
-                     deriving (Eq,Show)
+                     deriving (Eq, Ord, Show)
 
 -- | Get the type that is being annotated.
 getAnnotatedType :: AnnotatedType t -> t
@@ -94,13 +94,13 @@ getAnnotatedType (TypeNonNull (NonNullTypeList (ListType t))) = getAnnotatedType
 instance HasName t => HasName (AnnotatedType t) where
   getName = getName . getAnnotatedType
 
-newtype ListType t = ListType (AnnotatedType t) deriving (Eq, Show)
+newtype ListType t = ListType (AnnotatedType t) deriving (Eq, Ord, Show)
 
 data NonNullType t = NonNullTypeNamed t
                    | NonNullTypeList  (ListType t)
-                   deriving (Eq,Show)
+                   deriving (Eq, Ord, Show)
 
-data Type = DefinedType TypeDefinition | BuiltinType Builtin deriving (Eq, Show)
+data Type = DefinedType TypeDefinition | BuiltinType Builtin deriving (Eq, Ord, Show)
 
 instance DefinesTypes Type where
   getDefinedTypes (BuiltinType _) = mempty
@@ -117,7 +117,7 @@ data TypeDefinition = TypeDefinitionObject        ObjectTypeDefinition
                     | TypeDefinitionEnum          EnumTypeDefinition
                     | TypeDefinitionInputObject   InputObjectTypeDefinition
                     | TypeDefinitionTypeExtension TypeExtensionDefinition
-                      deriving (Eq, Show)
+                      deriving (Eq, Ord, Show)
 
 instance HasName TypeDefinition where
   getName (TypeDefinitionObject x) = getName x
@@ -141,7 +141,7 @@ instance DefinesTypes TypeDefinition where
         panic "TODO: we should remove the 'extend' behaviour entirely"
 
 data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces (NonEmptyList FieldDefinition)
-                            deriving (Eq, Show)
+                            deriving (Eq, Ord, Show)
 
 instance HasName ObjectTypeDefinition where
   getName (ObjectTypeDefinition name _ _) = name
@@ -155,7 +155,7 @@ instance DefinesTypes ObjectTypeDefinition where
 type Interfaces = [InterfaceTypeDefinition]
 
 data FieldDefinition = FieldDefinition Name [ArgumentDefinition] (AnnotatedType Type)
-                       deriving (Eq, Show)
+                       deriving (Eq, Ord, Show)
 
 instance HasName FieldDefinition where
   getName (FieldDefinition name _ _) = name
@@ -164,13 +164,13 @@ instance DefinesTypes FieldDefinition where
   getDefinedTypes (FieldDefinition _ _ retVal) = getDefinedTypes (getAnnotatedType retVal)
 
 data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
-                          deriving (Eq, Show)
+                          deriving (Eq, Ord, Show)
 
 instance HasName ArgumentDefinition where
   getName (ArgumentDefinition name _ _) = name
 
 data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmptyList FieldDefinition)
-                               deriving (Eq, Show)
+                               deriving (Eq, Ord, Show)
 
 instance HasName InterfaceTypeDefinition where
   getName (InterfaceTypeDefinition name _) = name
@@ -179,7 +179,7 @@ instance DefinesTypes InterfaceTypeDefinition where
   getDefinedTypes i@(InterfaceTypeDefinition name fields) = Map.singleton name (TypeDefinitionInterface i) <> foldMap getDefinedTypes fields
 
 data UnionTypeDefinition = UnionTypeDefinition Name (NonEmptyList ObjectTypeDefinition)
-                           deriving (Eq, Show)
+                           deriving (Eq, Ord, Show)
 
 instance HasName UnionTypeDefinition where
   getName (UnionTypeDefinition name _) = name
@@ -190,7 +190,7 @@ instance DefinesTypes UnionTypeDefinition where
     foldMap getDefinedTypes objs
 
 newtype ScalarTypeDefinition = ScalarTypeDefinition Name
-                             deriving (Eq, Show)
+                             deriving (Eq, Ord, Show)
 
 instance HasName ScalarTypeDefinition where
   getName (ScalarTypeDefinition name) = name
@@ -212,7 +212,7 @@ data Builtin
   -- | Signed double‐precision fractional values as specified by [IEEE 754](https://en.wikipedia.org/wiki/IEEE_floating_point)
   | GFloat
   -- | A unique identifier, often used to refetch an object or as the key for a cache
-  | GID deriving (Eq, Show)
+  | GID deriving (Eq, Ord, Show)
 
 instance HasName Builtin where
   getName = unsafeMakeName . getBuiltinName
@@ -224,7 +224,7 @@ instance HasName Builtin where
       getBuiltinName GID = "ID"
 
 data EnumTypeDefinition = EnumTypeDefinition Name [EnumValueDefinition]
-                          deriving (Eq, Show)
+                          deriving (Eq, Ord, Show)
 
 instance HasName EnumTypeDefinition where
   getName (EnumTypeDefinition name _) = name
@@ -233,30 +233,30 @@ instance DefinesTypes EnumTypeDefinition where
   getDefinedTypes enum = Map.singleton (getName enum) (TypeDefinitionEnum enum)
 
 newtype EnumValueDefinition = EnumValueDefinition Name
-                              deriving (Eq, Show)
+                              deriving (Eq, Ord, Show)
 
 instance HasName EnumValueDefinition where
   getName (EnumValueDefinition name) = name
 
 data InputObjectTypeDefinition = InputObjectTypeDefinition Name (NonEmptyList InputObjectFieldDefinition)
-                                 deriving (Eq, Show)
+                                 deriving (Eq, Ord, Show)
 
 instance HasName InputObjectTypeDefinition where
   getName (InputObjectTypeDefinition name _) = name
 
 data InputObjectFieldDefinition = InputObjectFieldDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
-                                  deriving (Eq, Show) -- XXX: spec is unclear about default value for input object field definitions
+                                  deriving (Eq, Ord, Show) -- XXX: spec is unclear about default value for input object field definitions
 
 instance HasName InputObjectFieldDefinition where
   getName (InputObjectFieldDefinition name _ _) = name
 
 newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
-                                  deriving (Eq, Show)
+                                  deriving (Eq, Ord, Show)
 
 instance HasName TypeExtensionDefinition where
   getName (TypeExtensionDefinition obj) = getName obj
 
-data InputType = DefinedInputType InputTypeDefinition | BuiltinInputType Builtin deriving (Eq, Show)
+data InputType = DefinedInputType InputTypeDefinition | BuiltinInputType Builtin deriving (Eq, Ord, Show)
 
 instance HasName InputType where
   getName (DefinedInputType x) = getName x
@@ -266,7 +266,7 @@ data InputTypeDefinition
   = InputTypeDefinitionObject        InputObjectTypeDefinition
   | InputTypeDefinitionScalar        ScalarTypeDefinition
   | InputTypeDefinitionEnum          EnumTypeDefinition
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance HasName InputTypeDefinition where
   getName (InputTypeDefinitionObject x) = getName x
