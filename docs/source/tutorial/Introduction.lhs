@@ -54,8 +54,8 @@ And get responses like:
 
 ```json
 {
-  data: {
-    greeting: "Hello world!"
+  "data": {
+    "greeting": "Hello world!"
   }
 }
 ```
@@ -215,9 +215,9 @@ Which would produce output like:
 
 ```json
 {
-  data: {
-    me: {
-      name: "Mort"
+  "data": {
+    "me": {
+      "name": "Mort"
     }
   }
 }
