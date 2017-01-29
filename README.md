@@ -95,10 +95,10 @@ We are tracking open problems, missing features & wishlist items in [GitHub's is
 
 ## Copyright
 
-All files Copyright (c) 2016 Thomas E. Hunger & Jonathan M. Lange, except:
+All files Copyright (c) 2016-2017 Thomas E. Hunger & Jonathan M. Lange, except:
 
-* src/GraphQL/Internal/AST.hs
-* src/GraphQL/Internal/Encoder.hs
-* src/GraphQL/Internal/Parser.hs
+* src/GraphQL/Internal/Syntax/AST.hs
+* src/GraphQL/Internal/Syntax/Encoder.hs
+* src/GraphQL/Internal/Syntax/Parser.hs
 
 for which see LICENSE.BSD3 in this repository.
