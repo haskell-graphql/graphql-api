@@ -17,5 +17,6 @@ library:
     - base >= 4.9 && < 5
     - protolude
     - graphql-api
+    - random
     - markdown-unlit >= 0.4
     - aeson
