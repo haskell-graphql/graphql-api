@@ -399,6 +399,9 @@ instance forall typeName interfaces fields m.
     case getSelectionSet of
       Left err -> throwE err
       Right ss -> do
+        -- Run the handler so the field resolvers have access to the object.
+        -- This (and other places, including field resolvers) is where user
+        -- code can do things like look up something in a database.
         handler <- mHandler
         r <- traverse (runFields @m @(RunFieldsType m fields) allTypes handler) ss
         let (Result errs obj)  = GValue.objectFromOrderedMap . OrderedMap.catMaybes <$> sequenceA r
@@ -407,6 +410,16 @@ instance forall typeName interfaces fields m.
     where
       getSelectionSet = do
         defn <- first SchemaError $ API.getDefinition @(API.Object typeName interfaces fields)
+        -- Fields of a selection set may be behind "type conditions", due to
+        -- inline fragments or the use of fragment spreads. These type
+        -- conditions are represented in the schema by the name of a type
+        -- (e.g. "Dog"). To determine which type conditions (and thus which
+        -- fields) are relevant for this selection set, we need to look up the
+        -- actual types they refer to, as interfaces (say) match objects
+        -- differently than unions.
+        --
+        -- See <https://facebook.github.io/graphql/#sec-Field-Collection> for
+        -- more details.
         (SelectionSet ss') <- first ValidationError $ getSelectionSetForType (flip Map.lookup allTypes) defn selectionSet
         pure ss'
 
