@@ -59,8 +59,8 @@ Which will produce the following GraphQL response:
 
 ```json
 {
-  data: {
-    greeting: "Hello mort"
+  "data": {
+    "greeting": "Hello mort"
   }
 }
 ```
