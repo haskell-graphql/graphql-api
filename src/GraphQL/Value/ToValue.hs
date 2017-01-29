@@ -22,7 +22,7 @@ instance ToValue a => ToValue [a] where
   toValue = toValue . List' . map toValue
 
 -- TODO - tom still thinks that using Maybe for nullable is maybe not
--- the best idea.
+-- the best idea. <https://github.com/jml/graphql-api/issues/100>
 instance ToValue a => ToValue (Maybe a) where
   toValue Nothing = ValueNull
   toValue (Just v) = toValue v

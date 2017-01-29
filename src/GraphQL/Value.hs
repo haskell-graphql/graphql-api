@@ -110,6 +110,7 @@ type Value = Value' ConstScalar
 
 -- TODO: These next two definitions are quite internal. We should move this
 -- module to Internal and then re-export the bits that end-users will use.
+-- <https://github.com/jml/graphql-api/issues/99>
 
 -- | A GraphQL value which might contain some variables. These variables are
 -- not yet associated with

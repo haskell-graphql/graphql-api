@@ -312,6 +312,7 @@ tests = testSpec "End-to-end tests" $ do
         -- very simple function to turn a JSON value / object into the
         -- variable map that we desire. Alternatively, we should have APIs
         -- like Aeson does.
+        -- <https://github.com/jml/graphql-api/issues/96>
         let Right varName = makeName "whichCommand"
         let vars = Map.singleton (Variable varName) (toValue Sit)
         response <- executeQuery  @QueryRoot root query Nothing vars

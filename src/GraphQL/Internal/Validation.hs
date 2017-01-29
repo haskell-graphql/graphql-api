@@ -494,10 +494,8 @@ validateSelection schema selection =
     AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
       SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)
     AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
-      SelectionInlineFragment <$> (InlineFragment  -- TODO: fix the case statement
-                                    <$> (case typeCond of
-                                           Nothing -> pure Nothing
-                                           Just tC -> Just <$> validateTypeCondition schema tC)
+      SelectionInlineFragment <$> (InlineFragment
+                                    <$> traverse (validateTypeCondition schema) typeCond
                                     <*> validateDirectives directives
                                     <*> childSegments ss)
   where
