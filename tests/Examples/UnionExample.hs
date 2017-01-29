@@ -10,7 +10,7 @@ import GraphQL.Resolver (Handler, (:<>)(..), unionValue)
 type MiniCat = Object "MiniCat" '[] '[Field "name" Text, Field "meowVolume" Int32]
 type MiniDog = Object "MiniDog" '[] '[Field "barkVolume" Int32]
 
-type CatOrDog = Union "CatOrDog" '[MiniCat, MiniDog]
+type CatOrDog = Object "Me" '[] '[Field "myPet" (Union "CatOrDog" '[MiniCat, MiniDog])]
 type CatOrDogList = Object "CatOrDogList" '[] '[Field "pets" (List (Union "CatOrDog" '[MiniCat, MiniDog]))]
 
 miniCat :: Text -> Handler IO MiniCat
@@ -20,7 +20,7 @@ miniDog :: Handler IO MiniDog
 miniDog = pure (pure 100)
 
 catOrDog :: Handler IO CatOrDog
-catOrDog = do
+catOrDog = pure $ do
   name <- pure "MonadicFelix" -- we can do monadic actions
   unionValue @MiniCat (miniCat name)
 
@@ -39,9 +39,9 @@ catOrDogList = pure $
 --
 -- >>> response <- exampleQuery
 -- >>> putStrLn $ encode $ toValue response
--- {"data":{"meowVolume":32,"name":"MonadicFelix"}}
+-- {"data":{"myPet":{"meowVolume":32,"name":"MonadicFelix"}}}
 exampleQuery :: IO Response
-exampleQuery = interpretAnonymousQuery @CatOrDog catOrDog "{ ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } }"
+exampleQuery = interpretAnonymousQuery @CatOrDog catOrDog "{ myPet { ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } } }"
 
 -- | 'unionValue' can be used in a list context
 --

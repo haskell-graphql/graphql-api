@@ -31,6 +31,9 @@ module GraphQL.Resolver
 -- - Enforce non-empty lists (might only be doable via value-level validation)
 
 import Protolude hiding (Enum, TypeError)
+
+import qualified Data.Text as Text
+import qualified Data.List.NonEmpty as NonEmpty
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..), Symbol, symbolVal)
 import qualified GHC.Exts (Any)
 import Unsafe.Coerce (unsafeCoerce)
@@ -48,18 +51,16 @@ import GraphQL.Value
   )
 import GraphQL.Value.FromValue (FromValue(..))
 import GraphQL.Value.ToValue (ToValue(..))
-import GraphQL.Internal.Name (Name, NameError(..), HasName(..), makeName, nameFromSymbol)
-import qualified GraphQL.Internal.Syntax.AST as AST
+import GraphQL.Internal.Name (Name, NameError(..), HasName(..), nameFromSymbol)
+import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Validation
-  ( SelectionSet
-  , Selection'(..)
-  , InlineFragment(..)
-  , FragmentSpread
+  ( SelectionSetByType
+  , SelectionSet(..)
   , Field
-  , getFields
-  , getFieldSelectionSet
-  , getResponseKey
+  , ValidationErrors
+  , getSubSelectionSet
+  , getSelectionSetForType
   , lookupArgument
   )
 
@@ -72,13 +73,12 @@ data ResolverError
   | ValueMissing Name
   -- | Could not translate value into Haskell. Probably a client-side problem.
   | InvalidValue Name Text
-  -- | Found duplicate fields in set.
-  | DuplicateFields [ResolveFieldResult]  -- TODO: Catch this in validation
-  -- | We tried to use an inline fragment with a name that the union
-  -- type does not support.
-  | UnionTypeNotFound Name (SelectionSet Value)
-  -- | We found more than one inline fragment matching the given type condition.
-  | MultipleInlineFragmentsForType Name [InlineFragment FragmentSpread Value]
+  -- | Found validation errors when we tried to merge fields.
+  | ValidationError ValidationErrors
+  -- | Tried to get subselection of leaf field.
+  | SubSelectionOnLeaf (SelectionSetByType Value)
+  -- | Tried to treat an object as a leaf.
+  | MissingSelectionSet
   deriving (Show, Eq)
 
 instance GraphQLError ResolverError where
@@ -90,15 +90,12 @@ instance GraphQLError ResolverError where
     "No value provided for " <> show name <> ", and no default specified."
   formatError (InvalidValue name text) =
     "Could not coerce " <> show name <> " to valid value: " <> text
-  -- TODO: format 'result' nicely
-  formatError (DuplicateFields result) =
-    "Duplicate fields requested: " <> show result
-  formatError (UnionTypeNotFound unionTypeName selectionSet) =
-    "No inline fragment for " <> show unionTypeName
-    <> " (e.g. '... on " <> show unionTypeName <> "') found in selection set: "
-    <> show selectionSet
-  formatError (MultipleInlineFragmentsForType name fragments) =
-    "Multiple inline fragments found for " <> show name <> ": " <> show fragments
+  formatError (ValidationError errs) =
+    "Validation errors: " <> Text.intercalate ", " (map formatError (NonEmpty.toList errs))
+  formatError (SubSelectionOnLeaf ss) =
+    "Tried to get values within leaf field: " <> show ss
+  formatError MissingSelectionSet =
+    "Triet to treat object as if it were leaf field."
 
 -- | Object field separation operator.
 --
@@ -134,6 +131,9 @@ data Result a = Result [ResolverError] a deriving (Show, Functor, Eq)
 aggregateResults :: [Result Value] -> Result Value
 aggregateResults r = toValue <$> sequenceA r
 
+throwE :: Applicative f => ResolverError -> f (Result Value)
+throwE err = pure (Result [err] GValue.ValueNull)
+
 instance Applicative Result where
   pure v = Result [] v
   (Result e1 f) <*> (Result e2 x) = Result (e1 <> e2) (f x)
@@ -141,10 +141,9 @@ instance Applicative Result where
 ok :: Value -> Result Value
 ok = pure
 
-
 class HasResolver m a where
   type Handler m a
-  resolve :: Handler m a -> SelectionSet Value -> m (Result Value)
+  resolve :: Handler m a -> Maybe (SelectionSetByType Value) -> m (Result Value)
 
 -- | Specify a default value for a type in a GraphQL schema.
 --
@@ -179,28 +178,27 @@ instance Defaultable (Maybe a) where
   -- | The default for @Maybe a@ is @Nothing@.
   defaultFor _ = pure Nothing
 
-instance forall m. (Functor m) => HasResolver m Int32 where
+instance forall m. (Applicative m) => HasResolver m Int32 where
   type Handler m Int32 = m Int32
-  -- TODO check that selectionset is empty (we expect a terminal node)
-  resolve handler _ =  do
-    map (ok . toValue) handler
+  resolve handler Nothing = map (ok . toValue) handler
+  resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
-
-instance forall m. (Functor m) => HasResolver m Double where
+instance forall m. (Applicative m) => HasResolver m Double where
   type Handler m Double = m Double
-  -- TODO check that selectionset is empty (we expect a terminal node)
-  resolve handler _ =  map (ok . toValue) handler
+  resolve handler Nothing =  map (ok . toValue) handler
+  resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
-instance forall m. (Functor m) => HasResolver m Text where
+instance forall m. (Applicative m) => HasResolver m Text where
   type Handler m Text = m Text
-  -- TODO check that selectionset is empty (we expect a terminal node)
-  resolve handler _ =  map (ok . toValue) handler
+  resolve handler Nothing =  map (ok . toValue) handler
+  resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
-instance forall m. (Functor m) => HasResolver m Bool where
+instance forall m. (Applicative m) => HasResolver m Bool where
   type Handler m Bool = m Bool
-  -- TODO check that selectionset is empty (we expect a terminal node)
-  resolve handler _ =  map (ok . toValue) handler
+  resolve handler Nothing =  map (ok . toValue) handler
+  resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
+-- XXX: jml really doesn't understand this. What happens to the selection set? What if it's a nullable object?
 instance forall m hg. (HasResolver m hg, Functor m, ToValue (Maybe hg)) => HasResolver m (Maybe hg) where
   type Handler m (Maybe hg) = m (Maybe hg)
   resolve handler _ =  map (ok . toValue) handler
@@ -215,14 +213,15 @@ instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver 
 
 instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver m (API.Enum ksN enum) where
   type Handler m (API.Enum ksN enum) = enum
-  resolve handler _ = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
+  resolve handler Nothing = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
+  resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
 -- TODO: A parametrized `Result` is really not a good way to handle the
 -- "result" for resolveField, but not sure what to use either. Tom liked the
 -- tuple we had before more because it didn't imply any other structure or
 -- meaning. Maybe we can just create a new datatype. jml thinks we should
 -- extract some helpful generic monad, ala `Validator`.
-type ResolveFieldResult = Result (Maybe GValue.ObjectField)
+type ResolveFieldResult = Result (Maybe GValue.Value)
 
 -- Extract field name from an argument type. TODO: ideally we'd run
 -- this directly on the "a :> b" argument structure, but that requires
@@ -241,17 +240,15 @@ resolveField :: forall dispatchType (m :: Type -> Type).
 resolveField handler nextHandler field =
   -- check name before
   case nameFromSymbol @(FieldName dispatchType) of
-    Left err -> pure (Result [SchemaError err] (Just (GValue.ObjectField responseKey GValue.ValueNull)))
+    Left err -> pure (Result [SchemaError err] (Just GValue.ValueNull))
     Right name'
       | getName field == name' ->
           case buildFieldResolver @m @dispatchType handler field of
-            Left err -> pure (Result [err] (Just (GValue.ObjectField responseKey GValue.ValueNull)))
+            Left err -> pure (Result [err] (Just GValue.ValueNull))
             Right resolver -> do
               Result errs value <- resolver
-              pure (Result errs (Just (GValue.ObjectField responseKey value)))
+              pure (Result errs (Just value))
       | otherwise -> nextHandler
-  where
-    responseKey = getResponseKey field
 
 -- We're using our usual trick of rewriting a type in a closed type
 -- family to emulate a closed typeclass. The following are the
@@ -280,8 +277,7 @@ instance forall ksG t m.
   ( KnownSymbol ksG, HasResolver m t, HasAnnotatedType t, Monad m
   ) => BuildFieldResolver m (JustHandler (API.Field ksG t)) where
   buildFieldResolver handler field = do
-    let resolver = resolve @m @t handler (getFieldSelectionSet field)
-    pure resolver
+    pure (resolve @m @t handler (getSubSelectionSet field))
 
 instance forall ksH t f m.
   ( KnownSymbol ksH
@@ -357,10 +353,10 @@ instance forall f fs m dispatchType.
          , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (f :<> fs) where
-  runFields (handler :<> nextHandlers) selection =
-    resolveField @dispatchType @m handler nextHandler selection
+  runFields (handler :<> nextHandlers) field =
+    resolveField @dispatchType @m handler nextHandler field
     where
-      nextHandler = runFields @m @fs nextHandlers selection
+      nextHandler = runFields @m @fs nextHandlers field
 
 instance forall ksM t m dispatchType.
          ( BuildFieldResolver m dispatchType
@@ -386,23 +382,39 @@ instance forall m a b dispatchType.
 
 instance forall typeName interfaces fields m.
          ( RunFields m (RunFieldsType m fields)
+         , API.HasObjectDefinition (API.Object typeName interfaces fields)
          , Monad m
          ) => HasResolver m (API.Object typeName interfaces fields) where
   type Handler m (API.Object typeName interfaces fields) = m (RunFieldsHandler m (RunFieldsType m fields))
 
-  resolve mHandler selectionSet = do
-    -- First we run the actual handler function itself in IO.
-    handler <- mHandler
-    let fields = getFields selectionSet
-    -- We're evaluating an Object so we're collecting ObjectFields from
-    -- runFields and build a GValue.Map with them.
-    r <- forM fields (runFields @m @(RunFieldsType m fields) handler)
-    -- let (errs, fields) = foldr' (\(Result ea fa) (eb, fbs) -> (eb <> ea, fa:fbs)) ([], []) r
-    let (Result errs obj)  = GValue.makeObject . catMaybes <$> sequenceA r
-    case obj of
-      Nothing -> pure (Result [DuplicateFields r] GValue.ValueNull)
-      Just object -> pure (Result errs (GValue.ValueObject object))
+  resolve _ Nothing = throwE MissingSelectionSet
+  resolve mHandler (Just selectionSet) =
+    case getSelectionSet of
+      Left err -> throwE err
+      Right ss -> do
+        -- Run the handler so the field resolvers have access to the object.
+        -- This (and other places, including field resolvers) is where user
+        -- code can do things like look up something in a database.
+        handler <- mHandler
+        r <- traverse (runFields @m @(RunFieldsType m fields) handler) ss
+        let (Result errs obj)  = GValue.objectFromOrderedMap . OrderedMap.catMaybes <$> sequenceA r
+        pure (Result errs (GValue.ValueObject obj))
 
+    where
+      getSelectionSet = do
+        defn <- first SchemaError $ API.getDefinition @(API.Object typeName interfaces fields)
+        -- Fields of a selection set may be behind "type conditions", due to
+        -- inline fragments or the use of fragment spreads. These type
+        -- conditions are represented in the schema by the name of a type
+        -- (e.g. "Dog"). To determine which type conditions (and thus which
+        -- fields) are relevant for this 1selection set, we need to look up the
+        -- actual types they refer to, as interfaces (say) match objects
+        -- differently than unions.
+        --
+        -- See <https://facebook.github.io/graphql/#sec-Field-Collection> for
+        -- more details.
+        (SelectionSet ss') <- first ValidationError $ getSelectionSetForType defn selectionSet
+        pure ss'
 
 -- TODO(tom): we're getting to a point where it might make sense to
 -- split resolver into submodules (GraphQL.Resolver.Union  etc.)
@@ -440,19 +452,20 @@ type role DynamicUnionValue representational representational
 data DynamicUnionValue (union :: Type) (m :: Type -> Type) = DynamicUnionValue { _label :: Text, _value :: GHC.Exts.Any }
 
 class RunUnion m union objects where
-  runUnion :: DynamicUnionValue union m -> InlineFragment FragmentSpread Value -> m (Result Value)
+  runUnion :: DynamicUnionValue union m -> SelectionSetByType Value -> m (Result Value)
 
 instance forall m union objects name interfaces fields.
   ( Monad m
   , KnownSymbol name
   , TypeIndex m (API.Object name interfaces fields) union ~ Handler m (API.Object name interfaces fields)
   , RunFields m (RunFieldsType m fields)
+  , API.HasObjectDefinition (API.Object name interfaces fields)
   , RunUnion m union objects
   ) => RunUnion m union (API.Object name interfaces fields:objects) where
-  runUnion duv fragment@(InlineFragment _ _ selection) =
+  runUnion duv selectionSet =
     case extractUnionValue @(API.Object name interfaces fields) @union @m duv of
-      Just handler -> resolve @m @(API.Object name interfaces fields) handler selection
-      Nothing -> runUnion @m @union @objects duv fragment
+      Just handler -> resolve @m @(API.Object name interfaces fields) handler (Just selectionSet)
+      Nothing -> runUnion @m @union @objects duv selectionSet
 
 -- AFAICT it should not be possible to ever hit the empty case because
 -- the compiler doesn't allow constructing a unionValue that's not in
@@ -471,41 +484,10 @@ instance forall m unionName objects.
   , RunUnion m (API.Union unionName objects) objects
   ) => HasResolver m (API.Union unionName objects) where
   type Handler m (API.Union unionName objects) = m (DynamicUnionValue (API.Union unionName objects) m)
-  -- 'label' is the name of the GraphQL type of the branch of the union that
-  -- we are currently implementing.
-  resolve mHandler selectionSet = do
-    duv@(DynamicUnionValue label _) <- mHandler
-    case makeName label of
-      Left e -> pure (Result [SchemaError e] GValue.ValueNull)
-      Right name ->
-        -- we only need to look at the fragment that matches by name:
-        case findInlineFragmentForType name selectionSet of
-          Left e -> pure (Result [e] GValue.ValueNull)
-          Right inlineFragment -> do
-            -- loop through union handlers and call right one when type matches.
-            runUnion @m @(API.Union unionName objects) @objects duv inlineFragment
-
--- | Inline fragments have optional[*] type conditions. Find the inline
--- fragment in the selection set that matches the named type.
---
--- <https://facebook.github.io/graphql/#sec-Inline-Fragments>
---
--- [*] Except we currently treat type conditions as mandatory. This is a bug.
--- See <https://github.com/jml/graphql-api/issues/70>
---
--- Note: probably want to move this to Validation, esp. as part of work to
--- validate selection sets (see https://github.com/jml/graphql-api/issues/59).
-findInlineFragmentForType :: Name -> SelectionSet Value -> Either ResolverError (InlineFragment FragmentSpread Value)
-findInlineFragmentForType name selectionSet =
-  case mapMaybe getInlineFragment selectionSet of
-    [] -> Left (UnionTypeNotFound name selectionSet)
-    [x] -> Right x
-    xs -> Left (MultipleInlineFragmentsForType name xs)
-  where
-    getInlineFragment (SelectionInlineFragment frag@(InlineFragment (Just (AST.NamedType name')) _ _))
-      | name == name' = Just frag
-      | otherwise = Nothing
-    getInlineFragment _ = Nothing
+  resolve _ Nothing = throwE MissingSelectionSet
+  resolve mHandler (Just selectionSet) = do
+    duv <- mHandler
+    runUnion @m @(API.Union unionName objects) @objects duv selectionSet
 
 symbolText :: forall ks. KnownSymbol ks => Text
 symbolText = toS (symbolVal @ks Proxy)
