@@ -58,8 +58,8 @@ import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Schema (TypeDefinition)
 import GraphQL.Internal.Validation
   ( SelectionSetByType
-  , ExecutionField
   , SelectionSet(..)
+  , Field
   , ValidationErrors
   , getSubSelectionSet
   , getSelectionSetForType
@@ -243,7 +243,7 @@ type family FieldName (a :: Type) = (r :: Symbol) where
 
 resolveField :: forall dispatchType (m :: Type -> Type).
   (BuildFieldResolver m dispatchType, Monad m, KnownSymbol (FieldName dispatchType))
-  => AllTypes -> FieldHandler m dispatchType -> m ResolveFieldResult -> ExecutionField Value -> m ResolveFieldResult
+  => AllTypes -> FieldHandler m dispatchType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
 resolveField allTypes handler nextHandler field =
   -- check name before
   case nameFromSymbol @(FieldName dispatchType) of
@@ -278,7 +278,7 @@ type family FieldHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
   FieldHandler m (EnumArgument (API.Argument ksF (API.Enum name t)) f) = t -> FieldHandler m f
 
 class BuildFieldResolver m fieldResolverType where
-  buildFieldResolver :: AllTypes -> FieldHandler m fieldResolverType -> ExecutionField Value -> Either ResolverError (m (Result Value))
+  buildFieldResolver :: AllTypes -> FieldHandler m fieldResolverType -> Field Value -> Either ResolverError (m (Result Value))
 
 instance forall ksG t m.
   ( KnownSymbol ksG, HasResolver m t, HasAnnotatedType t, Monad m
@@ -351,7 +351,7 @@ class RunFields m a where
   -- Individual implementations are responsible for calling 'runFields' if
   -- they haven't matched the field and there are still candidate fields
   -- within the handler.
-  runFields :: AllTypes -> RunFieldsHandler m a -> ExecutionField Value -> m ResolveFieldResult
+  runFields :: AllTypes -> RunFieldsHandler m a -> Field Value -> m ResolveFieldResult
 
 instance forall f fs m dispatchType.
          ( BuildFieldResolver m dispatchType

@@ -49,7 +49,7 @@ module GraphQL.Internal.Validation
   , SelectionSetByType
   , SelectionSet(..)
   , getSelectionSetForType
-  , ExecutionField
+  , Field
   , lookupArgument
   , getSubSelectionSet
   , ResponseKey
@@ -221,52 +221,51 @@ validateSelectionSet fragments selections = do
 -- | A selection set, almost fully validated.
 --
 -- Sub-selection sets might not be validated.
-newtype SelectionSet value = SelectionSet (OrderedMap ResponseKey (ExecutionField value)) deriving (Eq, Ord, Show)
+newtype SelectionSet value = SelectionSet (OrderedMap ResponseKey (Field value)) deriving (Eq, Ord, Show)
 
 newtype SelectionSetByType value
-  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value)))
+  = SelectionSetByType (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (Field value)))
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 -- | A 'ResponseKey' is the key under which a field appears in a response. If
 -- there's an alias, it's the alias, if not, it's the field name.
 type ResponseKey = Name
 
--- | A field ready to be executed.
--- XXX: Reviewer, the 'Field' name has been freed up. Should I rename this to 'Field'.
-data ExecutionField value
-  = ExecutionField
+-- | A field ready to be resolved.
+data Field value
+  = Field
   { name :: Name
   , arguments :: Arguments value
   , subSelectionSet :: Maybe (SelectionSetByType value)
   } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-instance HasName (ExecutionField value) where
+instance HasName (Field value) where
   getName = name
 
 -- | Get the value of an argument in a field.
-lookupArgument :: ExecutionField value -> Name -> Maybe value
-lookupArgument (ExecutionField _ (Arguments args) _) name = Map.lookup name args
+lookupArgument :: Field value -> Name -> Maybe value
+lookupArgument (Field _ (Arguments args) _) name = Map.lookup name args
 
 -- | Get the selection set within a field.
-getSubSelectionSet :: ExecutionField value -> Maybe (SelectionSetByType value)
+getSubSelectionSet :: Field value -> Maybe (SelectionSetByType value)
 getSubSelectionSet = subSelectionSet
 
 -- | Merge two execution fields. Assumes that they are fields for the same
 -- response key on the same type (i.e. that they are fields we would actually
 -- rationally want to merge).
-mergeFields :: Eq value => ExecutionField value -> ExecutionField value -> Validation (ExecutionField value)
+mergeFields :: Eq value => Field value -> Field value -> Validation (Field value)
 mergeFields field1 field2 = do
   unless (name field1 == name field2) $ throwE (MismatchedNames (name field1) (name field2))
   unless (arguments field1 == arguments field2) $ throwE (MismatchedArguments (name field1))
   case (subSelectionSet field1, subSelectionSet field2) of
     (Nothing, Nothing) ->
-      pure ExecutionField { name = name field1
+      pure Field { name = name field1
                           , arguments = arguments field1
                           , subSelectionSet = Nothing
                           }
     (Just ss1, Just ss2) -> do
       mergedSet <- mergeSelectionSets ss1 ss2
-      pure ExecutionField { name = name field1
+      pure Field { name = name field1
                           , arguments = arguments field1
                           , subSelectionSet = Just mergedSet
                           }
@@ -282,7 +281,7 @@ mergeFields field1 field2 = do
 
 -- | Once we know the GraphQL type of the object that a selection set (i.e. a
 -- 'SelectionSetByType') is for, we can eliminate all the irrelevant types and
--- present a single, flattened map of 'ResponseKey' to 'ExecutionField'.
+-- present a single, flattened map of 'ResponseKey' to 'Field'.
 getSelectionSetForType
   :: Eq value
   => (Name -> Maybe TypeDefinition) -- ^ A function that given a name of a type returns the definition of that type
@@ -332,11 +331,11 @@ groupByResponseKey selectionSet = SelectionSetByType <$>
     byKey :: Eq value
           => Set TypeCondition
           -> Selection' FragmentSpread value
-          -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value)))
+          -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (Field value)))
     byKey typeConds (SelectionField field@(Field' _ name arguments _ ss))
       = case ss of
-          [] -> pure $ OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds .  ExecutionField name arguments $ Nothing
-          _ -> OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds . ExecutionField name arguments . Just <$> groupByResponseKey ss
+          [] -> pure $ OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds .  Field name arguments $ Nothing
+          _ -> OrderedMap.singleton (getResponseKey field) . OrderedMap.singleton typeConds . Field name arguments . Just <$> groupByResponseKey ss
     byKey typeConds (SelectionFragmentSpread (FragmentSpread _ _ (FragmentDefinition _ typeCond _ ss)))
       = flattenSelectionSet (typeConds <> Set.singleton typeCond) ss
     byKey typeConds (SelectionInlineFragment (InlineFragment (Just typeCond) _ ss))
@@ -347,7 +346,7 @@ groupByResponseKey selectionSet = SelectionSetByType <$>
     flattenSelectionSet :: Eq value
                         => Set TypeCondition
                         -> [Selection' FragmentSpread value]
-                        -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (ExecutionField value)))
+                        -> Validation (OrderedMap ResponseKey (OrderedMap (Set TypeCondition) (Field value)))
     flattenSelectionSet typeConds ss = do
       groupedByKey <- traverse (byKey typeConds) ss
       OrderedMap.unionsWithM (OrderedMap.unionWithM mergeFields) groupedByKey
