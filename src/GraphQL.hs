@@ -94,14 +94,7 @@ executeQuery
 executeQuery handler document name variables =
   case getOperation document name variables of
     Left e -> pure (ExecutionFailure (singleError e))
-    Right operation ->
-      case makeSchema @api of
-        Left err -> pure (PreExecutionFailure (toError err :| []))
-        Right allTypes ->
-          -- TODO: At this point we know that the schema is valid (at least
-          -- name-wise, which is all we check at the moment. Would be great to
-          -- pass evidence of that down to resolvers.
-          toResult <$> resolve @m @api allTypes handler (Just operation)
+    Right operation -> toResult <$> resolve @m @api handler (Just operation)
   where
     toResult (Result errors result) =
       case result of
