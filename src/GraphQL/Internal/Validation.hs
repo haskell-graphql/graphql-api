@@ -72,7 +72,12 @@ import GraphQL.Internal.Syntax.AST (Alias, TypeCondition, Variable, NamedType(..
 import GraphQL.Internal.OrderedMap (OrderedMap)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
-import GraphQL.Internal.Schema (TypeDefinition, ObjectTypeDefinition, doesFragmentTypeApply)
+import GraphQL.Internal.Schema
+  ( TypeDefinition
+  , ObjectTypeDefinition
+  , Schema
+  , doesFragmentTypeApply
+  )
 import GraphQL.Value
   ( Value
   , Value'
@@ -122,8 +127,8 @@ type Operations value = Map Name (Operation value)
 --
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
-validate :: AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument VariableValue)
-validate (AST.QueryDocument defns) = runValidator $ do
+validate :: Schema -> AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument VariableValue)
+validate _ (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, named) = splitBy splitOps operations
   (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions fragments
@@ -790,9 +795,9 @@ type Validation = Validator ValidationError
 -- An empty list means no errors.
 --
 -- <https://facebook.github.io/graphql/#sec-Validation>
-getErrors :: AST.QueryDocument -> [ValidationError]
-getErrors doc =
-  case validate doc of
+getErrors :: Schema -> AST.QueryDocument -> [ValidationError]
+getErrors schema doc =
+  case validate schema doc of
     Left errors -> NonEmpty.toList errors
     Right _ -> []
 

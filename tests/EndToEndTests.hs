@@ -10,7 +10,7 @@ import Protolude
 
 import Data.Aeson (Value(Null), toJSON, object, (.=))
 import qualified Data.Map as Map
-import GraphQL (compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
+import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
 import GraphQL.API (Object, Field)
 import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler)
@@ -274,14 +274,16 @@ tests = testSpec "End-to-end tests" $ do
       toJSON (toValue response) `shouldBe` expected
     describe "Handles variables" $ do
       let root = pure (viewServerDog mortgage)
+      let Right schema = makeSchema @Dog
       let Right query =
-            compileQuery [r|query myQuery($whichCommand: DogCommand) {
-                              dog {
-                                name
-                                doesKnowCommand(dogCommand: $whichCommand)
-                              }
-                            }
-                           |]
+            compileQuery schema
+            [r|query myQuery($whichCommand: DogCommand) {
+                 dog {
+                   name
+                   doesKnowCommand(dogCommand: $whichCommand)
+                 }
+               }
+              |]
       it "Errors when no variables provided" $ do
         response <- executeQuery  @QueryRoot root query Nothing mempty
         let expected =

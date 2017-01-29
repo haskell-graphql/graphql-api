@@ -12,6 +12,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Internal.Name (Name, unsafeMakeName)
 import qualified GraphQL.Internal.Syntax.AST as AST
+import GraphQL.Internal.Schema (Schema)
 import GraphQL.Internal.Validation
   ( ValidationError(..)
   , findDuplicates
@@ -23,6 +24,11 @@ me = unsafeMakeName "me"
 
 someName :: Name
 someName = unsafeMakeName "name"
+
+-- | Schema used for these tests. Since none of them do type-level stuff, we
+-- don't need to define it.
+schema :: Schema
+schema = undefined
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do
@@ -37,7 +43,7 @@ tests = testSpec "Validation" $ do
                     )
                   )
                 ]
-      getErrors doc `shouldBe` []
+      getErrors schema doc `shouldBe` []
 
     it "Detects duplicate operation names" $ do
       let doc = AST.QueryDocument
@@ -56,7 +62,7 @@ tests = testSpec "Validation" $ do
                     )
                   )
                 ]
-      getErrors doc `shouldBe` [DuplicateOperation me]
+      getErrors schema doc `shouldBe` [DuplicateOperation me]
 
     it "Detects duplicate anonymous operations" $ do
       let doc = AST.QueryDocument
@@ -71,7 +77,7 @@ tests = testSpec "Validation" $ do
                     ]
                   )
                 ]
-      getErrors doc `shouldBe` [MixedAnonymousOperations 2 []]
+      getErrors schema doc `shouldBe` [MixedAnonymousOperations 2 []]
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do

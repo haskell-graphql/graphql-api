@@ -7,14 +7,19 @@
 -- __Note__: This module is highly subject to change. We're still figuring
 -- where to draw the lines and what to expose.
 module GraphQL
-  ( QueryError
+  (
+    -- * Running queries
+    interpretQuery
+  , interpretAnonymousQuery
   , Response(..)
-  , VariableValues
-  , Value
+    -- * Preparing queries then running them
+  , makeSchema
   , compileQuery
   , executeQuery
-  , interpretQuery
-  , interpretAnonymousQuery
+  , QueryError
+  , Schema
+  , VariableValues
+  , Value
   ) where
 
 import Protolude
@@ -44,7 +49,8 @@ import GraphQL.Internal.Output
   , Response(..)
   , singleError
   )
-import GraphQL.Internal.Schema (makeSchema)
+import GraphQL.Internal.Schema (Schema)
+import qualified GraphQL.Internal.Schema as Schema
 import GraphQL.Resolver (HasResolver(..), Result(..))
 import GraphQL.Value (Name, NameError, Value, pattern ValueObject)
 
@@ -89,8 +95,8 @@ executeQuery handler document name variables =
   case getOperation document name variables of
     Left e -> pure (ExecutionFailure (singleError e))
     Right operation ->
-      case getAllTypes of
-        Left err -> pure (PreExecutionFailure (toError (SchemaError err) :| []))
+      case makeSchema @api of
+        Left err -> pure (PreExecutionFailure (toError err :| []))
         Right allTypes ->
           -- TODO: At this point we know that the schema is valid (at least
           -- name-wise, which is all we check at the moment. Would be great to
@@ -107,7 +113,9 @@ executeQuery handler document name variables =
             Just errs -> PartialSuccess object (map toError errs)
         v -> ExecutionFailure (singleError (NonObjectResult v))
 
-    getAllTypes = makeSchema <$> getDefinition @api
+-- | Create a GraphQL schema.
+makeSchema :: forall api. HasObjectDefinition api => Either QueryError Schema
+makeSchema = first SchemaError (Schema.makeSchema <$> getDefinition @api)
 
 -- | Interpet a GraphQL query.
 --
@@ -120,11 +128,9 @@ interpretQuery
   -> VariableValues -- ^ Values for variables defined in the query document. A map of 'Variable' to 'Value'.
   -> m Response -- ^ The outcome of running the query.
 interpretQuery handler query name variables =
-  case compileQuery query of
+  case makeSchema @api >>= flip compileQuery query of
     Left err -> pure (PreExecutionFailure (toError err :| []))
-    Right document ->
-      executeQuery @api @m handler document name variables
-
+    Right document -> executeQuery @api @m handler document name variables
 
 -- | Interpret an anonymous GraphQL query.
 --
@@ -137,10 +143,10 @@ interpretAnonymousQuery
 interpretAnonymousQuery handler query = interpretQuery @api @m handler query Nothing mempty
 
 -- | Turn some text into a valid query document.
-compileQuery :: Text -> Either QueryError (QueryDocument VariableValue)
-compileQuery query = do
+compileQuery :: Schema -> Text -> Either QueryError (QueryDocument VariableValue)
+compileQuery schema query = do
   parsed <- first ParseError (parseQuery query)
-  first ValidationError (validate parsed)
+  first ValidationError (validate schema parsed)
 
 -- | Parse a query document.
 parseQuery :: Text -> Either Text AST.QueryDocument
