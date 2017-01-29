@@ -198,11 +198,6 @@ instance forall m. (Applicative m) => HasResolver m Bool where
   resolve handler Nothing =  map (ok . toValue) handler
   resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
--- XXX: jml really doesn't understand this. What happens to the selection set? What if it's a nullable object?
-instance forall m hg. (HasResolver m hg, Functor m, ToValue (Maybe hg)) => HasResolver m (Maybe hg) where
-  type Handler m (Maybe hg) = m (Maybe hg)
-  resolve handler _ =  map (ok . toValue) handler
-
 instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver m (API.List hg) where
   type Handler m (API.List hg) = m [Handler m hg]
   resolve handler selectionSet = do
@@ -210,17 +205,24 @@ instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver 
     let a = traverse (flip (resolve @m @hg) selectionSet) h
     map aggregateResults a
 
-
 instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver m (API.Enum ksN enum) where
   type Handler m (API.Enum ksN enum) = enum
   resolve handler Nothing = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
   resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
+
+-- TODO: This is our handler for `Maybe a`, which is currently used to
+-- implement nullable types. It's *probably* broken, in that it's discarding
+-- the selection set. <https://github.com/jml/graphql-api/issues/102>
+instance forall m hg. (HasResolver m hg, Functor m, ToValue (Maybe hg)) => HasResolver m (Maybe hg) where
+  type Handler m (Maybe hg) = m (Maybe hg)
+  resolve handler _ =  map (ok . toValue) handler
 
 -- TODO: A parametrized `Result` is really not a good way to handle the
 -- "result" for resolveField, but not sure what to use either. Tom liked the
 -- tuple we had before more because it didn't imply any other structure or
 -- meaning. Maybe we can just create a new datatype. jml thinks we should
 -- extract some helpful generic monad, ala `Validator`.
+-- <https://github.com/jml/graphql-api/issues/98>
 type ResolveFieldResult = Result (Maybe GValue.Value)
 
 -- Extract field name from an argument type. TODO: ideally we'd run
