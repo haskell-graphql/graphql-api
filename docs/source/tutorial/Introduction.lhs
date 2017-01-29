@@ -39,6 +39,9 @@ Which means we have base type, an _object_ called `Hello`, which has a single
 _field_ `greeting`, which takes a non-nullable `String` called `who` and
 returns a `String`.
 
+Note that all the types here are GraphQL types, not Haskell types. `String`
+here is a GraphQL `String`, not a Haskell one.
+
 And we want to be able to send queries that look like:
 
 ```graphql
@@ -72,11 +75,14 @@ object (also named `"Hello"`) that implements no interfaces (hence `'[]`). It
 has one field, called `"greeting"` which returns some `Text` and takes a
 single named argument `"who"`, which is also `Text`.
 
+Note that the GraphQL `String` from above got translated into a Haskell
+`Text`.
+
 There are some noteworthy differences between this schema and the GraphQL
 schema:
 
 * The GraphQL schema requires a special annotation to say that a value cannot
-  be null, `!`. In Haskell, we instead assume that everything can't be null.
+  be null, `!`. In Haskell, we instead assume that nothing can be null.
 * In the GraphQL schema, the argument appears *after* the field name. In
   Haskell, it appears *before*.
 * In Haskell, we name the top-level type twice, once on left hand side of the
@@ -111,8 +117,8 @@ The second layer of the handler, the implementation of `greeting`, produces
 the value of the `greeting` field. It is monadic so that it will only be
 executed when the field was requested.
 
-Each handler is a separate monadic action so we only perform the side effects
-for fields present in the query.
+Each field handler is a separate monadic action so we only perform the side
+effects for fields present in the query.
 
 This handler is in `Identity` because it doesn't do anything particularly
 monadic. It could be in `IO` or `STM` or `ExceptT Text IO` or whatever you
@@ -127,8 +133,8 @@ queryHello :: IO Response
 queryHello = interpretAnonymousQuery @Hello hello "{ greeting(who: \"mort\") }"
 ```
 
-The actual `Response` type is fairly big, so we're most likely to turn it into
-JSON:
+The actual `Response` type is fairly verbose, so we're most likely to turn it
+into JSON:
 
 ```
 λ Aeson.encode <$> queryHello
@@ -255,13 +261,13 @@ union UserOrCalculator = User | Calculator
 And now in Haskell:
 
 ```haskell
-type UserOrCalcualtor = Union "UserOrCalcualtor" '[User, Calculator]
+type UserOrCalculator = Union "UserOrCalculator" '[User, Calculator]
 ```
 
-And let's define a very simple top-level object that uses `UserOrCalcualtor`:
+And let's define a very simple top-level object that uses `UserOrCalculator`:
 
 ```haskell
-type UnionQuery = Object "UnionQuery" '[] '[Field "union" UserOrCalcualtor]
+type UnionQuery = Object "UnionQuery" '[] '[Field "union" UserOrCalculator]
 ```
 
 and a handler that randomly returns either a user or a calculator:
