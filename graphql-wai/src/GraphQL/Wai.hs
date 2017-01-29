@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- | Basic WAI handlers for graphql-api
 module GraphQL.Wai
   ( toApplication
   ) where
@@ -9,6 +10,7 @@ module GraphQL.Wai
 import Protolude
 
 import GraphQL (interpretAnonymousQuery)
+import GraphQL.API (HasObjectDefinition)
 import GraphQL.Resolver (HasResolver, Handler)
 import Network.Wai (Application, queryString, responseLBS)
 import GraphQL.Value.ToValue (toValue)
@@ -23,7 +25,9 @@ import qualified Data.Aeson as Aeson
 --
 -- If you have a 'Cat' type and a corresponding 'catHandler' then you
 -- can use "toApplication @Cat catHandler".
-toApplication :: forall r. (HasResolver IO r) => Handler IO r -> Application
+toApplication
+  :: forall r. (HasResolver IO r, HasObjectDefinition r)
+  => Handler IO r -> Application
 toApplication handler = app
   where
     app req respond =
