@@ -23,7 +23,7 @@ library
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -62,7 +62,7 @@ test-suite graphql-api-doctests
   hs-source-dirs:
       tests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -Werror -threaded
+  ghc-options: -Wall -fno-warn-redundant-constraints -threaded
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -90,7 +90,7 @@ test-suite graphql-api-tests
   hs-source-dirs:
       tests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
@@ -126,7 +126,7 @@ benchmark criterion
   hs-source-dirs:
       benchmarks
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
-  ghc-options: -Wall -fno-warn-redundant-constraints -Werror
+  ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
     , protolude
