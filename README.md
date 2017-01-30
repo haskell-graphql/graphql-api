@@ -78,7 +78,7 @@ We are tracking open problems, missing features & wishlist items in [GitHub's is
 * Near future:
   - Better error messages (this is really important to us)
   - Full support for recursive data types
-  - Close off lose ends in current implementation & gather feedback
+  - Close off loose ends in current implementation & gather feedback
 * Medium future:
   - Full schema validation
   - Schema introspection
