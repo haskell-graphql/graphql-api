@@ -17,5 +17,5 @@ main = doctest $ ["-isrc"] <> options <> files
                  ]
     -- library code and examples
     files = [ "src/"
-            , "examples/"
+            , "tests/Examples/"
             ]
