@@ -6,6 +6,9 @@
 module GraphQL.Internal.Syntax.AST
   ( Name(unName)
   , nameParser
+  , NameError(..)
+  , unsafeMakeName
+  , makeName
   , QueryDocument(..)
   , SchemaDocument(..)
   , Definition(..)
@@ -54,6 +57,7 @@ import Protolude hiding (Type)
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
+import Data.String (IsString(..))
 import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
@@ -65,6 +69,37 @@ import GraphQL.Internal.Syntax.Tokens (tok)
 --
 -- https://facebook.github.io/graphql/#sec-Names
 newtype Name = Name { unName :: Text } deriving (Eq, Ord, Show)
+
+-- | Create a 'Name', panicking if the given text is invalid.
+--
+-- Prefer 'makeName' to this in all cases.
+--
+-- >>> unsafeMakeName "foo"
+-- Name {unName = "foo"}
+unsafeMakeName :: HasCallStack => Text -> Name
+unsafeMakeName name =
+  case makeName name of
+    Left e -> panic (show e)
+    Right n -> n
+
+-- | Create a 'Name'.
+--
+-- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
+-- not match, return Nothing.
+--
+-- >>> makeName "foo"
+-- Right (Name {unName = "foo"})
+-- >>> makeName "9-bar"
+-- Left (NameError "9-bar")
+makeName :: Text -> Either NameError Name
+makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
+
+-- | An invalid name.
+newtype NameError = NameError Text deriving (Eq, Show)
+
+
+instance IsString Name where
+  fromString = unsafeMakeName . toS
 
 instance Aeson.ToJSON Name where
   toJSON = Aeson.toJSON . unName
