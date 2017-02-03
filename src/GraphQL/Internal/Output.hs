@@ -21,7 +21,7 @@ import GraphQL.Value
   , pattern ValueNull
   , NameError(..)
   )
-import GraphQL.Internal.Name (unsafeMakeName)
+import GraphQL.Internal.Name (Name)
 import GraphQL.Value.ToValue (ToValue(..))
 
 -- | GraphQL response.
@@ -61,9 +61,9 @@ data Response
 -- | Construct an object from a list of names and values.
 --
 -- Panic if there are duplicate names.
-unsafeMakeObject :: HasCallStack => [(Text, Value)] -> Value
+unsafeMakeObject :: HasCallStack => [(Name, Value)] -> Value
 unsafeMakeObject fields =
-  case objectFromList (map (first unsafeMakeName) fields) of
+  case objectFromList fields of
     Nothing -> panic $ "Object has duplicate keys: " <> show fields
     Just object -> ValueObject object
 

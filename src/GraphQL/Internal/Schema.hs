@@ -44,7 +44,7 @@ import Protolude hiding (Type)
 
 import qualified Data.Map as Map
 import GraphQL.Value (Value)
-import GraphQL.Internal.Name (HasName(..), Name, unsafeMakeName)
+import GraphQL.Internal.Name (HasName(..), Name)
 
 -- | An entire GraphQL schema.
 --
@@ -215,13 +215,11 @@ data Builtin
   | GID deriving (Eq, Ord, Show)
 
 instance HasName Builtin where
-  getName = unsafeMakeName . getBuiltinName
-    where
-      getBuiltinName GInt = "Int"
-      getBuiltinName GBool = "Boolean"
-      getBuiltinName GString = "String"
-      getBuiltinName GFloat = "Float"
-      getBuiltinName GID = "ID"
+  getName GInt = "Int"
+  getName GBool = "Boolean"
+  getName GString = "String"
+  getName GFloat = "Float"
+  getName GID = "ID"
 
 data EnumTypeDefinition = EnumTypeDefinition Name [EnumValueDefinition]
                           deriving (Eq, Ord, Show)

@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
 module SchemaTests (tests) where
 
@@ -18,7 +17,6 @@ import GraphQL.API
   , getFieldDefinition
   , getInterfaceDefinition
   )
-import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Internal.Schema
   ( EnumTypeDefinition(..)
   , EnumValueDefinition(..)
@@ -41,33 +39,33 @@ tests :: IO TestTree
 tests = testSpec "Type" $ do
   describe "Field" $
     it "encodes correctly" $ do
-    getFieldDefinition @(Field "hello" Int) `shouldBe` Right (FieldDefinition (unsafeMakeName "hello") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))
+    getFieldDefinition @(Field "hello" Int) `shouldBe` Right (FieldDefinition "hello" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))
   describe "Interface" $
     it "encodes correctly" $ do
     getInterfaceDefinition @Sentient `shouldBe`
       Right (InterfaceTypeDefinition
-        (unsafeMakeName "Sentient")
-        (NonEmptyList [FieldDefinition (unsafeMakeName "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
+        "Sentient"
+        (NonEmptyList [FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
   describe "full example" $
     it "encodes correctly" $ do
     getDefinition @Human `shouldBe`
-      Right (ObjectTypeDefinition (unsafeMakeName "Human")
-        [ InterfaceTypeDefinition (unsafeMakeName "Sentient") (
-            NonEmptyList [FieldDefinition (unsafeMakeName "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
+      Right (ObjectTypeDefinition "Human"
+        [ InterfaceTypeDefinition "Sentient" (
+            NonEmptyList [FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
         ]
-        (NonEmptyList [FieldDefinition (unsafeMakeName "name") [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
+        (NonEmptyList [FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
   describe "output Enum" $
     it "encodes correctly" $ do
     getAnnotatedType @(Enum "DogCommand" DogCommand) `shouldBe`
-       Right (TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum (EnumTypeDefinition (unsafeMakeName "DogCommand")
-         [ EnumValueDefinition (unsafeMakeName "Sit")
-         , EnumValueDefinition (unsafeMakeName "Down")
-         , EnumValueDefinition (unsafeMakeName "Heel")
+       Right (TypeNonNull (NonNullTypeNamed (DefinedType (TypeDefinitionEnum (EnumTypeDefinition "DogCommand"
+         [ EnumValueDefinition "Sit"
+         , EnumValueDefinition "Down"
+         , EnumValueDefinition "Heel"
          ])))))
   describe "Union type" $
     it "encodes correctly" $ do
     getAnnotatedType @CatOrDog `shouldBe`
-      TypeNamed . DefinedType . TypeDefinitionUnion . UnionTypeDefinition (unsafeMakeName "CatOrDog")
+      TypeNamed . DefinedType . TypeDefinitionUnion . UnionTypeDefinition "CatOrDog"
         . NonEmptyList <$> sequence [ getDefinition @Cat
                                     , getDefinition @Dog
                                     ]

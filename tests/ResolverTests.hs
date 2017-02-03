@@ -24,7 +24,6 @@ import GraphQL.Resolver
   , ResolverError(..)
   , (:<>)(..)
   )
-import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Internal.Output (singleError)
 
 -- Test a custom error monad
@@ -46,7 +45,7 @@ tests = testSpec "TypeAPI" $ do
       encode object `shouldBe` "{\"t\":12}"
     it "complains about missing field" $ do
       Right (PartialSuccess _ errs) <- runExceptT (interpretAnonymousQuery @T tHandler "{ not_a_field }")
-      errs `shouldBe` singleError (FieldNotFoundError (unsafeMakeName "not_a_field"))
+      errs `shouldBe` singleError (FieldNotFoundError "not_a_field")
     it "complains about missing argument" $ do
       Right (PartialSuccess _ errs) <- runExceptT (interpretAnonymousQuery @T tHandler "{ t }")
-      errs `shouldBe` singleError (ValueMissing (unsafeMakeName "x"))
+      errs `shouldBe` singleError (ValueMissing "x")
