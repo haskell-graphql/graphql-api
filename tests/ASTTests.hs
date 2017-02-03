@@ -13,7 +13,7 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Value (String(..))
-import GraphQL.Internal.Name (Name, unsafeMakeName)
+import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import qualified GraphQL.Internal.Syntax.Parser as Parser
 import qualified GraphQL.Internal.Syntax.Encoder as Encoder
@@ -22,10 +22,10 @@ kitchenSink :: Text
 kitchenSink = "query queryName($foo:ComplexType,$site:Site=MOBILE){whoever123is:node(id:[123,456]){id,... on User@defer{field2{id,alias:field1(first:10,after:$foo)@include(if:$foo){id,...frag}}}}}mutation likeStory{like(story:123)@defer{story{id}}}fragment frag on Friend{foo(size:$size,bar:$b,obj:{key:\"value\"})}\n"
 
 dog :: Name
-dog = unsafeMakeName "dog"
+dog = "dog"
 
 someName :: Name
-someName = unsafeMakeName "name"
+someName = "name"
 
 tests :: IO TestTree
 tests = testSpec "AST" $ do
@@ -62,9 +62,9 @@ tests = testSpec "AST" $ do
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue
-                     [ AST.ObjectField (unsafeMakeName "s")
+                     [ AST.ObjectField "s"
                        (AST.ValueString (AST.StringValue "\224\225v^6{FPDk\DC3\a")),
-                       AST.ObjectField (unsafeMakeName "Hsr") (AST.ValueInt 0)
+                       AST.ObjectField "Hsr" (AST.ValueInt 0)
                      ])
         let output = Encoder.value input
         parseOnly Parser.value output `shouldBe` Right input
@@ -121,11 +121,11 @@ tests = testSpec "AST" $ do
                          ])
                      , AST.DefinitionOperation
                        (AST.Query
-                        (AST.Node (unsafeMakeName "getName") [] []
+                        (AST.Node "getName" [] []
                          [ AST.SelectionField
                            (AST.Field Nothing dog [] []
                             [ AST.SelectionField
-                              (AST.Field Nothing (unsafeMakeName "owner") [] []
+                              (AST.Field Nothing "owner" [] []
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
                             ])
@@ -145,18 +145,18 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node (unsafeMakeName "houseTrainedQuery")
+                           (AST.Node "houseTrainedQuery"
                             [ AST.VariableDefinition
-                                (AST.Variable (unsafeMakeName "atOtherHomes"))
-                                (AST.TypeNamed (AST.NamedType (unsafeMakeName "Boolean")))
+                                (AST.Variable "atOtherHomes")
+                                (AST.TypeNamed (AST.NamedType "Boolean"))
                                 (Just (AST.ValueBoolean True))
                             ] []
                             [ AST.SelectionField
                                 (AST.Field Nothing dog [] []
                                  [ AST.SelectionField
-                                     (AST.Field Nothing (unsafeMakeName "isHousetrained")
-                                      [ AST.Argument (unsafeMakeName "atOtherHomes")
-                                          (AST.ValueVariable (AST.Variable (unsafeMakeName "atOtherHomes")))
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
                             ]))

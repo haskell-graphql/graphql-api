@@ -9,7 +9,6 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
-import GraphQL.Internal.Name (unsafeMakeName)
 import GraphQL.Value
   ( Object
   , ObjectField'(..)
@@ -28,19 +27,19 @@ tests = testSpec "Value" $ do
     it "returns empty on empty list" $ do
       unionObjects [] `shouldBe` (objectFromList [] :: Maybe Object)
     it "merges objects" $ do
-      let (Just foo) = objectFromList [ (unsafeMakeName "foo", toValue @Int32 1)
-                                      , (unsafeMakeName "bar",toValue @Int32 2)]
-      let (Just bar) = objectFromList [ (unsafeMakeName "bar", toValue @Text "cow")
-                                      , (unsafeMakeName "baz",toValue @Int32 3)]
+      let (Just foo) = objectFromList [ ("foo", toValue @Int32 1)
+                                      , ("bar",toValue @Int32 2)]
+      let (Just bar) = objectFromList [ ("bar", toValue @Text "cow")
+                                      , ("baz",toValue @Int32 3)]
       let observed = unionObjects [foo, bar]
       observed `shouldBe` Nothing
     it "merges objects with unique keys" $ do
-      let (Just foo) = objectFromList [(unsafeMakeName "foo", toValue @Int32 1)]
-      let (Just bar) = objectFromList [ (unsafeMakeName "bar", toValue @Text "cow")
-                                      , (unsafeMakeName "baz",toValue @Int32 3)]
-      let (Just expected) = objectFromList [ (unsafeMakeName "foo", toValue @Int32 1)
-                                           , (unsafeMakeName "bar", toValue @Text "cow")
-                                           , (unsafeMakeName "baz", toValue @Int32 3)
+      let (Just foo) = objectFromList [("foo", toValue @Int32 1)]
+      let (Just bar) = objectFromList [ ("bar", toValue @Text "cow")
+                                      , ("baz",toValue @Int32 3)]
+      let (Just expected) = objectFromList [ ("foo", toValue @Int32 1)
+                                           , ("bar", toValue @Text "cow")
+                                           , ("baz", toValue @Int32 3)
                                            ]
       let (Just observed) = unionObjects [foo, bar]
       observed `shouldBe` expected
@@ -57,8 +56,8 @@ tests = testSpec "Value" $ do
     prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
   describe "AST" $ do
     it "Objects converted from AST have unique fields" $ do
-      let input = AST.ObjectValue [ AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "bar"))
-                                  , AST.ObjectField (unsafeMakeName "foo") (AST.ValueString (AST.StringValue "qux"))
+      let input = AST.ObjectValue [ AST.ObjectField "foo" (AST.ValueString (AST.StringValue "bar"))
+                                  , AST.ObjectField "foo" (AST.ValueString (AST.StringValue "qux"))
                                   ]
       astToVariableValue (AST.ValueObject input) `shouldBe` Nothing
 

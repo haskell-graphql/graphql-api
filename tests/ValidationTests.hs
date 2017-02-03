@@ -10,7 +10,7 @@ import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.Internal.Name (Name, unsafeMakeName)
+import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Schema (Schema)
 import GraphQL.Internal.Validation
@@ -20,10 +20,10 @@ import GraphQL.Internal.Validation
   )
 
 me :: Name
-me = unsafeMakeName "me"
+me = "me"
 
 someName :: Name
-someName = unsafeMakeName "name"
+someName = "name"
 
 -- | Schema used for these tests. Since none of them do type-level stuff, we
 -- don't need to define it.
