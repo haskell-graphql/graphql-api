@@ -3,7 +3,7 @@
 -- see: https://github.com/sol/hpack
 
 name:           graphql-api
-version:        0.1.1
+version:        0.1.2
 synopsis:       Sketch of GraphQL stuff
 description:    Please see README.md
 category:       Web
