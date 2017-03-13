@@ -95,7 +95,7 @@ instance GraphQLError ResolverError where
   formatError (SubSelectionOnLeaf ss) =
     "Tried to get values within leaf field: " <> show ss
   formatError MissingSelectionSet =
-    "Triet to treat object as if it were leaf field."
+    "Tried to treat object as if it were leaf field."
 
 -- | Object field separation operator.
 --
