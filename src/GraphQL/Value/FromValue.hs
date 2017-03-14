@@ -81,8 +81,7 @@ prop_roundtripValue x = fromValue (toValue x) == Right x
 
 -- | Throw an error saying that @value@ does not have the @expected@ type.
 wrongType :: (MonadError Text m, Show a) => Text -> a -> m b
-wrongType expected value = throwError ("Wrong type, should be " <> expected <> show value)
-
+wrongType expected value = throwError ("Wrong type, should be: `" <> expected <> "` but is: `" <> show value <> "`")
 
 -- We only allow generic record reading for now because I am not sure
 -- how we should interpret any other generic things (e.g. tuples).
