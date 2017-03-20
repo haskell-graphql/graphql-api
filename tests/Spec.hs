@@ -13,7 +13,7 @@ import qualified ResolverTests
 import qualified SchemaTests
 import qualified ValidationTests
 import qualified ValueTests
-import qualified EnumTests
+import qualified EnumTests ()
 
 -- import examples to ensure they compile
 import Examples.InputObject ()

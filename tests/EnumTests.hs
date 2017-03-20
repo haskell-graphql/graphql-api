@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module EnumTests (tests) where
+module EnumTests () where
 
 import Protolude hiding (Enum)
 
