@@ -42,29 +42,21 @@ instance forall conName m p f nt.
   genericEnumFromValue name = M1 <$> genericEnumFromValue name
   genericEnumToValue (M1 gv) = genericEnumToValue gv
 
-instance forall conName f p b.
-  ( KnownSymbol conName
-  , GenericEnumValues f
-  ) => GenericEnumValues (C1 ('MetaCons conName p b) U1 :+: f) where
-  genericEnumValues = let name = nameFromSymbol @conName in name:genericEnumValues @f
+instance forall left right.
+  ( GenericEnumValues left
+  , GenericEnumValues right
+  ) => GenericEnumValues (left :+: right) where
+  genericEnumValues = genericEnumValues @left <> genericEnumValues @right
   genericEnumFromValue vname =
-    case nameFromSymbol @conName of
-      Right name -> if name == vname
-                    then L1 <$> Right (M1 U1)
-                    else R1 <$> genericEnumFromValue vname
-      Left x -> invalidEnumName x
-  genericEnumToValue (L1 _) =
-    case nameFromSymbol @conName of
-      Right name -> name
-      -- XXX: This is impossible to catch during validation, because we cannot
-      -- validate type-level symbols, we can only validate values. We could
-      -- show that the schema is invalid at the type-level and still decide to
-      -- call this anyway. The error should rather say that the schema is
-      -- invalid.
-      --
-      -- Further, we don't actually have any schema-level validation, so
-      -- "should have been caught during validation" is misleading.
-      Left err -> panic ("Invalid name: " <> show err <> ". This should have been caught during validation. Please file a bug.")
+    let left = genericEnumFromValue @left vname
+        right = genericEnumFromValue @right vname
+    in case (left, right) of
+      (x@(Right _), Left _) -> L1 <$> x
+      (Left _, x@(Right _)) -> R1 <$> x
+      (err@(Left _), Left _) -> L1 <$> err
+      _ -> panic "Can't have two successful branches in Haskell"
+
+  genericEnumToValue (L1 gv) = genericEnumToValue gv
   genericEnumToValue (R1 gv) = genericEnumToValue gv
 
 instance forall conName p b. (KnownSymbol conName) => GenericEnumValues (C1 ('MetaCons conName p b) U1) where
@@ -74,6 +66,14 @@ instance forall conName p b. (KnownSymbol conName) => GenericEnumValues (C1 ('Me
       Right name -> if name == vname
                     then Right (M1 U1)
                     else Left ("Not a valid choice for enum: " <> show vname)
+      -- XXX: This is impossible to catch during validation, because we cannot
+      -- validate type-level symbols, we can only validate values. We could
+      -- show that the schema is invalid at the type-level and still decide to
+      -- call this anyway. The error should rather say that the schema is
+      -- invalid.
+      --
+      -- Further, we don't actually have any schema-level validation, so
+      -- "should have been caught during validation" is misleading.
       Left x -> invalidEnumName x
   genericEnumToValue (M1 _) =
     let Right name = nameFromSymbol @conName
