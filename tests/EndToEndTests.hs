@@ -61,7 +61,7 @@ isHouseTrained dog (Just True) = houseTrainedElsewhere dog
 viewServerDog :: ServerDog -> Handler IO Dog
 viewServerDog dog@(ServerDog{..}) = pure $
   pure name :<>
-  pure nickname :<>
+  pure (fmap pure nickname) :<>
   pure barkVolume :<>
   pure . doesKnowCommand dog :<>
   pure . isHouseTrained dog :<>
@@ -326,4 +326,3 @@ tests = testSpec "End-to-end tests" $ do
                 ]
               ]
         toJSON (toValue response) `shouldBe` expected
-

@@ -210,12 +210,13 @@ instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver
   resolve handler Nothing = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
   resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
--- TODO: This is our handler for `Maybe a`, which is currently used to
--- implement nullable types. It's *probably* broken, in that it's discarding
--- the selection set. <https://github.com/jml/graphql-api/issues/102>
-instance forall m hg. (HasResolver m hg, Functor m, ToValue (Maybe hg)) => HasResolver m (Maybe hg) where
-  type Handler m (Maybe hg) = m (Maybe hg)
-  resolve handler _ =  map (ok . toValue) handler
+instance forall m hg. (HasResolver m hg, Monad m) => HasResolver m (Maybe hg) where
+  type Handler m (Maybe hg) = m (Maybe (Handler m hg))
+  resolve handler selectionSet = do
+    result <- handler
+    case result of
+      Just x -> resolve @m @hg (x :: Handler m hg) selectionSet
+      Nothing -> (pure . ok) GValue.ValueNull
 
 -- TODO: A parametrized `Result` is really not a good way to handle the
 -- "result" for resolveField, but not sure what to use either. Tom liked the
