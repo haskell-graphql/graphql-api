@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.15.0.
+-- This file has been generated from package.yaml by hpack version 0.17.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -26,7 +26,7 @@ library
   ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
-    , protolude
+    , protolude < 0.2
     , exceptions
     , transformers
     , attoparsec
@@ -65,7 +65,7 @@ test-suite graphql-api-doctests
   ghc-options: -Wall -fno-warn-redundant-constraints -threaded
   build-depends:
       base >= 4.9 && < 5
-    , protolude
+    , protolude < 0.2
     , exceptions
     , transformers
     , attoparsec
@@ -94,7 +94,7 @@ test-suite graphql-api-tests
   ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
-    , protolude
+    , protolude < 0.2
     , exceptions
     , transformers
     , attoparsec
@@ -131,7 +131,7 @@ benchmark criterion
   ghc-options: -Wall -fno-warn-redundant-constraints
   build-depends:
       base >= 4.9 && < 5
-    , protolude
+    , protolude < 0.2
     , exceptions
     , transformers
     , attoparsec

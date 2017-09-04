@@ -18,7 +18,7 @@ default-extensions:
 
 dependencies:
   - base >= 4.9 && < 5
-  - protolude
+  - protolude < 0.2
   - exceptions
   - transformers
   - attoparsec
