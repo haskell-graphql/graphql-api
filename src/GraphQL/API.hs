@@ -40,6 +40,7 @@ import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
 import GraphQL.Internal.Name (NameError, nameFromSymbol)
 import GraphQL.API.Enum (GraphQLEnum(..))
 import GHC.Generics ((:*:)(..))
+import GHC.Types (Type)
 
 
 -- $setup

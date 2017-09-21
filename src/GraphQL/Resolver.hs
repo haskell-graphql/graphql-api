@@ -35,6 +35,7 @@ import Protolude hiding (Enum, TypeError)
 import qualified Data.Text as Text
 import qualified Data.List.NonEmpty as NonEmpty
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..), Symbol, symbolVal)
+import GHC.Types (Type)
 import qualified GHC.Exts (Any)
 import Unsafe.Coerce (unsafeCoerce)
 

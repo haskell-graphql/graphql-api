@@ -5,7 +5,7 @@ module GraphQL.Internal.Syntax.Parser
   , value
   ) where
 
-import Protolude hiding (Type, takeWhile)
+import Protolude hiding (option, takeWhile)
 
 import Control.Applicative ((<|>), empty, many, optional)
 import Control.Monad (fail)

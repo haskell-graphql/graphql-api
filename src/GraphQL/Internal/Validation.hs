@@ -58,11 +58,12 @@ module GraphQL.Internal.Validation
   , findDuplicates
   ) where
 
-import Protolude
+import Protolude hiding ((<>))
 
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
+import Data.Semigroup ((<>))
 import qualified Data.Set as Set
 import GraphQL.Internal.Name (HasName(..), Name)
 import qualified GraphQL.Internal.Syntax.AST as AST

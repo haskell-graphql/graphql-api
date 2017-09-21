@@ -40,7 +40,7 @@ module GraphQL.Internal.Schema
   , lookupType
   ) where
 
-import Protolude hiding (Type)
+import Protolude
 
 import qualified Data.Map as Map
 import GraphQL.Value (Value)

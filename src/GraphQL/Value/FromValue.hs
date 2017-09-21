@@ -25,6 +25,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty)
 import GHC.Generics ((:*:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
+import GHC.Types (Type)
 
 -- * FromValue
 

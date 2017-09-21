@@ -52,7 +52,7 @@ module GraphQL.Internal.Syntax.AST
   , TypeExtensionDefinition(..)
   ) where
 
-import Protolude hiding (Type)
+import Protolude
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
