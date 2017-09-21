@@ -4,3 +4,5 @@ packages:
   - "."
   - "./docs/source/tutorial"
   - "./graphql-wai"
+
+extra-deps: [protolude-0.2]

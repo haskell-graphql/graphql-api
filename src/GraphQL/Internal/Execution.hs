@@ -14,7 +14,7 @@ module GraphQL.Internal.Execution
   , substituteVariables
   ) where
 
-import Protolude hiding (Type)
+import Protolude
 
 import qualified Data.Map as Map
 import GraphQL.Value

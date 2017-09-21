@@ -17,6 +17,7 @@ import GraphQL.Internal.Name (Name, nameFromSymbol, NameError)
 import GraphQL.Internal.Output (GraphQLError(..))
 import GHC.Generics (D, (:+:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
+import GHC.Types (Type)
 
 invalidEnumName :: forall t. NameError -> Either Text t
 invalidEnumName x = Left ("In Enum: " <> formatError x)

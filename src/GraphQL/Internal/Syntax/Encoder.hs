@@ -4,7 +4,7 @@ module GraphQL.Internal.Syntax.Encoder
   , value
   ) where
 
-import Protolude hiding (Type, intercalate)
+import Protolude hiding (intercalate)
 
 import qualified Data.Aeson as Aeson
 import Data.Text (Text, cons, intercalate, pack, snoc)
