@@ -3,10 +3,19 @@ graphql-api changelog
 =====================
 
 $next (yyyy-mm-dd)
-==================
+=================
+
+
+v0.2.0 (2017-10-12)
+===================
 
 * Make ``Name`` an overloaded string that panics if an invalid name is
   provided.
+* Correctly descend into the type parameter of a ``Maybe``. See https://github.com/jml/graphql-api/issues/119.
+  This is a backwards-incompatible change.
+
+  A common update would be having to ``fmap pure callback`` instead of just ``callback``
+  for ``Maybe`` handlers.
 
 
 v0.1.0 (2017-01-30)
@@ -21,5 +30,3 @@ v0.1.0 (2017-01-29)
 ===================
 
 Initial release, support basic handling of GraphQL queries.
-
-
