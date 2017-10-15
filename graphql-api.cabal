@@ -1,9 +1,9 @@
--- This file has been generated from package.yaml by hpack version 0.17.1.
+-- This file has been generated from package.yaml by hpack version 0.17.0.
 --
 -- see: https://github.com/sol/hpack
 
 name:           graphql-api
-version:        0.1.2
+version:        0.2.0
 synopsis:       Sketch of GraphQL stuff
 description:    Please see README.md
 category:       Web
