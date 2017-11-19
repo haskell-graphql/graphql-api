@@ -51,8 +51,11 @@ module GraphQL.Value
 import Protolude
 
 import qualified Data.Aeson as Aeson
-import Data.Aeson (ToJSON(..), (.=), pairs)
+import Data.Aeson (FromJSON(..), ToJSON(..), (.=), pairs)
+import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.Map as Map
+import Data.Scientific (toRealFloat)
+import qualified Data.Vector as Vector
 import Test.QuickCheck (Arbitrary(..), Gen, oneof, listOf, sized)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
@@ -85,6 +88,11 @@ instance Traversable Value' where
   traverse f (ValueScalar' x) = ValueScalar' <$> f x
   traverse f (ValueList' xs) = ValueList' <$> traverse f xs
   traverse f (ValueObject' xs) = ValueObject' <$> traverse f xs
+
+instance FromJSON scalar => FromJSON (Value' scalar) where
+  parseJSON (Aeson.Object x) = ValueObject' <$> parseJSON (Aeson.Object x)
+  parseJSON (Aeson.Array x) = ValueList' <$> parseJSON (Aeson.Array x)
+  parseJSON x = ValueScalar' <$> parseJSON x
 
 instance ToJSON scalar => ToJSON (Value' scalar) where
   toJSON (ValueScalar' x) = toJSON x
@@ -151,6 +159,11 @@ toObject _ = empty
 -- * Scalars
 
 -- | A non-variable value which contains no other values.
+--
+-- Note that the 'FromJSON' instance always decodes JSON strings to
+-- GraphQL strings (never enums) and JSON numbers to GraphQL floats
+-- (never ints); doing a better job of resolving this requires query
+-- context.
 data ConstScalar
   = ConstInt Int32
   | ConstFloat Double
@@ -159,6 +172,13 @@ data ConstScalar
   | ConstEnum Name
   | ConstNull
   deriving (Eq, Ord, Show)
+
+instance FromJSON ConstScalar where
+  parseJSON (Aeson.String x) = parseJSON (Aeson.String x) >>= return . ConstString
+  parseJSON (Aeson.Number x) = return $ ConstFloat $ toRealFloat x
+  parseJSON (Aeson.Bool x) = return $ ConstBoolean x
+  parseJSON Aeson.Null = return ConstNull
+  parseJSON _ = mempty
 
 instance ToJSON ConstScalar where
   toJSON (ConstInt x) = toJSON x
@@ -213,13 +233,11 @@ astToScalar _ = empty
 
 -- * Strings
 
-newtype String = String Text deriving (Eq, Ord, Show)
+newtype String = String Text deriving (Eq, Ord, Show, Aeson.FromJSON,
+                                       Aeson.ToJSON)
 
 instance Arbitrary String where
   arbitrary = String <$> arbitraryText
-
-instance ToJSON String where
-  toJSON (String x) = toJSON x
 
 -- * Lists
 
@@ -245,6 +263,9 @@ instance Arbitrary scalar => Arbitrary (List' scalar) where
   -- invalid lists.
   arbitrary = List' <$> listOf arbitrary
 
+instance FromJSON scalar => FromJSON (List' scalar) where
+  parseJSON = Aeson.withArray "List" $ \v ->
+    mapM parseJSON v >>= return . List' . Vector.toList
 
 instance ToJSON scalar => ToJSON (List' scalar) where
   toJSON (List' x) = toJSON x
@@ -301,6 +322,16 @@ objectFromList xs = Object' <$> OrderedMap.orderedMap xs
 
 unionObjects :: [Object' scalar] -> Maybe (Object' scalar)
 unionObjects objects = Object' <$> OrderedMap.unions [obj | Object' obj <- objects]
+
+instance FromJSON scalar => FromJSON (Object' scalar) where
+  parseJSON = Aeson.withObject "Object" $ \v -> do
+    -- Order of keys is lost before we get here
+    let kvps = HashMap.toList v
+    names <- mapM parseJSON (Aeson.String <$> fst <$> kvps)
+    values <- mapM parseJSON (snd <$> kvps)
+    case objectFromList $ zip names values of
+      Nothing -> mempty
+      Just obj -> return obj
 
 instance ToJSON scalar => ToJSON (Object' scalar) where
   -- Direct encoding to preserve order of keys / values
