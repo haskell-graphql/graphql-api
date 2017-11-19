@@ -5,6 +5,7 @@ module ASTTests (tests) where
 
 import Protolude
 
+import Data.Aeson (decode, encode)
 import Data.Attoparsec.Text (parseOnly)
 import Text.RawString.QQ (r)
 import Test.Hspec.QuickCheck (prop)
@@ -29,6 +30,9 @@ someName = "name"
 
 tests :: IO TestTree
 tests = testSpec "AST" $ do
+  describe "Name" $ do
+    prop "round trips valid names through JSON" $ do
+      \x -> decode (encode (x :: Name)) == Just x
   describe "Parser and encoder" $ do
     it "roundtrips on minified documents" $ do
       let actual = Encoder.queryDocument <$> parseOnly Parser.queryDocument kitchenSink

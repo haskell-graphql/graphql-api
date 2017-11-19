@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -104,6 +105,12 @@ instance IsString Name where
 instance Aeson.ToJSON Name where
   toJSON = Aeson.toJSON . unName
 
+instance Aeson.FromJSON Name where
+  parseJSON = Aeson.withText "Name" $ \v ->
+    case makeName v of
+      Left _ -> mempty
+      Right name -> return name
+
 instance Arbitrary Name where
   arbitrary = do
     initial <- elements alpha
@@ -153,7 +160,11 @@ getNodeName (Node name _ _ _) = name
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
 
-newtype Variable = Variable Name deriving (Eq, Ord, Show)
+newtype Variable = Variable Name deriving (Eq, Ord, Show, Aeson.FromJSON,
+                                           Aeson.ToJSON)
+
+instance Aeson.FromJSONKey Variable
+instance Aeson.ToJSONKey Variable
 
 instance Arbitrary Variable where
   arbitrary = Variable <$> arbitrary
