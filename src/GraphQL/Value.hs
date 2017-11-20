@@ -50,8 +50,10 @@ module GraphQL.Value
 
 import Protolude
 
+import Control.Monad.Fail
 import qualified Data.Aeson as Aeson
 import Data.Aeson (FromJSON(..), ToJSON(..), (.=), pairs)
+import Data.Aeson.Types (typeMismatch)
 import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.Map as Map
 import Data.Scientific (toRealFloat)
@@ -178,7 +180,7 @@ instance FromJSON ConstScalar where
   parseJSON (Aeson.Number x) = return $ ConstFloat $ toRealFloat x
   parseJSON (Aeson.Bool x) = return $ ConstBoolean x
   parseJSON Aeson.Null = return ConstNull
-  parseJSON _ = mempty
+  parseJSON other = typeMismatch "Scalar" other
 
 instance ToJSON ConstScalar where
   toJSON (ConstInt x) = toJSON x
@@ -330,7 +332,7 @@ instance FromJSON scalar => FromJSON (Object' scalar) where
     names <- mapM parseJSON (Aeson.String <$> fst <$> kvps)
     values <- mapM parseJSON (snd <$> kvps)
     case objectFromList $ zip names values of
-      Nothing -> mempty
+      Nothing -> fail "duplicate keys in object"
       Just obj -> return obj
 
 instance ToJSON scalar => ToJSON (Object' scalar) where

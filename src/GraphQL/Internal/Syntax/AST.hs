@@ -55,6 +55,7 @@ module GraphQL.Internal.Syntax.AST
 
 import Protolude
 
+import Control.Monad.Fail
 import qualified Data.Aeson as Aeson
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isDigit)
@@ -108,7 +109,7 @@ instance Aeson.ToJSON Name where
 instance Aeson.FromJSON Name where
   parseJSON = Aeson.withText "Name" $ \v ->
     case makeName v of
-      Left _ -> mempty
+      Left err -> fail $ show err
       Right name -> return name
 
 instance Arbitrary Name where
