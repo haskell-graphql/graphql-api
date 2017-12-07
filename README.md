@@ -11,6 +11,15 @@ You can find the latest release on [hackage](https://hackage.haskell.org/package
 
 We implement the [GraphQL specification](https://facebook.github.io/graphql/) as best as we can in Haskell. We figure they know what they're doing. Even if an alternative API or behaviour looks nicer, we will defer to the spec.
 
+## Tutorial
+
+A simple graphql-api tutorial can be read at [readthedocs.io](http://haskell-graphql-api.readthedocs.io/en/latest/tutorial/Introduction.html).
+
+To follow along and get your hands dirty, clone this repository, enter the `graphql-api` root directory, and run:
+```
+stack repl tutorial
+```
+
 ## Example
 
 Say we have a simple GraphQL schema like:
