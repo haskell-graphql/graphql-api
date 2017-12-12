@@ -8,9 +8,9 @@ module EndToEndTests (tests) where
 
 import Protolude
 
-import Data.Aeson (Value(Null), toJSON, object, (.=))
+import Data.Aeson (Value(Null), toJSON, object, (.=), decode, encode)
 import qualified Data.Map as Map
-import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
+import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery, interpretRequest)
 import GraphQL.API (Object, Field)
 import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler)
@@ -326,3 +326,10 @@ tests = testSpec "End-to-end tests" $ do
                 ]
               ]
         toJSON (toValue response) `shouldBe` expected
+  describe "interpretRequest" $ do
+    it "performs a query" $ do
+      let root = pure (viewServerDog mortgage)
+      let Just request = decode [r|{"query": "{ dog { name } }"}|]
+      response <- interpretRequest @QueryRoot root request
+      let expected = "{\"data\":{\"dog\":{\"name\":\"Mortgage\"}}}"
+      encode response `shouldBe` expected

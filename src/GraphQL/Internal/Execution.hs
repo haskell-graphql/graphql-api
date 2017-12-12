@@ -12,6 +12,7 @@ module GraphQL.Internal.Execution
   , formatError
   , getOperation
   , substituteVariables
+  , Request(..)
   ) where
 
 import Protolude
@@ -34,6 +35,7 @@ import GraphQL.Internal.Validation
   , Variable
   , Type(..)
   )
+import Data.Aeson (FromJSON(..), withObject, (.:), (.:?), (.!=))
 
 -- | Get an operation from a GraphQL document
 --
@@ -105,3 +107,15 @@ instance GraphQLError ExecutionError where
 -- GraphQL allows the values of variables to be specified, but doesn't provide
 -- a way for doing so in the language.
 type VariableValues = Map Variable Value
+
+-- | A JSON request to execute a GraphQL query with some context.
+-- See <http://graphql.org/learn/serving-over-http/#post-request>.
+data Request = Request Text (Maybe Name) VariableValues deriving (Eq, Show)
+
+instance FromJSON Request where
+  parseJSON = withObject "Request" $ \v -> do
+    query <- v .: "query"
+    operationName <- v .:? "operationName"
+    variables <- v .:? "variables" .!= mempty
+    return $ Request query operationName variables
+

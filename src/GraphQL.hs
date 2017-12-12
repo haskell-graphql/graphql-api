@@ -10,6 +10,7 @@ module GraphQL
   (
     -- * Running queries
     interpretQuery
+  , interpretRequest
   , interpretAnonymousQuery
   , Response(..)
     -- * Preparing queries then running them
@@ -32,6 +33,7 @@ import GraphQL.Internal.Execution
   ( VariableValues
   , ExecutionError
   , substituteVariables
+  , Request(..)
   )
 import qualified GraphQL.Internal.Execution as Execution
 import qualified GraphQL.Internal.Syntax.AST as AST
@@ -124,6 +126,15 @@ interpretQuery handler query name variables =
   case makeSchema @api >>= flip compileQuery query of
     Left err -> pure (PreExecutionFailure (toError err :| []))
     Right document -> executeQuery @api @m handler document name variables
+
+-- | Interpret a GraphQL query, given a packaged request.
+interpretRequest
+  :: forall api m. (Applicative m, HasResolver m api, HasObjectDefinition api)
+  => Handler m api -- ^ Handler for the query. This links the query to the code you've written to handle it.
+  -> Request -- ^ The query and its input values.
+  -> m Response -- ^ The outcome of running the query.
+interpretRequest handler (Request query name variables) =
+  interpretQuery @api @m handler query name variables
 
 -- | Interpret an anonymous GraphQL query.
 --

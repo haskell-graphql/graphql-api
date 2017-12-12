@@ -32,6 +32,8 @@ library:
     - scientific
     - QuickCheck
     - text
+    - vector
+    - unordered-containers
 
 tests:
   graphql-api-tests:
