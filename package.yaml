@@ -1,12 +1,14 @@
 name: graphql-api
 version: 0.2.0
-synopsis: Sketch of GraphQL stuff
+synopsis: GraphQL API
 description: Please see README.md
-maintainer: Jonathan M. Lange <jml@mumak.net>
+author: Jonathan M. Lange
+maintainer: Jonathan M. Lange <jml@mumak.net>, Tom Hunger <tehunger@gmail.com>
 license: Apache
 license-file: LICENSE.Apache-2.0
 github: jml/graphql-api
 category: Web
+stability: unstable
 
 # NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
 ghc-options: -Wall -fno-warn-redundant-constraints
