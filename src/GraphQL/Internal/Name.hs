@@ -50,7 +50,7 @@ unsafeMakeName name =
 -- | Create a 'Name'.
 --
 -- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
--- not match, return Nothing.
+-- not match, return NameError.
 --
 -- >>> makeName "foo"
 -- Right (Name {unName = "foo"})
