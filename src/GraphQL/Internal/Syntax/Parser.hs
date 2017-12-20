@@ -52,7 +52,7 @@ operationDefinition =
   <?> "operationDefinition error!"
 
 node :: Parser AST.Node
-node = AST.Node <$> nameParser
+node = AST.Node <$> optempty nameParser
                 <*> optempty variableDefinitions
                 <*> optempty directives
                 <*> selectionSet

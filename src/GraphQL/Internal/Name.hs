@@ -25,6 +25,7 @@ import Data.Text as T (Text)
 import qualified Data.Attoparsec.Text as A
 import Test.QuickCheck (Arbitrary(..), elements, listOf)
 import Data.String (IsString(..))
+import Data.Text as T (Text, append, empty)
 
 import GraphQL.Internal.Syntax.Tokens (tok)
 
@@ -34,6 +35,20 @@ import GraphQL.Internal.Syntax.Tokens (tok)
 --
 -- https://facebook.github.io/graphql/#sec-Names
 newtype Name = Name { unName :: T.Text } deriving (Eq, Ord, Show)
+
+instance Monoid Name where
+    mempty  = Name T.empty
+--    mappend (Name {a}) mempty = Name {a}
+--    mappend mempty (Name {b}) = Name {b}
+    mappend (Name a1) (Name a2) = Name (T.append a1 a2)
+--    mappend = append
+--    mconcat = concat
+
+--newtype Any = Any { getAny :: Bool }
+
+--instance Monoid Any where
+--    mempty = Any False
+--    (Any b1) `mappend` (Any b2) = Any (b1 || b2)
 
 -- | Create a 'Name', panicking if the given text is invalid.
 --
