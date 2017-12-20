@@ -21,11 +21,11 @@ import Protolude
 import qualified Data.Aeson as Aeson
 import GHC.TypeLits (Symbol, KnownSymbol, symbolVal)
 import Data.Char (isDigit)
+import Data.Text as T (Text)
 import qualified Data.Attoparsec.Text as A
 import Test.QuickCheck (Arbitrary(..), elements, listOf)
 import Data.String (IsString(..))
 
-import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.Syntax.Tokens (tok)
 
 -- * Name
@@ -33,7 +33,7 @@ import GraphQL.Internal.Syntax.Tokens (tok)
 -- | A name in GraphQL.
 --
 -- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { unName :: Text } deriving (Eq, Ord, Show)
+newtype Name = Name { unName :: T.Text } deriving (Eq, Ord, Show)
 
 -- | Create a 'Name', panicking if the given text is invalid.
 --

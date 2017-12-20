@@ -48,7 +48,7 @@ module GraphQL.Internal.Syntax.AST
 
 import Protolude
 
-import Data.String (IsString(..))
+--import Data.String (IsString(..))
 import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
