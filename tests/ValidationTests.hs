@@ -10,7 +10,7 @@ import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.Internal.Name (Name)
+import GraphQL.Internal.Name (Name(Name), mempty)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Schema (Schema)
 import GraphQL.Internal.Validation
@@ -24,6 +24,9 @@ me = pure "me"
 
 someName :: Name
 someName = "name"
+
+dog :: Name
+dog = "dog"
 
 -- | Schema used for these tests. Since none of them do type-level stuff, we
 -- don't need to define it.
@@ -42,6 +45,41 @@ tests = testSpec "Validation" $ do
                       ]
                     )
                   )
+                ]
+      getErrors schema doc `shouldBe` []
+
+    it "Treats anonymous queries as valid" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                  (AST.Query
+                    (AST.Node (Name mempty) [] []
+                      [ AST.SelectionField
+                        (AST.Field Nothing dog [] []
+                          [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                          ])
+                      ]))
+                ]
+      getErrors schema doc `shouldBe` []
+
+    it "Treats anonymous queries with variables as valid" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node (Name mempty)
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNamed (AST.NamedType "Boolean"))
+                           (Just (AST.ValueBoolean True))
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [ AST.Argument "atOtherHomes"
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                 ] [] [])
+                            ])
+                       ]))
                 ]
       getErrors schema doc `shouldBe` []
 

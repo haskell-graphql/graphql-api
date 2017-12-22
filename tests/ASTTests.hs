@@ -13,7 +13,7 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Value (String(..))
-import GraphQL.Internal.Name (Name)
+import GraphQL.Internal.Name (Name (Name), mempty)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import qualified GraphQL.Internal.Syntax.Parser as Parser
 import qualified GraphQL.Internal.Syntax.Encoder as Encoder
@@ -78,7 +78,7 @@ tests = testSpec "AST" $ do
         output `shouldBe` "[1.5,1.5]"
         parseOnly Parser.value output `shouldBe` Right input
   describe "Parser" $ do
-    it "parses anonymous query documents" $ do
+    it "parses shorthand syntax documents" $ do
       let query = [r|{
                        dog {
                          name
@@ -93,6 +93,25 @@ tests = testSpec "AST" $ do
                              [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                              ])
                          ])
+                     ]
+      parsed `shouldBe` expected
+
+    it "parses anonymous query documents" $ do
+      let query = [r|query {
+                       dog {
+                         name
+                       }
+                     }|]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                       (AST.Query
+                         (AST.Node (Name mempty) [] []
+                           [ AST.SelectionField
+                             (AST.Field Nothing dog [] []
+                               [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                               ])
+                           ]))
                      ]
       parsed `shouldBe` expected
 
@@ -146,6 +165,36 @@ tests = testSpec "AST" $ do
                      [ AST.DefinitionOperation
                          (AST.Query
                            (AST.Node (pure "houseTrainedQuery")
+                            [ AST.VariableDefinition
+                                (AST.Variable "atOtherHomes")
+                                (AST.TypeNamed (AST.NamedType "Boolean"))
+                                (Just (AST.ValueBoolean True))
+                            ] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected
+
+    it "parses anonymous query with variables" $ do
+      let query = [r|
+                    query ($atOtherHomes: Boolean = true) {
+                      dog {
+                        isHousetrained(atOtherHomes: $atOtherHomes)
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node (Name mempty)
                             [ AST.VariableDefinition
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))
