@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module EnumTests () where
+module EnumTests ( Mode(Directory, NormalFile, ExecutableFile, Symlink) ) where
 
 import Protolude hiding (Enum)
 
