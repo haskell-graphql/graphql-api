@@ -207,8 +207,8 @@ instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver 
     map aggregateResults a
 
 instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver m (API.Enum ksN enum) where
-  type Handler m (API.Enum ksN enum) = enum
-  resolve handler Nothing = (pure . ok . GValue.ValueEnum . API.enumToValue) handler
+  type Handler m (API.Enum ksN enum) = m enum
+  resolve handler Nothing = map (ok . GValue.ValueEnum . API.enumToValue) handler
   resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
 instance forall m hg. (HasResolver m hg, Monad m) => HasResolver m (Maybe hg) where

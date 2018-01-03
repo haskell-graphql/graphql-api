@@ -17,6 +17,7 @@ import GraphQL.API
   ( Object
   , Field
   , Argument
+  , Enum
   , (:>)
   )
 import GraphQL.Resolver
@@ -25,6 +26,8 @@ import GraphQL.Resolver
   , (:<>)(..)
   )
 import GraphQL.Internal.Output (singleError)
+
+import EnumTests ( Mode(NormalFile) )
 
 -- Test a custom error monad
 type TMonad = ExceptT Text IO
@@ -63,6 +66,13 @@ handler = pure $ \fooId -> do
   -- have to wrap the result in a pure.
   sequence $ fmap (pure . viewFoo) foo
 
+-- Enum test
+type EnumQuery = Object "File" '[]
+  '[ Field "mode" (Enum "modeEnumName" Mode) ]
+
+enumHandler :: Handler IO EnumQuery
+enumHandler = pure $ pure NormalFile
+-- /Enum test
 
 tests :: IO TestTree
 tests = testSpec "TypeAPI" $ do
@@ -80,3 +90,7 @@ tests = testSpec "TypeAPI" $ do
     it "Just works" $ do
       Success object <- interpretAnonymousQuery @Query handler "{ test(id: \"10\") { name } }"
       encode object `shouldBe` "{\"test\":{\"name\":\"Mort\"}}"
+  describe "Parse, validate and execute queries against API" $ do
+    it "API.Enum works" $ do
+      Success object <- interpretAnonymousQuery @EnumQuery enumHandler "{ mode }"
+      encode object `shouldBe` "{\"mode\":\"NormalFile\"}"
