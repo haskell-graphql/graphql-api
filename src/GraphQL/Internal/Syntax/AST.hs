@@ -4,17 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module GraphQL.Internal.Syntax.AST
-  ( Name(unName)
-  , nameParser
-  , NameError(..)
-  , unsafeMakeName
-  , makeName
-  , QueryDocument(..)
+  ( QueryDocument(..)
   , SchemaDocument(..)
   , Definition(..)
   , OperationDefinition(..)
   , Node(..)
-  , getNodeName
   , VariableDefinition(..)
   , Variable(..)
   , SelectionSet
@@ -54,72 +48,11 @@ module GraphQL.Internal.Syntax.AST
 
 import Protolude
 
-import qualified Data.Aeson as Aeson
-import qualified Data.Attoparsec.Text as A
-import Data.Char (isDigit)
-import Data.String (IsString(..))
+--import Data.String (IsString(..))
 import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Syntax.Tokens (tok)
-
--- * Name
-
--- | A name in GraphQL.
---
--- https://facebook.github.io/graphql/#sec-Names
-newtype Name = Name { unName :: Text } deriving (Eq, Ord, Show)
-
--- | Create a 'Name', panicking if the given text is invalid.
---
--- Prefer 'makeName' to this in all cases.
---
--- >>> unsafeMakeName "foo"
--- Name {unName = "foo"}
-unsafeMakeName :: HasCallStack => Text -> Name
-unsafeMakeName name =
-  case makeName name of
-    Left e -> panic (show e)
-    Right n -> n
-
--- | Create a 'Name'.
---
--- Names must match the regex @[_A-Za-z][_0-9A-Za-z]*@. If the given text does
--- not match, return Nothing.
---
--- >>> makeName "foo"
--- Right (Name {unName = "foo"})
--- >>> makeName "9-bar"
--- Left (NameError "9-bar")
-makeName :: Text -> Either NameError Name
-makeName name = first (const (NameError name)) (A.parseOnly nameParser name)
-
--- | An invalid name.
-newtype NameError = NameError Text deriving (Eq, Show)
-
-
-instance IsString Name where
-  fromString = unsafeMakeName . toS
-
-instance Aeson.ToJSON Name where
-  toJSON = Aeson.toJSON . unName
-
-instance Arbitrary Name where
-  arbitrary = do
-    initial <- elements alpha
-    rest <- listOf (elements (alpha <> numeric))
-    pure (Name (toS (initial:rest)))
-    where
-      alpha = ['A'..'Z'] <> ['a'..'z'] <> ['_']
-      numeric = ['0'..'9']
-
--- | Parser for 'Name'.
-nameParser :: A.Parser Name
-nameParser = Name <$> tok ((<>) <$> A.takeWhile1 isA_z
-                                <*> A.takeWhile ((||) <$> isDigit <*> isA_z))
-  where
-    -- `isAlpha` handles many more Unicode Chars
-    isA_z = A.inClass $ '_' : ['A'..'Z'] <> ['a'..'z']
+import GraphQL.Internal.Name (HasName(getName), Name(unName, Name), unsafeMakeName)
 
 -- * Documents
 
@@ -146,9 +79,8 @@ data OperationDefinition
 data Node = Node Name [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
--- TODO: Just make Node implement HasName.
-getNodeName :: Node -> Name
-getNodeName (Node name _ _ _) = name
+instance HasName Node where
+  getName (Node name _ _ _) = name
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
