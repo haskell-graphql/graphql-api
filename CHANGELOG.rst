@@ -3,7 +3,14 @@ graphql-api changelog
 =====================
 
 $next (yyyy-mm-dd)
-=================
+==================
+
+Breaking changes
+----------------
+
+* ``Enum`` handlers are now monadic (see `#118`_)
+
+.. _`#118`: https://github.com/jml/graphql-api/issues/118
 
 
 v0.2.0 (2017-10-12)
