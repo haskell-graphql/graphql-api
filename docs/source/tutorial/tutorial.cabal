@@ -1,6 +1,8 @@
--- This file has been generated from package.yaml by hpack version 0.15.0.
+-- This file has been generated from package.yaml by hpack version 0.20.0.
 --
 -- see: https://github.com/sol/hpack
+--
+-- hash: b3da6c729f0fa19c9ad82cb7e45f616850463bcc1654b9cd4797e34f6685ebd8
 
 name:          tutorial
 version:       0.0.1
@@ -18,11 +20,11 @@ library
   other-modules:
       Paths_tutorial
   build-depends:
-      base >= 4.9 && < 5
-    , protolude
+      aeson
+    , base >=4.9 && <5
     , graphql-api
+    , markdown-unlit >=0.4
+    , protolude
     , random
-    , markdown-unlit >= 0.4
-    , aeson
   default-language: Haskell2010
   ghc-options: -Wall -pgmL markdown-unlit

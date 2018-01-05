@@ -49,10 +49,10 @@ module GraphQL.Internal.Syntax.AST
 import Protolude
 
 --import Data.String (IsString(..))
-import Test.QuickCheck (Arbitrary(..), elements, listOf, oneof)
+import Test.QuickCheck (Arbitrary(..), listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Name (HasName(getName), Name(unName, Name), unsafeMakeName)
+import GraphQL.Internal.Name (Name)
 
 -- * Documents
 
@@ -76,11 +76,12 @@ data OperationDefinition
   | AnonymousQuery SelectionSet
   deriving (Eq,Show)
 
-data Node = Node Name [VariableDefinition] [Directive] SelectionSet
+data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
-instance HasName Node where
-  getName (Node name _ _ _) = name
+--
+getNodeName :: Node -> Maybe Name
+getNodeName (Node maybeName _ _ _) = maybeName
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)

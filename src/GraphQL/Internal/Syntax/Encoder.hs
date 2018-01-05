@@ -30,9 +30,13 @@ operationDefinition (AST.Mutation n) = "mutation " <> node n
 operationDefinition (AST.AnonymousQuery ss) = selectionSet ss
 
 node :: AST.Node -> Text
-node (AST.Node name vds ds ss) =
+node (AST.Node (Just name) vds ds ss) =
      unName name
   <> optempty variableDefinitions vds
+  <> optempty directives ds
+  <> selectionSet ss
+node (AST.Node Nothing vds ds ss) =
+     optempty variableDefinitions vds
   <> optempty directives ds
   <> selectionSet ss
 
