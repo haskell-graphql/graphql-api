@@ -13,7 +13,7 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Value (String(..))
-import GraphQL.Internal.Name (Name (Name), mempty)
+import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import qualified GraphQL.Internal.Syntax.Parser as Parser
 import qualified GraphQL.Internal.Syntax.Encoder as Encoder
@@ -106,7 +106,7 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                        (AST.Query
-                         (AST.Node (Name mempty) [] []
+                         (AST.Node Nothing [] []
                            [ AST.SelectionField
                              (AST.Field Nothing dog [] []
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
@@ -194,7 +194,7 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node (Name mempty)
+                           (AST.Node Nothing
                             [ AST.VariableDefinition
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))

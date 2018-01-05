@@ -10,7 +10,7 @@ import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import GraphQL.Internal.Name (Name(Name), mempty)
+import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Schema (Schema)
 import GraphQL.Internal.Validation
@@ -52,7 +52,7 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   (AST.Query
-                    (AST.Node (Name mempty) [] []
+                    (AST.Node (Nothing) [] []
                       [ AST.SelectionField
                         (AST.Field Nothing dog [] []
                           [ AST.SelectionField (AST.Field Nothing someName [] [] [])
@@ -65,7 +65,7 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                     (AST.Query
-                      (AST.Node (Name mempty)
+                      (AST.Node Nothing
                        [ AST.VariableDefinition
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "Boolean"))

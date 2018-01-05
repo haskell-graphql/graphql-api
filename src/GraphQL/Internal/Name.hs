@@ -6,7 +6,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module GraphQL.Internal.Name
   ( Name(unName, Name)
-  , mempty
   , NameError(..)
   , makeName
   , nameFromSymbol
