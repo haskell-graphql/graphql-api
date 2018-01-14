@@ -123,7 +123,7 @@ getSelectionSet (Mutation _ _ ss) = ss
 -- | Type alias for 'Query' and 'Mutation' constructors of 'Operation'.
 type OperationType value = VariableDefinitions -> Directives value -> SelectionSetByType value -> Operation value
 
-type Operations value = Map Name (Operation value)
+type Operations value = Map (Maybe Name) (Operation value)
 
 -- | Turn a parsed document into a known valid one.
 --
@@ -132,9 +132,9 @@ type Operations value = Map Name (Operation value)
 validate :: Schema -> AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument VariableValue)
 validate schema (AST.QueryDocument defns) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
-  let (anonymous, named) = splitBy splitOps operations
+  let (anonymous, maybeNamed) = splitBy splitOps operations
   (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions schema fragments
-  case (anonymous, named) of
+  case (anonymous, maybeNamed) of
     ([], ops) -> do
       (validOps, usedFrags) <- runStateT (validateOperations schema frags ops) mempty
       assertAllFragmentsUsed frags (visitedFrags <> usedFrags)
@@ -146,7 +146,7 @@ validate schema (AST.QueryDocument defns) = runValidator $ do
       validValuesSS <- validateValues ss
       resolvedValuesSS <- resolveVariables emptyVariableDefinitions validValuesSS
       pure (LoneAnonymousOperation (Query emptyVariableDefinitions emptyDirectives resolvedValuesSS))
-    _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst named))
+    _ -> throwE (MixedAnonymousOperations (length anonymous) (map fst maybeNamed))
 
   where
     splitBy :: (a -> Either b c) -> [a] -> ([b], [c])
@@ -156,17 +156,17 @@ validate schema (AST.QueryDocument defns) = runValidator $ do
     splitDefns (AST.DefinitionFragment frag) = Right frag
 
     splitOps (AST.AnonymousQuery ss) = Left ss
-    splitOps (AST.Query node@(AST.Node name _ _ _)) = Right (name, (Query, node))
-    splitOps (AST.Mutation node@(AST.Node name _ _ _)) = Right (name, (Mutation, node))
+    splitOps (AST.Query node@(AST.Node maybeName _ _ _)) = Right (maybeName, (Query, node))
+    splitOps (AST.Mutation node@(AST.Node maybeName _ _ _)) = Right (maybeName, (Mutation, node))
 
-    assertAllFragmentsUsed :: Fragments value -> Set Name -> Validation ()
+    assertAllFragmentsUsed :: Fragments value -> Set (Maybe Name) -> Validation ()
     assertAllFragmentsUsed fragments used =
-      let unused = Map.keysSet fragments `Set.difference` used
+      let unused = ( Set.map pure (Map.keysSet fragments)) `Set.difference` used
       in unless (Set.null unused) (throwE (UnusedFragments unused))
 
 -- * Operations
 
-validateOperations :: Schema -> Fragments AST.Value -> [(Name, (OperationType AST.Value, AST.Node))] -> StateT (Set Name) Validation (Operations AST.Value)
+validateOperations :: Schema -> Fragments AST.Value -> [(Maybe Name, (OperationType AST.Value, AST.Node))] -> StateT (Set (Maybe Name)) Validation (Operations AST.Value)
 validateOperations schema fragments ops = do
   deduped <- lift (mapErrors DuplicateOperation (makeMap ops))
   traverse validateNode deduped
@@ -219,7 +219,7 @@ validateOperation (Mutation vars directives selectionSet) = do
 -- We do this /before/ validating the values (since that's much easier once
 -- everything is in a nice structure and away from the AST), which means we
 -- can't yet evaluate directives.
-validateSelectionSet :: Schema -> Fragments AST.Value -> [AST.Selection] -> StateT (Set Name) Validation (SelectionSetByType AST.Value)
+validateSelectionSet :: Schema -> Fragments AST.Value -> [AST.Selection] -> StateT (Set (Maybe Name)) Validation (SelectionSetByType AST.Value)
 validateSelectionSet schema fragments selections = do
   unresolved <- lift $ traverse (validateSelection schema) selections
   resolved <- traverse (resolveSelection fragments) unresolved
@@ -508,14 +508,14 @@ validateSelection schema selection =
 -- We're doing a standard depth-first traversal of fragment references, where
 -- references are by name, so the set of names can be thought of as a record
 -- of visited references.
-resolveSelection :: Fragments a -> Selection' UnresolvedFragmentSpread a -> StateT (Set Name) Validation (Selection' FragmentSpread a)
+resolveSelection :: Fragments a -> Selection' UnresolvedFragmentSpread a -> StateT (Set (Maybe Name)) Validation (Selection' FragmentSpread a)
 resolveSelection fragments = traverseFragmentSpreads resolveFragmentSpread
   where
     resolveFragmentSpread (UnresolvedFragmentSpread name directive) = do
       case Map.lookup name fragments of
         Nothing -> lift (throwE (NoSuchFragment name))
         Just fragment -> do
-          modify (Set.insert name)
+          modify (Set.insert (pure name))
           pure (FragmentSpread name directive fragment)
 
 -- * Fragment definitions
@@ -577,7 +577,7 @@ validateTypeCondition schema (NamedType typeCond) =
 --
 -- <https://facebook.github.io/graphql/#sec-Fragment-spread-target-defined>
 -- <https://facebook.github.io/graphql/#sec-Fragment-spreads-must-not-form-cycles>
-resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread value) -> Validation (Fragments value, Set Name)
+resolveFragmentDefinitions :: Map Name (FragmentDefinition UnresolvedFragmentSpread value) -> Validation (Fragments value, Set (Maybe Name))
 resolveFragmentDefinitions allFragments =
   splitResult <$> traverse resolveFragment allFragments
   where
@@ -595,12 +595,12 @@ resolveFragmentDefinitions allFragments =
       FragmentDefinition name cond directives <$> traverse (traverseFragmentSpreads resolveSpread) ss
 
     resolveSpread (UnresolvedFragmentSpread name directives) = do
-      visited <- Set.member name <$> get
+      visited <- Set.member (pure name) <$> get
       when visited (lift (throwE (CircularFragmentSpread name)))
       case Map.lookup name allFragments of
         Nothing -> lift (throwE (NoSuchFragment name))
         Just definition -> do
-          modify (Set.insert name)
+          modify (Set.insert (pure name))
           FragmentSpread name directives <$> resolveFragment' definition
 
 -- * Arguments
@@ -727,12 +727,12 @@ data ValidationError
   -- with the given name.
   --
   -- <https://facebook.github.io/graphql/#sec-Operation-Name-Uniqueness>
-  = DuplicateOperation Name
+  = DuplicateOperation (Maybe Name)
   -- | 'MixedAnonymousOperations' means there was more than one operation
   -- defined in a document with an anonymous operation.
   --
   -- <https://facebook.github.io/graphql/#sec-Lone-Anonymous-Operation>
-  | MixedAnonymousOperations Int [Name]
+  | MixedAnonymousOperations Int [Maybe Name]
   -- | 'DuplicateArgument' means that multiple copies of the same argument was
   -- given to the same field, directive, etc.
   | DuplicateArgument Name
@@ -755,7 +755,7 @@ data ValidationError
   | CircularFragmentSpread Name
   -- | 'UnusedFragments' means that fragments were defined that weren't used.
   -- <https://facebook.github.io/graphql/#sec-Fragments-Must-Be-Used>
-  | UnusedFragments (Set Name)
+  | UnusedFragments (Set (Maybe Name))
   -- | Variables were defined without being used.
   -- <https://facebook.github.io/graphql/#sec-All-Variables-Used>
   | UnusedVariables (Set Variable)
@@ -777,10 +777,10 @@ data ValidationError
   deriving (Eq, Show)
 
 instance GraphQLError ValidationError where
-  formatError (DuplicateOperation name) = "More than one operation named '" <> show name <> "'"
-  formatError (MixedAnonymousOperations n names)
-    | n > 1 && null names = "Multiple anonymous operations defined. Found " <> show n
-    | otherwise = "Document contains both anonymous operations (" <> show n <> ") and named operations (" <> show names <> ")"
+  formatError (DuplicateOperation maybeName) = "More than one operation named '" <> show maybeName <> "'"
+  formatError (MixedAnonymousOperations n maybeNames)
+    | n > 1 && null maybeNames = "Multiple anonymous operations defined. Found " <> show n
+    | otherwise = "Document contains both anonymous operations (" <> show n <> ") and named operations (" <> show maybeNames <> ")"
   formatError (DuplicateArgument name) = "More than one argument named '" <> show name <> "'"
   formatError (DuplicateFragmentDefinition name) = "More than one fragment named '" <> show name <> "'"
   formatError (NoSuchFragment name) = "No fragment named '" <> show name <> "'"

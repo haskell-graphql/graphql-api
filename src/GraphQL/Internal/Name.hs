@@ -35,6 +35,7 @@ import GraphQL.Internal.Syntax.Tokens (tok)
 -- https://facebook.github.io/graphql/#sec-Names
 newtype Name = Name { unName :: T.Text } deriving (Eq, Ord, Show)
 
+
 -- | Create a 'Name', panicking if the given text is invalid.
 --
 -- Prefer 'makeName' to this in all cases.

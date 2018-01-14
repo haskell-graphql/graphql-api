@@ -19,8 +19,8 @@ import GraphQL.Internal.Validation
   , getErrors
   )
 
-me :: Name
-me = "me"
+me :: Maybe Name
+me = pure "me"
 
 someName :: Name
 someName = "name"

@@ -51,7 +51,7 @@ import GraphQL.Internal.Validation
 --     * Return {operation}.
 getOperation :: QueryDocument value -> Maybe Name -> Either ExecutionError (Operation value)
 getOperation (LoneAnonymousOperation op) Nothing = pure op
-getOperation (MultipleOperations ops) (Just name) = note (NoSuchOperation name) (Map.lookup name ops)
+getOperation (MultipleOperations ops) (Just name) = note (NoSuchOperation name) (Map.lookup (pure name) ops)
 getOperation (MultipleOperations ops) Nothing =
   case toList ops of
     [op] -> pure op

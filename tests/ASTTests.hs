@@ -121,7 +121,7 @@ tests = testSpec "AST" $ do
                          ])
                      , AST.DefinitionOperation
                        (AST.Query
-                        (AST.Node "getName" [] []
+                        (AST.Node (pure "getName") [] []
                          [ AST.SelectionField
                            (AST.Field Nothing dog [] []
                             [ AST.SelectionField
@@ -145,7 +145,7 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [ AST.DefinitionOperation
                          (AST.Query
-                           (AST.Node "houseTrainedQuery"
+                           (AST.Node (pure "houseTrainedQuery")
                             [ AST.VariableDefinition
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))
