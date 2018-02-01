@@ -48,7 +48,6 @@ module GraphQL.Internal.Syntax.AST
 
 import Protolude hiding (Type)
 
---import Data.String (IsString(..))
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
@@ -78,10 +77,6 @@ data OperationDefinition
 
 data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
-
---
-getNodeName :: Node -> Maybe Name
-getNodeName (Node maybeName _ _ _) = maybeName
 
 data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
                           deriving (Eq,Show)
