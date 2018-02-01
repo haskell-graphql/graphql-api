@@ -1,8 +1,10 @@
-resolver: nightly-2017-01-25
+# GHC 8.0.2 is the lowest (and currently, only) supported compiler version.
+resolver: lts-9.21
 
 packages:
   - "."
   - "./docs/source/tutorial"
   - "./graphql-wai"
 
-extra-deps: [protolude-0.2]
+extra-deps:
+  - protolude-0.2

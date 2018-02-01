@@ -1,0 +1,32 @@
+version: 2
+jobs:
+  build:
+    docker:
+      # GHC 8.0.2 is the lowest (and so far, only) supported compiler version.
+      - image: fpco/stack-build:lts-9.21
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - stack-ghc-{{ checksum "stack.yaml" }}
+      - restore_cache:
+          keys:
+            - stack-deps-{{ checksum "package.yaml" }}
+      - run:
+          name: Set up Stack
+          command: stack setup --no-terminal --no-reinstall
+      - save_cache:
+          key: stack-ghc-{{ checksum "stack.yaml" }}
+          paths:
+            - /root/.stack
+      - run:
+          name: Install dependencies
+          command: stack build --skip-ghc-check --no-terminal --test --only-dependencies
+      - save_cache:
+          key: stack-deps-{{ checksum "package.yaml" }}
+          paths:
+            - /root/.stack
+            - .stack-work
+      - run:
+          name: Tests
+          command: stack test --skip-ghc-check --no-terminal
