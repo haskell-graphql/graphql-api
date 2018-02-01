@@ -46,7 +46,7 @@ module GraphQL.Internal.Syntax.AST
   , TypeExtensionDefinition(..)
   ) where
 
-import Protolude
+import Protolude hiding (Type)
 
 --import Data.String (IsString(..))
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
