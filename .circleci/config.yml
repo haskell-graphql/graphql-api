@@ -1,27 +1,27 @@
 version: 2
 jobs:
-  build:
+  build-8.0:
     docker:
-      # GHC 8.0.2 is the lowest (and so far, only) supported compiler version.
+      # GHC 8.0.2 is the lowest supported compiler version.
       - image: fpco/stack-build:lts-9.21
     steps:
       - checkout
       - restore_cache:
           keys:
-            - stack-ghc-{{ checksum "stack.yaml" }}
+            - stack-ghc-{{ checksum "stack-8.0.yaml" }}
       - restore_cache:
           keys:
             - stack-deps-{{ checksum "package.yaml" }}
       - run:
           name: Set up Stack
-          command: stack setup --no-terminal --no-reinstall
+          command: STACK_YAML=stack-8.0.yaml stack setup --no-terminal --no-reinstall
       - save_cache:
-          key: stack-ghc-{{ checksum "stack.yaml" }}
+          key: stack-ghc-{{ checksum "stack-8.0.yaml" }}
           paths:
             - /root/.stack
       - run:
           name: Install dependencies
-          command: stack build --skip-ghc-check --no-terminal --test --only-dependencies
+          command: STACK_YAML=stack-8.0.yaml stack build --skip-ghc-check --no-terminal --test --only-dependencies
       - save_cache:
           key: stack-deps-{{ checksum "package.yaml" }}
           paths:
@@ -32,4 +32,44 @@ jobs:
           # *don't* build with -Werror on Hackage as that is strongly
           # discouraged.
           name: Tests
-          command: stack test --skip-ghc-check --no-terminal --pedantic
+          command: STACK_YAML=stack-8.0.yaml stack test --skip-ghc-check --no-terminal --pedantic
+  build-8.2:
+    docker:
+      # Latest stackage LTS for GHC 8.2 at time of writing
+      - image: fpco/stack-build:lts-10.4
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - stack-ghc-{{ checksum "stack-8.2.yaml" }}
+      - restore_cache:
+          keys:
+            - stack-deps-{{ checksum "package.yaml" }}
+      - run:
+          name: Set up Stack
+          command: STACK_YAML=stack-8.2.yaml stack setup --no-terminal --no-reinstall
+      - save_cache:
+          key: stack-ghc-{{ checksum "stack-8.2.yaml" }}
+          paths:
+            - /root/.stack
+      - run:
+          name: Install dependencies
+          command: STACK_YAML=stack-8.2.yaml stack build --skip-ghc-check --no-terminal --test --only-dependencies
+      - save_cache:
+          key: stack-deps-{{ checksum "package.yaml" }}
+          paths:
+            - /root/.stack
+            - .stack-work
+      - run:
+          # Build with --pedantic here to avoid introducing warnings. We
+          # *don't* build with -Werror on Hackage as that is strongly
+          # discouraged.
+          name: Tests
+          command: STACK_YAML=stack-8.2.yaml stack test --skip-ghc-check --no-terminal --pedantic
+
+workflows:
+  version: 2
+  build_all_versions:
+    jobs:
+      - build-8.0
+      - build-8.2

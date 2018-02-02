@@ -1,4 +1,4 @@
-# GHC 8.0.2 is the lowest (and currently, only) supported compiler version.
+# GHC 8.0.2 is the lowest supported compiler version.
 resolver: lts-9.21
 
 packages:
