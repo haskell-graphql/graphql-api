@@ -27,7 +27,7 @@ import GraphQL.Internal.Schema
   , AnnotatedType(..)
   , ListType(..)
   , UnionTypeDefinition(..)
-  , Type(..)
+  , GType(..)
   , TypeDefinition(..)
   , NonNullType(..)
   , Builtin(..)

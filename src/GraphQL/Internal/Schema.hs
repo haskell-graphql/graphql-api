@@ -8,7 +8,7 @@
 --
 -- Equivalent representation of GraphQL /values/ is in "GraphQL.Value".
 module GraphQL.Internal.Schema
-  ( Type(..)
+  ( GType(..)
   -- * Builtin types
   , Builtin(..)
   -- * Defining new types
@@ -40,7 +40,7 @@ module GraphQL.Internal.Schema
   , lookupType
   ) where
 
-import Protolude hiding (Type)
+import Protolude
 
 import qualified Data.Map as Map
 import GraphQL.Value (Value)
@@ -100,13 +100,13 @@ data NonNullType t = NonNullTypeNamed t
                    | NonNullTypeList  (ListType t)
                    deriving (Eq, Ord, Show)
 
-data Type = DefinedType TypeDefinition | BuiltinType Builtin deriving (Eq, Ord, Show)
+data GType = DefinedType TypeDefinition | BuiltinType Builtin deriving (Eq, Ord, Show)
 
-instance DefinesTypes Type where
+instance DefinesTypes GType where
   getDefinedTypes (BuiltinType _) = mempty
   getDefinedTypes (DefinedType t) = getDefinedTypes t
 
-instance HasName Type where
+instance HasName GType where
   getName (DefinedType x) = getName x
   getName (BuiltinType x) = getName x
 
@@ -154,7 +154,7 @@ instance DefinesTypes ObjectTypeDefinition where
 
 type Interfaces = [InterfaceTypeDefinition]
 
-data FieldDefinition = FieldDefinition Name [ArgumentDefinition] (AnnotatedType Type)
+data FieldDefinition = FieldDefinition Name [ArgumentDefinition] (AnnotatedType GType)
                        deriving (Eq, Ord, Show)
 
 instance HasName FieldDefinition where

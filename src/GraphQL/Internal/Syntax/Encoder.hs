@@ -138,7 +138,7 @@ directive (AST.Directive name args) = "@" <> unName name <> optempty arguments a
 
 -- * Type Reference
 
-type_ :: AST.Type -> Text
+type_ :: AST.GType -> Text
 type_ (AST.TypeNamed (AST.NamedType x)) = unName x
 type_ (AST.TypeList x) = listType x
 type_ (AST.TypeNonNull x) = nonNullType x

@@ -44,7 +44,7 @@ module GraphQL.Internal.Validation
   , VariableDefinition(..)
   , VariableValue
   , Variable
-  , AST.Type(..)
+  , AST.GType(..)
   -- * Resolving queries
   , SelectionSetByType
   , SelectionSet(..)
@@ -624,7 +624,7 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 data VariableDefinition
   = VariableDefinition
     { variable :: Variable -- ^ The name of the variable
-    , variableType :: AST.Type -- ^ The type of the variable
+    , variableType :: AST.GType -- ^ The type of the variable
     , defaultValue :: Maybe Value -- ^ An optional default value for the variable
     } deriving (Eq, Ord, Show)
 

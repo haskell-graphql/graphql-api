@@ -28,5 +28,8 @@ jobs:
             - /root/.stack
             - .stack-work
       - run:
+          # Build with --pedantic here to avoid introducing warnings. We
+          # *don't* build with -Werror on Hackage as that is strongly
+          # discouraged.
           name: Tests
-          command: stack test --skip-ghc-check --no-terminal
+          command: stack test --skip-ghc-check --no-terminal --pedantic
