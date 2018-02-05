@@ -32,7 +32,7 @@ import GraphQL.Internal.Validation
   , VariableDefinition(..)
   , VariableValue
   , Variable
-  , Type(..)
+  , GType(..)
   )
 
 -- | Get an operation from a GraphQL document

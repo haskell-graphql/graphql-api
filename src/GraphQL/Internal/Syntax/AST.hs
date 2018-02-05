@@ -27,7 +27,7 @@ module GraphQL.Internal.Syntax.AST
   , ObjectField(..)
   , DefaultValue
   , Directive(..)
-  , Type(..)
+  , GType(..)
   , NamedType(..)
   , ListType(..)
   , NonNullType(..)
@@ -46,7 +46,7 @@ module GraphQL.Internal.Syntax.AST
   , TypeExtensionDefinition(..)
   ) where
 
-import Protolude hiding (Type)
+import Protolude
 
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
 
@@ -78,7 +78,7 @@ data OperationDefinition
 data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
-data VariableDefinition = VariableDefinition Variable Type (Maybe DefaultValue)
+data VariableDefinition = VariableDefinition Variable GType (Maybe DefaultValue)
                           deriving (Eq,Show)
 
 newtype Variable = Variable Name deriving (Eq, Ord, Show)
@@ -169,14 +169,14 @@ data Directive = Directive Name [Argument] deriving (Eq,Show)
 
 -- * Type Reference
 
-data Type = TypeNamed NamedType
-          | TypeList ListType
-          | TypeNonNull NonNullType
-            deriving (Eq, Ord, Show)
+data GType = TypeNamed NamedType
+           | TypeList ListType
+           | TypeNonNull NonNullType
+           deriving (Eq, Ord, Show)
 
 newtype NamedType = NamedType Name deriving (Eq, Ord, Show)
 
-newtype ListType = ListType Type deriving (Eq, Ord, Show)
+newtype ListType = ListType GType deriving (Eq, Ord, Show)
 
 data NonNullType = NonNullTypeNamed NamedType
                  | NonNullTypeList  ListType
@@ -198,12 +198,12 @@ data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces [FieldDefinitio
 
 type Interfaces = [NamedType]
 
-data FieldDefinition = FieldDefinition Name ArgumentsDefinition Type
+data FieldDefinition = FieldDefinition Name ArgumentsDefinition GType
                        deriving (Eq,Show)
 
 type ArgumentsDefinition = [InputValueDefinition]
 
-data InputValueDefinition = InputValueDefinition Name Type (Maybe DefaultValue)
+data InputValueDefinition = InputValueDefinition Name GType (Maybe DefaultValue)
                             deriving (Eq,Show)
 
 data InterfaceTypeDefinition = InterfaceTypeDefinition Name [FieldDefinition]

@@ -208,7 +208,7 @@ directive = AST.Directive
 
 -- * Type Reference
 
-type_ :: Parser AST.Type
+type_ :: Parser AST.GType
 type_ = AST.TypeList    <$> listType
     <|> AST.TypeNonNull <$> nonNullType
     <|> AST.TypeNamed   <$> namedType

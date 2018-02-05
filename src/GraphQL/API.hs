@@ -191,7 +191,7 @@ class HasAnnotatedType a where
   -- forget this. Maybe we can flip the internal encoding to be
   -- non-null by default and needing explicit null-encoding (via
   -- Maybe).
-  getAnnotatedType :: Either NameError (Schema.AnnotatedType Schema.Type)
+  getAnnotatedType :: Either NameError (Schema.AnnotatedType Schema.GType)
 
 -- | Turn a non-null type into the optional version of its own type.
 dropNonNull :: Schema.AnnotatedType t -> Schema.AnnotatedType t
@@ -204,7 +204,7 @@ instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
   -- see TODO in HasAnnotatedType class
   getAnnotatedType = dropNonNull <$> getAnnotatedType @a
 
-builtinType :: Schema.Builtin -> Either NameError (Schema.AnnotatedType Schema.Type)
+builtinType :: Schema.Builtin -> Either NameError (Schema.AnnotatedType Schema.GType)
 builtinType = pure . Schema.TypeNonNull . Schema.NonNullTypeNamed . Schema.BuiltinType
 
 -- TODO(jml): Given that AnnotatedType is parametrised, we can probably reduce
