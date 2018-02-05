@@ -132,4 +132,4 @@ instance forall wrappedType fieldName u s l.
 instance forall l r m.
   ( TypeError ('Text "Generic fromValue only works for records with exactly one data constructor.")
   ) => GenericFromValue (D1 m (l :+: r)) where
-  genericFromValue = undefined
+  genericFromValue = panic "genericFromValue cannot be called for records with more than one data constructor. Code that tries will not be compiled."

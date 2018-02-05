@@ -31,7 +31,7 @@ dog = "dog"
 -- | Schema used for these tests. Since none of them do type-level stuff, we
 -- don't need to define it.
 schema :: Schema
-schema = undefined
+schema = panic "schema evaluated. We weren't expecting that."
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do

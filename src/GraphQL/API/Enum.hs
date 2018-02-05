@@ -86,18 +86,20 @@ instance forall conName p b sa sb.
   ( TypeError ('Text "Constructor not unary: " ':<>: 'Text conName)
   , KnownSymbol conName
   ) => GenericEnumValues (C1 ('MetaCons conName p b) (S1 sa sb)) where
-  genericEnumValues = undefined
-  genericEnumFromValue = undefined
-  genericEnumToValue = undefined
+  genericEnumValues = nonUnaryConstructorError
+  genericEnumFromValue = nonUnaryConstructorError
+  genericEnumToValue = nonUnaryConstructorError
 
 instance forall conName p b sa sb f.
   ( TypeError ('Text "Constructor not unary: " ':<>: 'Text conName)
   , KnownSymbol conName
   ) => GenericEnumValues (C1 ('MetaCons conName p b) (S1 sa sb) :+: f) where
-  genericEnumValues = undefined
-  genericEnumFromValue = undefined
-  genericEnumToValue = undefined
+  genericEnumValues = nonUnaryConstructorError
+  genericEnumFromValue = nonUnaryConstructorError
+  genericEnumToValue = nonUnaryConstructorError
 
+nonUnaryConstructorError :: a
+nonUnaryConstructorError = panic "Tried to construct enum with non-unary constructor. Should get a compile-time error instead of this."
 
 -- | For each enum type we need 1) a list of all possible values 2) a
 -- way to serialise and 3) deserialise.

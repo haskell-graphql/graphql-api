@@ -147,7 +147,7 @@ instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasIn
 -- NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
 instance forall ks t. TypeError ('Text ":> Arguments must end with a Field") =>
          HasFieldDefinition (Argument ks t) where
-  getFieldDefinition = notImplemented
+  getFieldDefinition = panic ":> Arugments must end with a Field. This should not happen, but rather we'll get a compile-time error instead."
 
 instance forall ks is ts. (KnownSymbol ks, HasInterfaceDefinitions is, HasFieldDefinitions ts) => HasAnnotatedType (Object ks is ts) where
   getAnnotatedType =
@@ -252,7 +252,7 @@ instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) =>
 -- Help users with better type errors
 instance TypeError ('Text "Cannot encode Integer because it has arbitrary size but the JSON encoding is a number") =>
          HasAnnotatedType Integer where
-  getAnnotatedType = undefined
+  getAnnotatedType = panic "Cannot encode Integer into JSON due to its arbitrary size. Should get a compile-time error instead of this."
 
 
 -- Builtin input types
