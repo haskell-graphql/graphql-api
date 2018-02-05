@@ -51,9 +51,9 @@ tests:
       - directory
 
   graphql-api-doctests:
-    main: Doctests.hs
+    main: Main.hs
     ghc-options: -threaded
-    source-dirs: tests
+    source-dirs: tests/doctests
     dependencies:
       - doctest
 
