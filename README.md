@@ -56,7 +56,7 @@ run :: Text -> IO Response
 run = interpretAnonymousQuery @Hello hello
 ```
 
-We require GHC 8.0.2 or later for features like the `@Hello` type application, and for certain bug fixes.
+We require GHC 8.0.2 or later for features like the `@Hello` type application, and for certain bug fixes. We also support GHC 8.2.
 
 With the code above we can now run a query:
 
