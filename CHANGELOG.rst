@@ -9,7 +9,9 @@ Breaking changes
 ----------------
 
 * ``Enum`` handlers are now monadic (see `#118`_)
-* restrict usage to Protolude 0.2.1 and later
+* You must use protolude 0.2.1 or later
+* ``Defaultable`` must now be imported from ``GraphQL.API``, rather than ``GraphQL.Resolver``,
+  this moves ``GraphQL.API`` closer to being sufficient for API definition. (see `#149`_)
 
 Improvements
 ------------
@@ -17,7 +19,7 @@ Improvements
 * Now support GHC 8.2 as well as 8.0.2 and later
 
 .. _`#118`: https://github.com/jml/graphql-api/issues/118
-
+.. _`#149`: https://github.com/haskell-graphql/graphql-api/issues/149
 
 v0.2.0 (2017-10-12)
 ===================
