@@ -11,6 +11,11 @@ Breaking changes
 * ``Enum`` handlers are now monadic (see `#118`_)
 * restrict usage to Protolude 0.2.1 and later
 
+Improvements
+------------
+
+* Now support GHC 8.2 as well as 8.0.2 and later
+
 .. _`#118`: https://github.com/jml/graphql-api/issues/118
 
 

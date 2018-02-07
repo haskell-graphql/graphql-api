@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 39113cf0b3911f4704bf80289a842f6a6cad623940e0146c3af99de590799257
+-- hash: 78a5a4f0c4375f8d03bffd738aeb76a00fdf535cd6bc2e07cdaa13de38b1e614
 
 name:           graphql-api
 version:        0.2.0
@@ -65,9 +65,9 @@ library
 
 test-suite graphql-api-doctests
   type: exitcode-stdio-1.0
-  main-is: Doctests.hs
+  main-is: Main.hs
   hs-source-dirs:
-      tests
+      tests/doctests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
   ghc-options: -Wall -fno-warn-redundant-constraints -threaded
   build-depends:
@@ -78,18 +78,6 @@ test-suite graphql-api-doctests
     , protolude >=0.2.1
     , transformers
   other-modules:
-      ASTTests
-      EndToEndTests
-      EnumTests
-      Examples.InputObject
-      Examples.UnionExample
-      ExampleSchema
-      OrderedMapTests
-      ResolverTests
-      SchemaTests
-      Spec
-      ValidationTests
-      ValueTests
       Paths_graphql_api
   default-language: Haskell2010
 
@@ -117,7 +105,6 @@ test-suite graphql-api-tests
     , transformers
   other-modules:
       ASTTests
-      Doctests
       EndToEndTests
       EnumTests
       Examples.InputObject
