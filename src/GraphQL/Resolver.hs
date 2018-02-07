@@ -17,7 +17,6 @@ module GraphQL.Resolver
   ( ResolverError(..)
   , HasResolver(..)
   , (:<>)(..)
-  , Defaultable(..)
   , Result(..)
   , unionValue
   ) where
@@ -146,38 +145,10 @@ class HasResolver m a where
   type Handler m a
   resolve :: Handler m a -> Maybe (SelectionSetByType Value) -> m (Result Value)
 
--- | Specify a default value for a type in a GraphQL schema.
---
--- GraphQL schema can have default values in certain places. For example,
--- arguments to fields can have default values. Because we cannot lift
--- arbitrary values to the type level, we need some way of getting at those
--- values. This typeclass provides the means.
---
--- To specify a default, implement this typeclass.
---
--- The default implementation is to say that there *is* no default for this
--- type.
-class Defaultable a where
-  -- | defaultFor returns the value to be used when no value has been given.
-  defaultFor :: Name -> Maybe a
-  defaultFor _ = empty
-
 -- | Called when the schema expects an input argument @name@ of type @a@ but
 -- @name@ has not been provided.
-valueMissing :: Defaultable a => Name -> Either ResolverError a
-valueMissing name = maybe (Left (ValueMissing name)) Right (defaultFor name)
-
-instance Defaultable Int32
-
-instance Defaultable Double
-
-instance Defaultable Bool
-
-instance Defaultable Text
-
-instance Defaultable (Maybe a) where
-  -- | The default for @Maybe a@ is @Nothing@.
-  defaultFor _ = pure Nothing
+valueMissing :: API.Defaultable a => Name -> Either ResolverError a
+valueMissing name = maybe (Left (ValueMissing name)) Right (API.defaultFor name)
 
 instance forall m. (Applicative m) => HasResolver m Int32 where
   type Handler m Int32 = m Int32
@@ -287,7 +258,7 @@ instance forall ksH t f m.
   ( KnownSymbol ksH
   , BuildFieldResolver m f
   , FromValue t
-  , Defaultable t
+  , API.Defaultable t
   , HasAnnotatedInputType t
   , Monad m
   ) => BuildFieldResolver m (PlainArgument (API.Argument ksH t) f) where
@@ -303,7 +274,7 @@ instance forall ksK t f m name.
   ( KnownSymbol ksK
   , BuildFieldResolver m f
   , KnownSymbol name
-  , Defaultable t
+  , API.Defaultable t
   , API.GraphQLEnum t
   , Monad m
   ) => BuildFieldResolver m (EnumArgument (API.Argument ksK (API.Enum name t)) f) where

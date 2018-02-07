@@ -7,7 +7,7 @@ import Protolude hiding (Enum)
 
 import GraphQL
 import GraphQL.API
-import GraphQL.Resolver (Handler, Defaultable(..))
+import GraphQL.Resolver (Handler)
 import GraphQL.Value.FromValue (FromValue)
 
 data DogStuff = DogStuff { toy :: Text, likesTreats :: Bool } deriving (Show, Generic)

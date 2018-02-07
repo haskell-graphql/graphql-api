@@ -15,13 +15,13 @@ module GraphQL.API
   ( Object
   , Field
   , Argument
-  , DefaultArgument
   , Union
   , List
   , Enum
   , GraphQLEnum(..)
   , Interface
   , (:>)(..)
+  , Defaultable(..)
   , HasAnnotatedType(..)
   , HasAnnotatedInputType
   , HasObjectDefinition(..)
@@ -36,7 +36,7 @@ import Protolude hiding (Enum, TypeError)
 
 import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
 import qualified GraphQL.Internal.Schema as Schema
-import GraphQL.Internal.Name (NameError, nameFromSymbol)
+import GraphQL.Internal.Name (Name, NameError, nameFromSymbol)
 import GraphQL.API.Enum (GraphQLEnum(..))
 import GHC.Generics ((:*:)(..))
 import GHC.Types (Type)
@@ -82,11 +82,34 @@ data Field (name :: Symbol) (fieldType :: Type)
 data Argument (name :: Symbol) (argType :: Type)
 
 
--- Can't set the value for default arguments via types, but can
--- distinguish to force users to provide a default argument somewhere
--- in their function (using Maybe? ore some new type like
--- https://hackage.haskell.org/package/optional-args-1.0.1)
-data DefaultArgument (name :: Symbol) (argType :: Type)
+-- | Specify a default value for a type in a GraphQL schema.
+--
+-- GraphQL schema can have default values in certain places. For example,
+-- arguments to fields can have default values. Because we cannot lift
+-- arbitrary values to the type level, we need some way of getting at those
+-- values. This typeclass provides the means.
+--
+-- To specify a default, implement this typeclass.
+--
+-- The default implementation is to say that there *is* no default for this
+-- type.
+class Defaultable a where
+  -- | defaultFor returns the value to be used when no value has been given.
+  defaultFor :: Name -> Maybe a
+  defaultFor _ = empty
+
+instance Defaultable Int32
+
+instance Defaultable Double
+
+instance Defaultable Bool
+
+instance Defaultable Text
+
+instance Defaultable (Maybe a) where
+  -- | The default for @Maybe a@ is @Nothing@.
+  defaultFor _ = pure Nothing
+
 
 cons :: a -> [a] -> [a]
 cons = (:)
@@ -316,7 +339,7 @@ instance forall dataName consName records s l p.
           . Schema.NonNullTypeNamed
           . Schema.DefinedInputType
           . Schema.InputTypeDefinitionObject
-          . (Schema.InputObjectTypeDefinition name)
+          . Schema.InputObjectTypeDefinition name
           . Schema.NonEmptyList
         ) (genericGetInputObjectFieldDefinitions @records)
 

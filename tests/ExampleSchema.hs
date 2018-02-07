@@ -85,10 +85,8 @@ import GraphQL.API
   , Interface
   , Union
   , (:>)
+  , Defaultable(..)
   )
--- XXX: This really shouldn't be part of Resolver, since whether or not a
--- thing has a default is part of the API / Schema definition.
-import GraphQL.Resolver (Defaultable(..))
 import GraphQL.Value (pattern ValueEnum, unName)
 import GraphQL.Value.ToValue (ToValue(..))
 
