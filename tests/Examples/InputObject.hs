@@ -32,7 +32,7 @@ description (DogStuff toy likesTreats)
 
 -- $setup
 -- >>> import Data.Aeson (encode)
--- >>> import GraphQL.Value.ToValue (ToValue(..))
+-- >>> import GraphQL.Value (ToValue(..))
 
 -- | Show input object usage
 --

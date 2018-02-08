@@ -33,7 +33,7 @@ catOrDogList = pure $
 
 -- $setup
 -- >>> import Data.Aeson (encode)
--- >>> import GraphQL.Value.ToValue (ToValue(..))
+-- >>> import GraphQL.Value (ToValue(..))
 
 -- | Show usage of a single unionValue
 --
