@@ -2,7 +2,7 @@
 graphql-api changelog
 =====================
 
-$next (yyyy-mm-dd)
+0.3.0 (2018-02-08)
 ==================
 
 Breaking changes
@@ -17,9 +17,11 @@ Improvements
 ------------
 
 * Now support GHC 8.2 as well as 8.0.2 and later
+* Added support for anonymous queries (thanks `@sunwukonga`_)
 
 .. _`#118`: https://github.com/jml/graphql-api/issues/118
 .. _`#149`: https://github.com/haskell-graphql/graphql-api/issues/149
+.. _`@sunwukonga`: https://github.com/sunwukonga
 
 v0.2.0 (2017-10-12)
 ===================
