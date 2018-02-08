@@ -13,9 +13,9 @@ import Protolude
 import Data.Aeson (Value(Null), toJSON, object, (.=))
 import qualified Data.Map as Map
 import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
-import GraphQL.API (Object, Field, Argument, (:>), Defaultable(..), HasAnnotatedInputType(..))
+import GraphQL.API (Object, Field, List, Argument, (:>), Defaultable(..), HasAnnotatedInputType(..))
 import GraphQL.Internal.Syntax.AST (Variable(..))
-import GraphQL.Resolver ((:<>)(..), Handler)
+import GraphQL.Resolver ((:<>)(..), Handler, unionValue)
 import GraphQL.Value (ToValue(..), FromValue(..), makeName)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
@@ -36,6 +36,8 @@ import ExampleSchema
 type QueryRoot = Object "QueryRoot" '[]
   '[ Field "dog" Dog
    , Argument "dog" DogStuff :> Field "describeDog" Text
+   , Field "catOrDog" CatOrDog
+   , Field "catOrDogList" (List CatOrDog)
    ]
 
 -- | An object that is passed as an argument. i.e. an input object.
@@ -48,6 +50,25 @@ instance HasAnnotatedInputType DogStuff
 instance Defaultable DogStuff where
   defaultFor "dog" = pure DogStuff { toy = "shoe", likesTreats = False }
   defaultFor _ = empty
+
+catOrDog :: Handler IO CatOrDog
+catOrDog = do
+  name <- pure "MonadicFelix" -- we can do monadic actions
+  unionValue @Cat (catHandler name Nothing 15)
+
+catOrDogList :: Handler IO (List CatOrDog)
+catOrDogList =
+  pure [ unionValue @Cat (catHandler "Felix the Cat" (Just "felix") 42)
+       , unionValue @Cat (catHandler "Henry" Nothing 10)
+       , unionValue @Dog (viewServerDog mortgage)
+       ]
+
+catHandler :: Text -> Maybe Text -> Int32 -> Handler IO Cat
+catHandler name nickName meowVolume = pure $
+  pure name :<>
+  pure (pure <$> nickName) :<>
+  pure . const False :<>  -- doesn't know any commands
+  pure meowVolume
 
 -- | Our server's internal representation of a 'Dog'.
 data ServerDog
@@ -87,7 +108,7 @@ describeDog (DogStuff toy likesTreats)
   | otherwise = pure $ "their favorite toy is a " <> toy
 
 rootHandler :: ServerDog -> Handler IO QueryRoot
-rootHandler dog = pure $ viewServerDog dog :<> describeDog
+rootHandler dog = pure $ viewServerDog dog :<> describeDog :<> catOrDog :<> catOrDogList
 
 -- | jml has a stuffed black dog called "Mortgage".
 mortgage :: ServerDog
@@ -243,8 +264,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     it "Handles fairly complex queries" $ do
-      -- TODO: jml would like to put some union checks in here, but we don't
-      -- have any unions reachable from Dog!
       let query = [r|{
                       dog {
                         callsign: name
@@ -271,6 +290,41 @@ tests = testSpec "End-to-end tests" $ do
                 [ "callsign" .= ("Mortgage" :: Text)
                 , "me" .= object
                   [ "name" .= ("jml" :: Text)
+                  ]
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Lets you query union types" $ do
+      let query = "{ catOrDog { ... on Cat { name meowVolume } ... on Dog { barkVolume } } }"
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
+      let expected =
+            object
+            [ "data" .= object
+              [ "catOrDog" .= object
+                [ "name" .= ("MonadicFelix" :: Text)
+                , "meowVolume" .= (15 :: Float)
+                ]
+              ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Lets you query lists of union types" $ do
+      let query = "{ catOrDogList { ... on Cat { name meowVolume } ... on Dog { barkVolume } } }"
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
+      let expected =
+            object
+            [ "data" .= object
+              [ "catOrDogList" .=
+                [ object
+                  [ "name" .= ("Felix the Cat" :: Text)
+                  , "meowVolume" .= (42 :: Float)
+                  ]
+                , object
+                  [ "name" .= ("Henry" :: Text)
+                  , "meowVolume" .= (10 :: Float)
+                  ]
+                , object
+                  [ "barkVolume" .= (0 :: Float)
                   ]
                 ]
               ]

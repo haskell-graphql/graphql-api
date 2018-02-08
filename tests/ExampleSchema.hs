@@ -249,6 +249,9 @@ type Human = Object "Human" '[Sentient]
 -- @
 data CatCommand = Jump deriving Generic
 
+instance Defaultable CatCommand where
+  defaultFor _ = empty
+
 instance GraphQLEnum CatCommand
 
 -- | A cat.
