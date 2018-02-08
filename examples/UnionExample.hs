@@ -1,10 +1,13 @@
 {-# LANGUAGE DataKinds #-}
-module Examples.UnionExample  where
+module Main (main) where
 
 import Protolude
+
+import qualified Data.Aeson as Aeson
 import GraphQL.API (Field, List, Object, Union)
-import GraphQL (Response, interpretAnonymousQuery)
+import GraphQL (interpretAnonymousQuery)
 import GraphQL.Resolver (Handler, (:<>)(..), unionValue)
+import GraphQL.Value (ToValue(..))
 
 -- Slightly reduced example from the spec
 type MiniCat = Object "MiniCat" '[] '[Field "name" Text, Field "meowVolume" Int32]
@@ -31,22 +34,9 @@ catOrDogList = pure $
        , unionValue @MiniDog miniDog
        ]
 
--- $setup
--- >>> import Data.Aeson (encode)
--- >>> import GraphQL.Value (ToValue(..))
-
--- | Show usage of a single unionValue
---
--- >>> response <- exampleQuery
--- >>> putStrLn $ encode $ toValue response
--- {"data":{"myPet":{"meowVolume":32,"name":"MonadicFelix"}}}
-exampleQuery :: IO Response
-exampleQuery = interpretAnonymousQuery @CatOrDog catOrDog "{ myPet { ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } } }"
-
--- | 'unionValue' can be used in a list context
---
--- >>> response <- exampleListQuery
--- >>> putStrLn $ encode $ toValue response
--- {"data":{"pets":[{"meowVolume":32,"name":"Felix"},{"meowVolume":32,"name":"Mini"},{"barkVolume":100}]}}
-exampleListQuery :: IO Response
-exampleListQuery = interpretAnonymousQuery @CatOrDogList catOrDogList  "{ pets { ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } } }"
+main :: IO ()
+main = do
+  response <- interpretAnonymousQuery @CatOrDog catOrDog "{ myPet { ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } } }"
+  putStrLn $ Aeson.encode $ toValue response
+  response' <- interpretAnonymousQuery @CatOrDogList catOrDogList "{ pets { ... on MiniCat { name meowVolume } ... on MiniDog { barkVolume } } }"
+  putStrLn $ Aeson.encode $ toValue response'

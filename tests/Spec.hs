@@ -15,10 +15,6 @@ import qualified ValidationTests
 import qualified ValueTests
 import qualified EnumTests ()
 
--- import examples to ensure they compile
-import Examples.InputObject ()
-import Examples.UnionExample ()
-
 main :: IO ()
 main = do
   t <- sequence tests
