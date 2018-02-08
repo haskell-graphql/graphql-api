@@ -11,22 +11,23 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Description: Convert GraphQL values to domain-specific Haskell values
-module GraphQL.Value.FromValue
+module GraphQL.Internal.Value.FromValue
   ( FromValue(..)
   , prop_roundtripValue
   , wrongType
   ) where
 
 import Protolude hiding (TypeError)
-import GraphQL.Internal.Name (nameFromSymbol)
-import qualified GraphQL.Internal.OrderedMap as OM
-import GraphQL.Value
-import GraphQL.Value.ToValue (ToValue(..))
+
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.List.NonEmpty (NonEmpty)
 import GHC.Generics ((:*:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 import GHC.Types (Type)
+
+import GraphQL.Internal.Name (nameFromSymbol)
+import qualified GraphQL.Internal.OrderedMap as OM
+import GraphQL.Internal.Value
+import GraphQL.Internal.Value.ToValue (ToValue(..))
 
 -- * FromValue
 

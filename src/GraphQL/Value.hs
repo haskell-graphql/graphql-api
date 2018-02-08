@@ -37,6 +37,9 @@ module GraphQL.Value
   , unionObjects
     -- ** Querying
   , objectFields
+    -- * Converting to and from Value
+  , ToValue(..)
+  , FromValue(..)
   ) where
 
 import GraphQL.Internal.Value
@@ -71,4 +74,10 @@ import GraphQL.Internal.Value
   , objectFromOrderedMap
   , unionObjects
   , objectFields
+  )
+import GraphQL.Internal.Value.FromValue
+  ( FromValue(..)
+  )
+import GraphQL.Internal.Value.ToValue
+  ( ToValue(..)
   )

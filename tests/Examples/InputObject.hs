@@ -3,12 +3,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Examples.InputObject where
+
 import Protolude hiding (Enum)
 
 import GraphQL
 import GraphQL.API
 import GraphQL.Resolver (Handler)
-import GraphQL.Value.FromValue (FromValue)
+import GraphQL.Value (FromValue)
 
 data DogStuff = DogStuff { toy :: Text, likesTreats :: Bool } deriving (Show, Generic)
 instance FromValue DogStuff

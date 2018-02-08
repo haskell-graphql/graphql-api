@@ -9,14 +9,15 @@ module GraphQL.Wai
 
 import Protolude
 
+import qualified Data.Aeson as Aeson
+import Network.Wai (Application, queryString, responseLBS)
+import Network.HTTP.Types.Header (hContentType)
+import Network.HTTP.Types.Status (status200, status400)
+
 import GraphQL (interpretAnonymousQuery)
 import GraphQL.API (HasObjectDefinition)
 import GraphQL.Resolver (HasResolver, Handler)
-import Network.Wai (Application, queryString, responseLBS)
-import GraphQL.Value.ToValue (toValue)
-import Network.HTTP.Types.Header (hContentType)
-import Network.HTTP.Types.Status (status200, status400)
-import qualified Data.Aeson as Aeson
+import GraphQL.Value (toValue)
 
 
 -- | Adapt a GraphQL handler to a WAI application. This is really just

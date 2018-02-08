@@ -11,8 +11,10 @@ module GraphQL.Internal.Output
   ) where
 
 import Protolude hiding (Location, Map)
+
 import Data.Aeson (ToJSON(..))
 import Data.List.NonEmpty (NonEmpty(..))
+
 import GraphQL.Value
   ( Object
   , objectFromList
@@ -20,9 +22,9 @@ import GraphQL.Value
   , pattern ValueObject
   , pattern ValueNull
   , NameError(..)
+  , ToValue(..)
   )
 import GraphQL.Internal.Name (Name)
-import GraphQL.Value.ToValue (ToValue(..))
 
 -- | GraphQL response.
 --

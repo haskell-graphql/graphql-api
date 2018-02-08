@@ -51,9 +51,9 @@ import qualified GraphQL.Value as GValue
 import GraphQL.Value
   ( Value
   , pattern ValueEnum
+  , FromValue(..)
+  , ToValue(..)
   )
-import GraphQL.Value.FromValue (FromValue(..))
-import GraphQL.Value.ToValue (ToValue(..))
 import GraphQL.Internal.Name (Name, NameError(..), HasName(..), nameFromSymbol)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))

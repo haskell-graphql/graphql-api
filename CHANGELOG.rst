@@ -12,6 +12,8 @@ Breaking changes
 * You must use protolude 0.2.1 or later
 * ``Defaultable`` must now be imported from ``GraphQL.API``, rather than ``GraphQL.Resolver``,
   this moves ``GraphQL.API`` closer to being sufficient for API definition. (see `#149`_)
+* ``GraphQL.Value.ToValue`` and ``GraphQL.Value.FromValue`` modules have been removed.
+  Import ``ToValue(..)`` and ``FromValue(..)`` from ``GraphQL.Value`` directly.
 
 Improvements
 ------------
