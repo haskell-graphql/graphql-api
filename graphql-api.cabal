@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 548d0a5e9d093fccdd93dbd48fba39325472d29b4621296bdcaae8af39c4a6d2
+-- hash: 642fa958f4905d966aea7a1712b443caa4c1fb0711a3bceea766f2f15e1444a3
 
 name:           graphql-api
 version:        0.3.0
@@ -64,6 +64,7 @@ library
       GraphQL.Internal.Syntax.Parser
       GraphQL.Internal.Syntax.Tokens
       GraphQL.Internal.Validation
+      GraphQL.Internal.Value
       GraphQL.Resolver
       GraphQL.Value
       GraphQL.Value.FromValue
