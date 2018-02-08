@@ -13,6 +13,9 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-} -- for TypeError
 
+-- | Description: Implement handlers for GraphQL schemas
+--
+-- Contains everything you need to write handlers for your GraphQL schema.
 module GraphQL.Resolver
   ( ResolverError(..)
   , HasResolver(..)

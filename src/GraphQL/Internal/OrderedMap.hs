@@ -1,5 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
--- | Data structure for mapping keys to values while preserving order of appearance.
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Data structure for mapping keys to values while preserving order of appearance
 --
 -- There are many cases in GraphQL where we want to have a map from names to
 -- values, where values can easily be lookup up by name and name is unique.

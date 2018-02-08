@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
--- | GraphQL output.
---
--- How we encode GraphQL responses.
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: How we encode GraphQL responses
 module GraphQL.Internal.Output
   ( Response(..)
   , Errors

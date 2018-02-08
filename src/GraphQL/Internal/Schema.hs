@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
--- | Fully realized GraphQL schema type system at the value level.
+-- | Description: Fully realized GraphQL schema type system at the Haskell value level
 --
 -- Differs from "Data.GraphQL.AST" in the
 -- [graphql](http://hackage.haskell.org/package/graphql) package in that there

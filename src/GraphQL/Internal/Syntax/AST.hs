@@ -2,7 +2,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
+-- | Description: The GraphQL AST
 module GraphQL.Internal.Syntax.AST
   ( QueryDocument(..)
   , SchemaDocument(..)

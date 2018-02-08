@@ -1,4 +1,6 @@
--- | Basic tokenising used by parser.
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Basic tokenising used by parser
 module GraphQL.Internal.Syntax.Tokens
   ( tok
   , whiteSpace

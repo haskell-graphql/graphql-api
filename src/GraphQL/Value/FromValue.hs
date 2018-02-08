@@ -8,8 +8,9 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
--- | Literal GraphQL values.
+-- | Description: Convert GraphQL values to domain-specific Haskell values
 module GraphQL.Value.FromValue
   ( FromValue(..)
   , prop_roundtripValue

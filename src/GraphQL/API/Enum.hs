@@ -7,7 +7,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
+-- | Description: Define GraphQL Enums with Haskell types
 module GraphQL.API.Enum
   ( GraphQLEnum(..)
   ) where

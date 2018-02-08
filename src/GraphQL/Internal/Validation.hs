@@ -5,7 +5,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
--- | Transform GraphQL query documents from AST into valid structures
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Transform GraphQL query documents from AST into valid structures
 --
 -- This corresponds roughly to the
 -- [Validation](https://facebook.github.io/graphql/#sec-Validation) section of

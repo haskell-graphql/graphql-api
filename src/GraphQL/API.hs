@@ -10,7 +10,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- | Type-level definitions for a GraphQL schema.
+-- | Description: Define a GraphQL schema with Haskell types
+--
+-- Use this to define your GraphQL schema with Haskell types.
 module GraphQL.API
   ( Object
   , Field

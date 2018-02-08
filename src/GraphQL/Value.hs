@@ -8,7 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- | Literal GraphQL values.
+-- | Description: Literal GraphQL values
 module GraphQL.Value
   ( Value
   , Value'(..)

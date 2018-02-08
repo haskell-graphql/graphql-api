@@ -1,9 +1,11 @@
--- | Representation of GraphQL names.
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Representation of GraphQL names.
 module GraphQL.Internal.Name
   ( Name(unName, Name)
   , NameError(..)

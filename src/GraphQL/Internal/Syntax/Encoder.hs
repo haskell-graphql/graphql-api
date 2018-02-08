@@ -1,3 +1,6 @@
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Turn GraphQL ASTs into text
 module GraphQL.Internal.Syntax.Encoder
   ( queryDocument
   , schemaDocument

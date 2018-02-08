@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
+-- | Description: Turn domain-specific Haskell values into GraphQL values.
 module GraphQL.Value.ToValue
   ( ToValue(..)
   ) where
