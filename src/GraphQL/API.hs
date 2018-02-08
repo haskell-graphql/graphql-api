@@ -137,13 +137,13 @@ instance HasFieldDefinitions '[] where
 -- object types from union type lists, e.g. for
 -- Union "Horse" '[Leg, Head, Tail]
 --               ^^^^^^^^^^^^^^^^^^ this part
-class UnionTypeObjectTypeDefinitionList a where
+class HasUnionTypeObjectTypeDefinitions a where
   getUnionTypeObjectTypeDefinitions :: Either NameError [Schema.ObjectTypeDefinition]
 
-instance forall a as. (HasObjectDefinition a, UnionTypeObjectTypeDefinitionList as) => UnionTypeObjectTypeDefinitionList (a:as) where
+instance forall a as. (HasObjectDefinition a, HasUnionTypeObjectTypeDefinitions as) => HasUnionTypeObjectTypeDefinitions (a:as) where
   getUnionTypeObjectTypeDefinitions = cons <$> getDefinition @a <*> getUnionTypeObjectTypeDefinitions @as
 
-instance UnionTypeObjectTypeDefinitionList '[] where
+instance HasUnionTypeObjectTypeDefinitions '[] where
   getUnionTypeObjectTypeDefinitions = pure []
 
 -- Interfaces
@@ -265,7 +265,7 @@ instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType 
     let et = Schema.EnumTypeDefinition <$> name <*> map (map Schema.EnumValueDefinition) enums
     Schema.TypeNonNull . Schema.NonNullTypeNamed . Schema.DefinedType . Schema.TypeDefinitionEnum <$> et
 
-instance forall ks as. (KnownSymbol ks, UnionTypeObjectTypeDefinitionList as) => HasAnnotatedType (Union ks as) where
+instance forall ks as. (KnownSymbol ks, HasUnionTypeObjectTypeDefinitions as) => HasAnnotatedType (Union ks as) where
   getAnnotatedType =
     let name = nameFromSymbol @ks
         types = Schema.NonEmptyList <$> getUnionTypeObjectTypeDefinitions @as
