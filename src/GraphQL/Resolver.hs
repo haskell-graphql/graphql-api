@@ -41,12 +41,12 @@ import GHC.Types (Type)
 import qualified GHC.Exts (Any)
 import Unsafe.Coerce (unsafeCoerce)
 
-import GraphQL.API
-  ( (:>)
-  , HasAnnotatedType(..)
+import GraphQL.Internal.API
+  ( HasAnnotatedType(..)
   , HasAnnotatedInputType(..)
+  , (:>)
   )
-import qualified GraphQL.API as API
+import qualified GraphQL.Internal.API as API
 import qualified GraphQL.Value as GValue
 import GraphQL.Value
   ( Value
