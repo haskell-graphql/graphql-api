@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeOperators #-}
 -- | Tests that span the entire system.
 --
 -- These tests function both as examples of how to use the API, as well as
@@ -11,10 +13,10 @@ import Protolude
 import Data.Aeson (Value(Null), toJSON, object, (.=))
 import qualified Data.Map as Map
 import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
-import GraphQL.API (Object, Field)
+import GraphQL.API (Object, Field, Argument, (:>), Defaultable(..), HasAnnotatedInputType(..))
 import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler)
-import GraphQL.Value (ToValue(..), makeName)
+import GraphQL.Value (ToValue(..), FromValue(..), makeName)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 import Text.RawString.QQ (r)
@@ -26,13 +28,26 @@ import ExampleSchema
 -- @
 -- type QueryRoot {
 --   dog: Dog
+--   describeDog(dog: DEFAULT): String
 -- }
 -- @
 --
 -- Drawn from <https://facebook.github.io/graphql/#sec-Validation>.
 type QueryRoot = Object "QueryRoot" '[]
   '[ Field "dog" Dog
+   , Argument "dog" DogStuff :> Field "describeDog" Text
    ]
+
+-- | An object that is passed as an argument. i.e. an input object.
+--
+-- TODO: Ideally this would be Dog itself, or ServerDog at worst.
+-- Unfortunately, jml cannot figure out how to do that.
+data DogStuff = DogStuff { toy :: Text, likesTreats :: Bool } deriving (Show, Generic)
+instance FromValue DogStuff
+instance HasAnnotatedInputType DogStuff
+instance Defaultable DogStuff where
+  defaultFor "dog" = pure DogStuff { toy = "shoe", likesTreats = False }
+  defaultFor _ = empty
 
 -- | Our server's internal representation of a 'Dog'.
 data ServerDog
@@ -66,6 +81,14 @@ viewServerDog dog@ServerDog{..} = pure $
   pure . isHouseTrained dog :<>
   viewServerHuman owner
 
+describeDog :: DogStuff -> Handler IO Text
+describeDog (DogStuff toy likesTreats)
+  | likesTreats = pure $ "likes treats and their favorite toy is a " <> toy
+  | otherwise = pure $ "their favorite toy is a " <> toy
+
+rootHandler :: ServerDog -> Handler IO QueryRoot
+rootHandler dog = pure $ viewServerDog dog :<> describeDog
+
 -- | jml has a stuffed black dog called "Mortgage".
 mortgage :: ServerDog
 mortgage = ServerDog
@@ -90,18 +113,18 @@ viewServerHuman (ServerHuman name) = pure (pure name)
 jml :: ServerHuman
 jml = ServerHuman "jml"
 
+
 tests :: IO TestTree
 tests = testSpec "End-to-end tests" $ do
   describe "interpretAnonymousQuery" $ do
     it "Handles the simplest possible valid query" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
                         name
                       }
                     }
                    |]
-      response <- interpretAnonymousQuery @QueryRoot root query
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
       let expected =
             object
             [ "data" .= object
@@ -112,7 +135,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     it "Handles more than one field" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
                         name
@@ -120,7 +142,7 @@ tests = testSpec "End-to-end tests" $ do
                       }
                     }
                    |]
-      response <- interpretAnonymousQuery @QueryRoot root query
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
       let expected =
             object
             [ "data" .= object
@@ -132,7 +154,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     it "Handles nested queries" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
                         name
@@ -142,7 +163,7 @@ tests = testSpec "End-to-end tests" $ do
                       }
                     }
                    |]
-      response <- interpretAnonymousQuery @QueryRoot root query
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
       let expected =
             object
             [ "data" .= object
@@ -156,7 +177,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     it "It aliases fields" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
                         name
@@ -166,7 +186,7 @@ tests = testSpec "End-to-end tests" $ do
                       }
                     }
                    |]
-      response <- interpretAnonymousQuery @QueryRoot root query
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
       let expected =
             object
             [ "data" .= object
@@ -180,7 +200,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     it "Passes arguments to functions" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|{
                       dog {
                         name
@@ -188,7 +207,7 @@ tests = testSpec "End-to-end tests" $ do
                       }
                      }
                     |]
-      response <- interpretAnonymousQuery @QueryRoot root query
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
       let expected =
             object
             [ "data" .= object
@@ -199,8 +218,31 @@ tests = testSpec "End-to-end tests" $ do
               ]
             ]
       toJSON (toValue response) `shouldBe` expected
+    it "Passes arguments that are objects to functions" $ do
+      let query = [r|{
+                      describeDog(dog: {toy: "bone", likesTreats: true})
+                     }
+                    |]
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
+      let expected =
+            object
+            [ "data" .= object
+              [ "describeDog" .= ("likes treats and their favorite toy is a bone" :: Text) ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
+    it "Passes default arguments that are objects to functions" $ do
+      let query = [r|{
+                      describeDog
+                     }
+                    |]
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
+      let expected =
+            object
+            [ "data" .= object
+              [ "describeDog" .= ("their favorite toy is a shoe" :: Text) ]
+            ]
+      toJSON (toValue response) `shouldBe` expected
     it "Handles fairly complex queries" $ do
-      let root = pure (viewServerDog mortgage)
       -- TODO: jml would like to put some union checks in here, but we don't
       -- have any unions reachable from Dog!
       let query = [r|{
@@ -221,7 +263,7 @@ tests = testSpec "End-to-end tests" $ do
                       }
                      }
                     |]
-      response <- interpretAnonymousQuery @QueryRoot root query
+      response <- interpretAnonymousQuery @QueryRoot (rootHandler mortgage) query
       let expected =
             object
             [ "data" .= object
@@ -236,14 +278,13 @@ tests = testSpec "End-to-end tests" $ do
       toJSON (toValue response) `shouldBe` expected
   describe "interpretQuery" $ do
     it "Handles the simplest named query" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|query myQuery {
                       dog {
                         name
                       }
                     }
                    |]
-      response <- interpretQuery @QueryRoot root query Nothing mempty
+      response <- interpretQuery @QueryRoot (rootHandler mortgage) query Nothing mempty
       let expected =
             object
             [ "data" .= object
@@ -254,7 +295,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     it "Allows calling query by name" $ do
-      let root = pure (viewServerDog mortgage)
       let query = [r|query myQuery {
                       dog {
                         name
@@ -262,7 +302,7 @@ tests = testSpec "End-to-end tests" $ do
                     }
                    |]
       let Right name = makeName "myQuery"
-      response <- interpretQuery @QueryRoot root query (Just name) mempty
+      response <- interpretQuery @QueryRoot (rootHandler mortgage) query (Just name) mempty
       let expected =
             object
             [ "data" .= object
@@ -273,7 +313,6 @@ tests = testSpec "End-to-end tests" $ do
             ]
       toJSON (toValue response) `shouldBe` expected
     describe "Handles variables" $ do
-      let root = pure (viewServerDog mortgage)
       let Right schema = makeSchema @Dog
       let Right query =
             compileQuery schema
@@ -285,7 +324,7 @@ tests = testSpec "End-to-end tests" $ do
                }
               |]
       it "Errors when no variables provided" $ do
-        response <- executeQuery  @QueryRoot root query Nothing mempty
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) query Nothing mempty
         let expected =
               object
               [ "data" .= object
@@ -315,7 +354,7 @@ tests = testSpec "End-to-end tests" $ do
         -- <https://github.com/jml/graphql-api/issues/96>
         let Right varName = makeName "whichCommand"
         let vars = Map.singleton (Variable varName) (toValue Sit)
-        response <- executeQuery  @QueryRoot root query Nothing vars
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) query Nothing vars
         let expected =
               object
               [ "data" .= object
