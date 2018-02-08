@@ -58,7 +58,7 @@ isHouseTrained dog (Just True) = houseTrainedElsewhere dog
 
 -- | Present 'ServerDog' for GraphQL.
 viewServerDog :: ServerDog -> Handler IO Dog
-viewServerDog dog@(ServerDog{..}) = pure $
+viewServerDog dog@ServerDog{..} = pure $
   pure name :<>
   pure (fmap pure nickname) :<>
   pure barkVolume :<>
@@ -79,7 +79,8 @@ mortgage = ServerDog
            }
 
 -- | Our server's internal representation of a 'Human'.
-data ServerHuman = ServerHuman Text deriving (Eq, Ord, Show)
+newtype ServerHuman = ServerHuman Text deriving (Eq, Ord, Show, Generic)
+
 
 -- | Present a 'ServerHuman' as a GraphQL 'Human'.
 viewServerHuman :: ServerHuman -> Handler IO Human
