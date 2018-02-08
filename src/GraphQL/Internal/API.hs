@@ -35,13 +35,13 @@ module GraphQL.Internal.API
 
 import Protolude hiding (Enum, TypeError)
 
-import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
-import qualified GraphQL.Internal.Schema as Schema
-import GraphQL.Internal.Name (Name, NameError, nameFromSymbol)
-import GraphQL.API.Enum (GraphQLEnum(..))
 import GHC.Generics ((:*:)(..))
+import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
 import GHC.Types (Type)
 
+import qualified GraphQL.Internal.Schema as Schema
+import GraphQL.Internal.Name (Name, NameError, nameFromSymbol)
+import GraphQL.Internal.API.Enum (GraphQLEnum(..))
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators

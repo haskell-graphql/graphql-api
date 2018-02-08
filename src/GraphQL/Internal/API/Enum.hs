@@ -10,16 +10,18 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Description: Define GraphQL Enums with Haskell types
-module GraphQL.API.Enum
+module GraphQL.Internal.API.Enum
   ( GraphQLEnum(..)
   ) where
 
 import Protolude hiding (Enum, TypeError)
-import GraphQL.Internal.Name (Name, nameFromSymbol, NameError)
-import GraphQL.Internal.Output (GraphQLError(..))
+
 import GHC.Generics (D, (:+:)(..))
 import GHC.TypeLits (KnownSymbol, TypeError, ErrorMessage(..))
 import GHC.Types (Type)
+
+import GraphQL.Internal.Name (Name, nameFromSymbol, NameError)
+import GraphQL.Internal.Output (GraphQLError(..))
 
 invalidEnumName :: forall t. NameError -> Either Text t
 invalidEnumName x = Left ("In Enum: " <> formatError x)
