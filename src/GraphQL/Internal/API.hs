@@ -27,6 +27,8 @@ module GraphQL.Internal.API
   , HasAnnotatedInputType
   , HasObjectDefinition(..)
   , getArgumentDefinition
+  , SchemaError(..)
+  , nameFromSymbol
   -- | Exported for testing.
   , getFieldDefinition
   , getInterfaceDefinition
@@ -35,13 +37,16 @@ module GraphQL.Internal.API
 
 import Protolude hiding (Enum, TypeError)
 
+import qualified Data.List.NonEmpty as NonEmpty
 import GHC.Generics ((:*:)(..))
 import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
 import GHC.Types (Type)
 
 import qualified GraphQL.Internal.Schema as Schema
-import GraphQL.Internal.Name (Name, NameError, nameFromSymbol)
+import qualified GraphQL.Internal.Name as Name
+import GraphQL.Internal.Name (Name, NameError)
 import GraphQL.Internal.API.Enum (GraphQLEnum(..))
+import GraphQL.Internal.Output (GraphQLError(..))
 
 -- $setup
 -- >>> :set -XDataKinds -XTypeOperators
@@ -83,6 +88,21 @@ data Field (name :: Symbol) (fieldType :: Type)
 data Argument (name :: Symbol) (argType :: Type)
 
 
+-- | The type-level schema was somehow invalid.
+data SchemaError
+  = NameError NameError
+  | EmptyFieldList
+  | EmptyUnion
+  deriving (Eq, Show)
+
+instance GraphQLError SchemaError where
+  formatError (NameError err) = formatError err
+  formatError EmptyFieldList = "Empty field list in type definition"
+  formatError EmptyUnion = "Empty object list in union"
+
+nameFromSymbol :: forall (n :: Symbol). KnownSymbol n => Either SchemaError Name
+nameFromSymbol = first NameError (Name.nameFromSymbol @n)
+
 -- | Specify a default value for a type in a GraphQL schema.
 --
 -- GraphQL schema can have default values in certain places. For example,
@@ -115,41 +135,52 @@ instance Defaultable (Maybe a) where
 cons :: a -> [a] -> [a]
 cons = (:)
 
+singleton :: a -> NonEmpty a
+singleton x = x :| []
+
 -- Transform into a Schema definition
 class HasObjectDefinition a where
   -- Todo rename to getObjectTypeDefinition
-  getDefinition :: Either NameError Schema.ObjectTypeDefinition
+  getDefinition :: Either SchemaError Schema.ObjectTypeDefinition
 
 class HasFieldDefinition a where
-  getFieldDefinition :: Either NameError Schema.FieldDefinition
+  getFieldDefinition :: Either SchemaError Schema.FieldDefinition
 
 
 -- Fields
 class HasFieldDefinitions a where
-  getFieldDefinitions :: Either NameError [Schema.FieldDefinition]
+  getFieldDefinitions :: Either SchemaError (NonEmpty Schema.FieldDefinition)
 
 instance forall a as. (HasFieldDefinition a, HasFieldDefinitions as) => HasFieldDefinitions (a:as) where
-  getFieldDefinitions = cons <$> getFieldDefinition @a <*> getFieldDefinitions @as
+  getFieldDefinitions =
+    case getFieldDefinitions @as of
+      Left EmptyFieldList -> singleton <$> getFieldDefinition @a
+      Left err -> Left err
+      Right fields -> NonEmpty.cons <$> getFieldDefinition @a <*> pure fields
 
 instance HasFieldDefinitions '[] where
-  getFieldDefinitions = pure []
+  getFieldDefinitions = Left EmptyFieldList
 
 
 -- object types from union type lists, e.g. for
 -- Union "Horse" '[Leg, Head, Tail]
 --               ^^^^^^^^^^^^^^^^^^ this part
 class HasUnionTypeObjectTypeDefinitions a where
-  getUnionTypeObjectTypeDefinitions :: Either NameError [Schema.ObjectTypeDefinition]
+  getUnionTypeObjectTypeDefinitions :: Either SchemaError (NonEmpty Schema.ObjectTypeDefinition)
 
 instance forall a as. (HasObjectDefinition a, HasUnionTypeObjectTypeDefinitions as) => HasUnionTypeObjectTypeDefinitions (a:as) where
-  getUnionTypeObjectTypeDefinitions = cons <$> getDefinition @a <*> getUnionTypeObjectTypeDefinitions @as
+  getUnionTypeObjectTypeDefinitions =
+    case getUnionTypeObjectTypeDefinitions @as of
+      Left EmptyUnion -> singleton <$> getDefinition @a
+      Left err -> Left err
+      Right objects -> NonEmpty.cons <$> getDefinition @a <*> pure objects
 
 instance HasUnionTypeObjectTypeDefinitions '[] where
-  getUnionTypeObjectTypeDefinitions = pure []
+  getUnionTypeObjectTypeDefinitions = Left EmptyUnion
 
 -- Interfaces
 class HasInterfaceDefinitions a where
-  getInterfaceDefinitions :: Either NameError Schema.Interfaces
+  getInterfaceDefinitions :: Either SchemaError Schema.Interfaces
 
 instance forall a as. (HasInterfaceDefinition a, HasInterfaceDefinitions as) => HasInterfaceDefinitions (a:as) where
   getInterfaceDefinitions = cons <$> getInterfaceDefinition @a <*> getInterfaceDefinitions @as
@@ -158,12 +189,12 @@ instance HasInterfaceDefinitions '[] where
   getInterfaceDefinitions = pure []
 
 class HasInterfaceDefinition a where
-  getInterfaceDefinition :: Either NameError Schema.InterfaceTypeDefinition
+  getInterfaceDefinition :: Either SchemaError Schema.InterfaceTypeDefinition
 
 instance forall ks fields. (KnownSymbol ks, HasFieldDefinitions fields) => HasInterfaceDefinition (Interface ks fields) where
   getInterfaceDefinition =
     let name = nameFromSymbol @ks
-        fields = Schema.NonEmptyList <$> getFieldDefinitions @fields
+        fields = getFieldDefinitions @fields
     in Schema.InterfaceTypeDefinition <$> name <*> fields
 
 -- Give users some help if they don't terminate Arguments with a Field:
@@ -183,7 +214,7 @@ instance forall t ks. (KnownSymbol ks, HasAnnotatedType t) => HasFieldDefinition
     in Schema.FieldDefinition <$> name <*> pure [] <*> getAnnotatedType @t
 
 class HasArgumentDefinition a where
-  getArgumentDefinition :: Either NameError Schema.ArgumentDefinition
+  getArgumentDefinition :: Either SchemaError Schema.ArgumentDefinition
 
 instance forall ks t. (KnownSymbol ks, HasAnnotatedInputType t) => HasArgumentDefinition (Argument ks t) where
   getArgumentDefinition = Schema.ArgumentDefinition <$> argName <*> argType <*> defaultValue
@@ -205,7 +236,7 @@ instance forall ks is fields.
   getDefinition =
     let name = nameFromSymbol @ks
         interfaces = getInterfaceDefinitions @is
-        fields = Schema.NonEmptyList <$> getFieldDefinitions @fields
+        fields = getFieldDefinitions @fields
     in Schema.ObjectTypeDefinition <$> name <*> interfaces <*> fields
 
 -- Builtin output types (annotated types)
@@ -215,7 +246,7 @@ class HasAnnotatedType a where
   -- forget this. Maybe we can flip the internal encoding to be
   -- non-null by default and needing explicit null-encoding (via
   -- Maybe).
-  getAnnotatedType :: Either NameError (Schema.AnnotatedType Schema.GType)
+  getAnnotatedType :: Either SchemaError (Schema.AnnotatedType Schema.GType)
 
 -- | Turn a non-null type into the optional version of its own type.
 dropNonNull :: Schema.AnnotatedType t -> Schema.AnnotatedType t
@@ -228,7 +259,7 @@ instance forall a. HasAnnotatedType a => HasAnnotatedType (Maybe a) where
   -- see TODO in HasAnnotatedType class
   getAnnotatedType = dropNonNull <$> getAnnotatedType @a
 
-builtinType :: Schema.Builtin -> Either NameError (Schema.AnnotatedType Schema.GType)
+builtinType :: Schema.Builtin -> Either SchemaError (Schema.AnnotatedType Schema.GType)
 builtinType = pure . Schema.TypeNonNull . Schema.NonNullTypeNamed . Schema.BuiltinType
 
 -- TODO(jml): Given that AnnotatedType is parametrised, we can probably reduce
@@ -263,13 +294,13 @@ instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedType 
   getAnnotatedType = do
     let name = nameFromSymbol @ks
     let enums = sequenceA (enumValues @enum) :: Either NameError [Schema.Name]
-    let et = Schema.EnumTypeDefinition <$> name <*> map (map Schema.EnumValueDefinition) enums
+    let et = Schema.EnumTypeDefinition <$> name <*> map (map Schema.EnumValueDefinition) (first NameError enums)
     Schema.TypeNonNull . Schema.NonNullTypeNamed . Schema.DefinedType . Schema.TypeDefinitionEnum <$> et
 
 instance forall ks as. (KnownSymbol ks, HasUnionTypeObjectTypeDefinitions as) => HasAnnotatedType (Union ks as) where
   getAnnotatedType =
     let name = nameFromSymbol @ks
-        types = Schema.NonEmptyList <$> getUnionTypeObjectTypeDefinitions @as
+        types = getUnionTypeObjectTypeDefinitions @as
     in (Schema.TypeNamed . Schema.DefinedType . Schema.TypeDefinitionUnion) <$> (Schema.UnionTypeDefinition <$> name <*> types)
 
 -- Help users with better type errors
@@ -281,14 +312,14 @@ instance TypeError ('Text "Cannot encode Integer because it has arbitrary size b
 -- Builtin input types
 class HasAnnotatedInputType a where
   -- See TODO comment in "HasAnnotatedType" class for nullability.
-  getAnnotatedInputType :: Either NameError (Schema.AnnotatedType Schema.InputType)
-  default getAnnotatedInputType :: (Generic a, GenericAnnotatedInputType (Rep a)) => Either NameError (Schema.AnnotatedType Schema.InputType)
+  getAnnotatedInputType :: Either SchemaError (Schema.AnnotatedType Schema.InputType)
+  default getAnnotatedInputType :: (Generic a, GenericAnnotatedInputType (Rep a)) => Either SchemaError (Schema.AnnotatedType Schema.InputType)
   getAnnotatedInputType = genericGetAnnotatedInputType @(Rep a)
 
 instance forall a. HasAnnotatedInputType a => HasAnnotatedInputType (Maybe a) where
   getAnnotatedInputType = dropNonNull <$> getAnnotatedInputType @a
 
-builtinInputType :: Schema.Builtin -> Either NameError (Schema.AnnotatedType Schema.InputType)
+builtinInputType :: Schema.Builtin -> Either SchemaError (Schema.AnnotatedType Schema.InputType)
 builtinInputType = pure . Schema.TypeNonNull . Schema.NonNullTypeNamed . Schema.BuiltinInputType
 
 instance HasAnnotatedInputType Int where
@@ -316,16 +347,16 @@ instance forall ks enum. (KnownSymbol ks, GraphQLEnum enum) => HasAnnotatedInput
   getAnnotatedInputType = do
     let name = nameFromSymbol @ks
         enums = sequenceA (enumValues @enum) :: Either NameError [Schema.Name]
-    let et = Schema.EnumTypeDefinition <$> name <*> map (map Schema.EnumValueDefinition) enums
+    let et = Schema.EnumTypeDefinition <$> name <*> map (map Schema.EnumValueDefinition) (first NameError enums)
     Schema.TypeNonNull . Schema.NonNullTypeNamed . Schema.DefinedInputType . Schema.InputTypeDefinitionEnum <$> et
 
 
 -- Generic getAnnotatedInputType function
 class GenericAnnotatedInputType (f :: Type -> Type) where
-  genericGetAnnotatedInputType :: Either NameError (Schema.AnnotatedType Schema.InputType)
+  genericGetAnnotatedInputType :: Either SchemaError (Schema.AnnotatedType Schema.InputType)
 
 class GenericInputObjectFieldDefinitions (f :: Type -> Type) where
-  genericGetInputObjectFieldDefinitions :: Either NameError [Schema.InputObjectFieldDefinition]
+  genericGetInputObjectFieldDefinitions :: Either SchemaError (NonEmpty Schema.InputObjectFieldDefinition)
 
 instance forall dataName consName records s l p.
   ( KnownSymbol dataName
@@ -341,7 +372,6 @@ instance forall dataName consName records s l p.
           . Schema.DefinedInputType
           . Schema.InputTypeDefinitionObject
           . Schema.InputObjectTypeDefinition name
-          . Schema.NonEmptyList
         ) (genericGetInputObjectFieldDefinitions @records)
 
 instance forall wrappedType fieldName rest u s l.
@@ -354,7 +384,7 @@ instance forall wrappedType fieldName rest u s l.
     annotatedInputType <- getAnnotatedInputType @wrappedType
     let l = Schema.InputObjectFieldDefinition name annotatedInputType Nothing
     r <- genericGetInputObjectFieldDefinitions @rest
-    pure (l:r)
+    pure (NonEmpty.cons l r)
 
 instance forall wrappedType fieldName u s l.
   ( KnownSymbol fieldName
@@ -364,4 +394,4 @@ instance forall wrappedType fieldName u s l.
     name <- nameFromSymbol @fieldName
     annotatedInputType <- getAnnotatedInputType @wrappedType
     let l = Schema.InputObjectFieldDefinition name annotatedInputType Nothing
-    pure [l]
+    pure (l :| [])
