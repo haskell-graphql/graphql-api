@@ -2,11 +2,17 @@
 """Ensure our test coverage only increases.
 
 Easier than figuring out how to get hpc-coveralls to work with Stack.
+
+If this fails, and the coverage went down: add some tests.
+If this fails, and the coverage went up: edit ``DESIRED_COVERAGE`` to match the new value.
+If this succeeds, great.
 """
 
+from __future__ import division
 from pprint import pprint
 import re
 import subprocess
+import sys
 
 
 EXPRESSIONS = 'expressions'
@@ -14,6 +20,25 @@ BOOLEANS = 'booleans'
 ALTERNATIVES = 'alternatives'
 LOCAL_DECLS = 'local_decls'
 TOP_LEVEL_DECLS = 'top_level_decls'
+
+
+"""The coverage we actually want.
+
+In a just world, this would be a separate config file, or command-line arguments.
+
+We round (truncate) coverage ratios to three decimals before comparing, so
+there's no need to go more than that.
+
+"""
+DESIRED_COVERAGE = {
+    EXPRESSIONS: 0.571,
+    BOOLEANS: 0.473,
+    ALTERNATIVES: 0.453,
+    LOCAL_DECLS: 0.813,
+    TOP_LEVEL_DECLS: 0.33,
+}
+
+DEFAULT_PRECISION = 3
 
 
 def get_report_summary():
@@ -106,9 +131,60 @@ def parse_report_summary(summary):
     return report
 
 
+def compare_values((covered, total), target, precision=DEFAULT_PRECISION):
+    """Compare measured coverage values with desired ones.
+
+    Compares ``covered / total`` to ``target``, up to ``precision`` places.
+    """
+    actual = covered / total
+    scale = 10 ** precision
+    rounded_actual = int(actual * scale)
+    rounded_target = int(target * scale)
+    return cmp(rounded_actual, rounded_target)
+
+
+def compare_coverage(report, desired, precision=DEFAULT_PRECISION):
+    comparison = {}
+    for key, target in desired.items():
+        actual = report.get(key, None)
+        if actual:
+            comparison[key] = compare_values(actual, target, precision=precision)
+        else:
+            comparison[key] = None
+    return comparison
+
+
+def format_result(result):
+    if result < 0:
+        return 'DOWN'
+    elif result == 0:
+        return 'OK'
+    else:
+        return 'UP'
+
+
+def format_entry(key, result, desired, actual):
+    covered, total = actual
+    formatted_result = format_result(result)
+    if result:
+        return '%s: %s (%2.1f => %2.1f)' % (
+            key, formatted_result, desired * 100,
+            100 * covered / total,
+        )
+    else:
+        return '%s: %s' % (key, formatted_result)
+
+
 def main():
     report = parse_report_summary(get_report_summary())
-    pprint(report)
+    comparison = compare_coverage(report, DESIRED_COVERAGE)
+    all_same = True
+    for key, value in sorted(comparison.items()):
+        if value != 0:
+            all_same = False
+        print format_entry(key, value, DESIRED_COVERAGE[key], report[key])
+    sys.exit(0 if all_same else 2)
 
 
-main()
+if __name__ == '__main__':
+    main()
