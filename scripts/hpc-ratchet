@@ -172,7 +172,7 @@ def format_entry(key, result, desired, actual):
     covered, total = actual
     formatted_result = format_result(result)
     if result:
-        return '%s: %s (%2.1f => %2.1f)' % (
+        return '%s: %s (%2.1f%% => %2.1f%%)' % (
             key, formatted_result, desired * 100,
             100 * covered / total,
         )
