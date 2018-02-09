@@ -6,6 +6,12 @@ Easier than figuring out how to get hpc-coveralls to work with Stack.
 If this fails, and the coverage went down: add some tests.
 If this fails, and the coverage went up: edit ``DESIRED_COVERAGE`` to match the new value.
 If this succeeds, great.
+
+If you want to get details of what's covered, run::
+
+    $ stack test --coverage
+
+And look at the generated HTML.
 """
 
 from __future__ import division
