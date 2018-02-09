@@ -32,16 +32,15 @@ TOP_LEVEL_DECLS = 'top_level_decls'
 
 In a just world, this would be a separate config file, or command-line arguments.
 
-We round (truncate) coverage ratios to three decimals before comparing, so
-there's no need to go more than that.
-
+We round coverage ratios to three decimals before comparing,
+so there's no need to go more than that.
 """
 DESIRED_COVERAGE = {
     EXPRESSIONS: 0.571,
-    BOOLEANS: 0.473,
+    BOOLEANS: 0.474,
     ALTERNATIVES: 0.453,
-    LOCAL_DECLS: 0.813,
-    TOP_LEVEL_DECLS: 0.33,
+    LOCAL_DECLS: 0.814,
+    TOP_LEVEL_DECLS: 0.331,
 }
 
 DEFAULT_PRECISION = 3
@@ -144,8 +143,8 @@ def compare_values((covered, total), target, precision=DEFAULT_PRECISION):
     """
     actual = covered / total
     scale = 10 ** precision
-    rounded_actual = int(actual * scale)
-    rounded_target = int(target * scale)
+    rounded_actual = int(round(actual * scale))
+    rounded_target = int(round(target * scale))
     return cmp(rounded_actual, rounded_target)
 
 
