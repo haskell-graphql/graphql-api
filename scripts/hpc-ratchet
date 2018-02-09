@@ -38,9 +38,9 @@ so there's no need to go more than that.
 DESIRED_COVERAGE = {
     EXPRESSIONS: 0.571,
     BOOLEANS: 0.474,
-    ALTERNATIVES: 0.453,
+    ALTERNATIVES: 0.454,
     LOCAL_DECLS: 0.814,
-    TOP_LEVEL_DECLS: 0.331,
+    TOP_LEVEL_DECLS: 0.325,
 }
 
 DEFAULT_PRECISION = 3
