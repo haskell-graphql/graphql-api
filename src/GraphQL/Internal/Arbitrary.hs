@@ -1,5 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
+-- | Description: QuickCheck instances to help with testing
 module GraphQL.Internal.Arbitrary
   ( arbitraryText
   , arbitraryNonEmpty

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2160ff0226a0b10f7166ddbcf09ec6f79dfddfd66c81244898fb1afabe36bcf8
+-- hash: 244f60f8e2def55fa21d6d61b793b76e26ffbe6fea3b5a4b9fee01127d32358d
 
 name:           graphql-api
 version:        0.3.0
@@ -51,22 +51,25 @@ library
   exposed-modules:
       GraphQL
       GraphQL.API
-      GraphQL.API.Enum
+      GraphQL.Internal.API
+      GraphQL.Internal.API.Enum
       GraphQL.Internal.Arbitrary
       GraphQL.Internal.Execution
       GraphQL.Internal.Name
       GraphQL.Internal.OrderedMap
       GraphQL.Internal.Output
+      GraphQL.Internal.Resolver
       GraphQL.Internal.Schema
       GraphQL.Internal.Syntax.AST
       GraphQL.Internal.Syntax.Encoder
       GraphQL.Internal.Syntax.Parser
       GraphQL.Internal.Syntax.Tokens
       GraphQL.Internal.Validation
+      GraphQL.Internal.Value
+      GraphQL.Internal.Value.FromValue
+      GraphQL.Internal.Value.ToValue
       GraphQL.Resolver
       GraphQL.Value
-      GraphQL.Value.FromValue
-      GraphQL.Value.ToValue
   other-modules:
       Paths_graphql_api
   default-language: Haskell2010

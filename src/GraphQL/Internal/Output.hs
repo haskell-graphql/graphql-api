@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
--- | GraphQL output.
---
--- How we encode GraphQL responses.
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: How we encode GraphQL responses
 module GraphQL.Internal.Output
   ( Response(..)
   , Errors
@@ -11,8 +11,10 @@ module GraphQL.Internal.Output
   ) where
 
 import Protolude hiding (Location, Map)
+
 import Data.Aeson (ToJSON(..))
 import Data.List.NonEmpty (NonEmpty(..))
+
 import GraphQL.Value
   ( Object
   , objectFromList
@@ -20,9 +22,9 @@ import GraphQL.Value
   , pattern ValueObject
   , pattern ValueNull
   , NameError(..)
+  , ToValue(..)
   )
 import GraphQL.Internal.Name (Name)
-import GraphQL.Value.ToValue (ToValue(..))
 
 -- | GraphQL response.
 --

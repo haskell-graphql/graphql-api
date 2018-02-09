@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
--- | Implement the \"Execution\" part of the GraphQL spec.
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Implement the \"Execution\" part of the GraphQL spec.
 --
 -- Actually, most of the execution work takes place in 'GraphQL.Resolver', but
 -- there's still a fair bit required to glue together the results of

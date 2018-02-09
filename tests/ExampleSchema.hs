@@ -87,8 +87,11 @@ import GraphQL.API
   , (:>)
   , Defaultable(..)
   )
-import GraphQL.Value (pattern ValueEnum, unName)
-import GraphQL.Value.ToValue (ToValue(..))
+import GraphQL.Value
+  ( pattern ValueEnum
+  , unName
+  , ToValue(..)
+  )
 
 -- | A command that can be given to a 'Dog'.
 --

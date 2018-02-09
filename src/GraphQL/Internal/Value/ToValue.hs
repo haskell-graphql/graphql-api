@@ -1,12 +1,14 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
-module GraphQL.Value.ToValue
+-- | Description: Turn domain-specific Haskell values into GraphQL values.
+module GraphQL.Internal.Value.ToValue
   ( ToValue(..)
   ) where
 
 import Protolude
-import GraphQL.Value
-import Data.List.NonEmpty (NonEmpty)
+
+import GraphQL.Internal.Value
 
 -- * ToValue
 

@@ -11,9 +11,11 @@ import GraphQL.API
   ( Field
   , Enum
   , List
-  , getAnnotatedType
   , getAnnotatedInputType
   , getDefinition
+  )
+import GraphQL.Internal.API
+  ( getAnnotatedType
   , getFieldDefinition
   , getInterfaceDefinition
   )

@@ -1,11 +1,14 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_HADDOCK not-home #-}
+
+-- | Description: Parse text into GraphQL ASTs
 module GraphQL.Internal.Syntax.Parser
   ( queryDocument
   , schemaDocument
   , value
   ) where
 
-import Protolude hiding (option, takeWhile)
+import Protolude hiding (option)
 
 import Control.Applicative ((<|>), empty, many, optional)
 import Control.Monad (fail)
