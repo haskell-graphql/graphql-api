@@ -1,14 +1,22 @@
 name: graphql-api
-version: 0.2.0
+version: 0.3.0
 synopsis: GraphQL API
-description: Please see README.md
-author: Jonathan M. Lange
+description: |
+  Implement [GraphQL](http://graphql.org/) servers in Haskell.
+
+  Provides a Servant-like type-based API for defining GraphQL schemas and
+  implementing handlers for those schemas.
+
+  See [README.md](https://github.com/haskell-graphql/graphql-api#graphql-api) for more details.
+author: Jonathan M. Lange, Tom Hunger
 maintainer: Jonathan M. Lange <jml@mumak.net>, Tom Hunger <tehunger@gmail.com>
 license: Apache
 license-file: LICENSE.Apache-2.0
-github: jml/graphql-api
+github: haskell-graphql/graphql-api
 category: Web
 stability: unstable
+extra-source-files:
+  - CHANGELOG.rst
 
 # NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
 ghc-options: -Wall -fno-warn-redundant-constraints

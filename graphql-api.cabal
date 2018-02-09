@@ -2,26 +2,34 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 78a5a4f0c4375f8d03bffd738aeb76a00fdf535cd6bc2e07cdaa13de38b1e614
+-- hash: 2160ff0226a0b10f7166ddbcf09ec6f79dfddfd66c81244898fb1afabe36bcf8
 
 name:           graphql-api
-version:        0.2.0
+version:        0.3.0
 synopsis:       GraphQL API
-description:    Please see README.md
+description:    Implement [GraphQL](http://graphql.org/) servers in Haskell.
+                .
+                Provides a Servant-like type-based API for defining GraphQL schemas and
+                implementing handlers for those schemas.
+                .
+                See [README.md](https://github.com/haskell-graphql/graphql-api#graphql-api) for more details.
 category:       Web
 stability:      unstable
-homepage:       https://github.com/jml/graphql-api#readme
-bug-reports:    https://github.com/jml/graphql-api/issues
-author:         Jonathan M. Lange
+homepage:       https://github.com/haskell-graphql/graphql-api#readme
+bug-reports:    https://github.com/haskell-graphql/graphql-api/issues
+author:         Jonathan M. Lange, Tom Hunger
 maintainer:     Jonathan M. Lange <jml@mumak.net>, Tom Hunger <tehunger@gmail.com>
 license:        Apache
 license-file:   LICENSE.Apache-2.0
 build-type:     Simple
 cabal-version:  >= 1.10
 
+extra-source-files:
+    CHANGELOG.rst
+
 source-repository head
   type: git
-  location: https://github.com/jml/graphql-api
+  location: https://github.com/haskell-graphql/graphql-api
 
 library
   hs-source-dirs:
