@@ -43,6 +43,23 @@ library:
     - QuickCheck
     - text
 
+executables:
+  input-object-example:
+    main: InputObject.hs
+    source-dirs: examples
+    other-modules: []
+    dependencies:
+      - aeson
+      - graphql-api
+
+  union-example:
+    main: UnionExample.hs
+    source-dirs: examples
+    other-modules: []
+    dependencies:
+      - aeson
+      - graphql-api
+
 tests:
   graphql-api-tests:
     main: Spec.hs

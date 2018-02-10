@@ -1,17 +1,20 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeOperators #-}
 
-module Examples.InputObject where
+-- | Demonstrate input object usage.
+module Main (main) where
 
 import Protolude hiding (Enum)
+
+import qualified Data.Aeson as Aeson
 
 import GraphQL
 import GraphQL.API
 import GraphQL.Resolver (Handler)
-import GraphQL.Value (FromValue)
+import GraphQL.Value (FromValue, toValue)
 
-data DogStuff = DogStuff { toy :: Text, likesTreats :: Bool } deriving (Show, Generic)
+data DogStuff = DogStuff { _toy :: Text, _likesTreats :: Bool } deriving (Show, Generic)
 instance FromValue DogStuff
 instance HasAnnotatedInputType DogStuff
 instance Defaultable DogStuff where
@@ -30,10 +33,6 @@ description (DogStuff toy likesTreats)
   | likesTreats = pure $ "likes treats and their favorite toy is a " <> toy
   | otherwise = pure $ "their favorite toy is a " <> toy
 
--- $setup
--- >>> import Data.Aeson (encode)
--- >>> import GraphQL.Value (ToValue(..))
-
 -- | Show input object usage
 --
 -- >>> response <- example "{ description(dogStuff: {toy: \"bone\", likesTreats: true}) }"
@@ -45,3 +44,11 @@ description (DogStuff toy likesTreats)
 -- {"data":{"description":"their favorite toy is a shoe"}}
 example :: Text -> IO Response
 example = interpretAnonymousQuery @Query root
+
+
+main :: IO ()
+main = do
+  response <- example "{ description(dogStuff: {toy: \"bone\", likesTreats: true}) }"
+  putStrLn $ Aeson.encode $ toValue response
+  response' <- example "{ description }"
+  putStrLn $ Aeson.encode $ toValue response'

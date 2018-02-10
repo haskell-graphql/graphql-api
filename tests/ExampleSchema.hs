@@ -108,6 +108,12 @@ import GraphQL.Value
 --     so it can be placed in a schema.
 data DogCommand = Sit | Down | Heel deriving (Show, Eq, Ord, Generic)
 
+instance Defaultable DogCommand where
+  -- Explicitly want no default for dogCommand
+  defaultFor (unName -> "dogCommand") = Nothing
+  -- DogCommand shouldn't be used elsewhere in schema, but who can say?
+  defaultFor _ = Nothing
+
 instance GraphQLEnum DogCommand
 
 -- TODO: Probably shouldn't have to do this for enums.
@@ -178,12 +184,6 @@ type Dog = Object "Dog" '[Pet]
    , Field "owner" Human
    ]
 
-instance Defaultable DogCommand where
-  -- Explicitly want no default for dogCommand
-  defaultFor (unName -> "dogCommand") = Nothing
-  -- DogCommand shouldn't be used elsewhere in schema, but who can say?
-  defaultFor _ = Nothing
-
 -- | Sentient beings have names.
 --
 -- This defines an interface, 'Sentient', that objects can implement.
@@ -248,6 +248,9 @@ type Human = Object "Human" '[Sentient]
 -- enum CatCommand { JUMP }
 -- @
 data CatCommand = Jump deriving Generic
+
+instance Defaultable CatCommand where
+  defaultFor _ = empty
 
 instance GraphQLEnum CatCommand
 

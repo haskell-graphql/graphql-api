@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 244f60f8e2def55fa21d6d61b793b76e26ffbe6fea3b5a4b9fee01127d32358d
+-- hash: 6a38b887cec0d4a157469f5d73041fd16cb286d8f445f4e213c6f08965dbc563
 
 name:           graphql-api
 version:        0.3.0
@@ -74,6 +74,38 @@ library
       Paths_graphql_api
   default-language: Haskell2010
 
+executable input-object-example
+  main-is: InputObject.hs
+  hs-source-dirs:
+      examples
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
+  ghc-options: -Wall -fno-warn-redundant-constraints
+  build-depends:
+      aeson
+    , attoparsec
+    , base >=4.9 && <5
+    , exceptions
+    , graphql-api
+    , protolude >=0.2.1
+    , transformers
+  default-language: Haskell2010
+
+executable union-example
+  main-is: UnionExample.hs
+  hs-source-dirs:
+      examples
+  default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
+  ghc-options: -Wall -fno-warn-redundant-constraints
+  build-depends:
+      aeson
+    , attoparsec
+    , base >=4.9 && <5
+    , exceptions
+    , graphql-api
+    , protolude >=0.2.1
+    , transformers
+  default-language: Haskell2010
+
 test-suite graphql-api-doctests
   type: exitcode-stdio-1.0
   main-is: Main.hs
@@ -118,8 +150,6 @@ test-suite graphql-api-tests
       ASTTests
       EndToEndTests
       EnumTests
-      Examples.InputObject
-      Examples.UnionExample
       ExampleSchema
       OrderedMapTests
       ResolverTests
