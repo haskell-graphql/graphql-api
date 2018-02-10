@@ -144,9 +144,8 @@ def compare_values((covered, total), tolerance):
 
 def compare_coverage(report, desired):
     comparison = {}
-    # TODO: Iterate over report and default to 0 for missing keys in desired.
-    for key, tolerance in desired.items():
-        actual = report.get(key, None)
+    for key, actual in report.items():
+        tolerance = desired.get(key, 0)
         if actual:
             comparison[key] = compare_values(actual, tolerance)
         else:
@@ -181,7 +180,7 @@ def main():
     for key, value in sorted(comparison.items()):
         if value != 0:
             all_same = False
-        print format_entry(key, value, COVERAGE_TOLERANCE[key], report[key])
+        print format_entry(key, value, COVERAGE_TOLERANCE.get(key, 0), report[key])
     sys.exit(0 if all_same else 2)
 
 
