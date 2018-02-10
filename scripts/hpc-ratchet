@@ -28,22 +28,19 @@ LOCAL_DECLS = 'local_decls'
 TOP_LEVEL_DECLS = 'top_level_decls'
 
 
-"""The coverage we actually want.
+"""The lack of coverage we are willing to tolerate.
 
 In a just world, this would be a separate config file, or command-line arguments.
 
-We round coverage ratios to three decimals before comparing,
-so there's no need to go more than that.
+Each item represents the number of "things" we are OK with not being covered.
 """
-DESIRED_COVERAGE = {
-    EXPRESSIONS: 0.571,
-    BOOLEANS: 0.474,
-    ALTERNATIVES: 0.454,
-    LOCAL_DECLS: 0.814,
-    TOP_LEVEL_DECLS: 0.325,
+COVERAGE_TOLERANCE = {
+    ALTERNATIVES: 183,
+    BOOLEANS: 10,
+    EXPRESSIONS: 1619,
+    LOCAL_DECLS: 16,
+    TOP_LEVEL_DECLS: 725,
 }
-
-DEFAULT_PRECISION = 3
 
 
 def get_report_summary():
@@ -136,24 +133,22 @@ def parse_report_summary(summary):
     return report
 
 
-def compare_values((covered, total), target, precision=DEFAULT_PRECISION):
-    """Compare measured coverage values with desired ones.
+def compare_values((covered, total), tolerance):
+    """Compare measured coverage values with our tolerated lack of coverage.
 
-    Compares ``covered / total`` to ``target``, up to ``precision`` places.
+    Return -1 if coverage has got worse, 0 if it is the same, 1 if it is better.
     """
-    actual = covered / total
-    scale = 10 ** precision
-    rounded_actual = int(round(actual * scale))
-    rounded_target = int(round(target * scale))
-    return cmp(rounded_actual, rounded_target)
+    missing = total - covered
+    return cmp(tolerance, missing)
 
 
-def compare_coverage(report, desired, precision=DEFAULT_PRECISION):
+def compare_coverage(report, desired):
     comparison = {}
-    for key, target in desired.items():
+    # TODO: Iterate over report and default to 0 for missing keys in desired.
+    for key, tolerance in desired.items():
         actual = report.get(key, None)
         if actual:
-            comparison[key] = compare_values(actual, target, precision=precision)
+            comparison[key] = compare_values(actual, tolerance)
         else:
             comparison[key] = None
     return comparison
@@ -161,20 +156,19 @@ def compare_coverage(report, desired, precision=DEFAULT_PRECISION):
 
 def format_result(result):
     if result < 0:
-        return 'DOWN'
+        return 'WORSE'
     elif result == 0:
         return 'OK'
     else:
-        return 'UP'
+        return 'BETTER'
 
 
 def format_entry(key, result, desired, actual):
     covered, total = actual
     formatted_result = format_result(result)
     if result:
-        return '%s: %s (%2.1f%% => %2.1f%%)' % (
-            key, formatted_result, desired * 100,
-            100 * covered / total,
+        return '%s: %s (%d missing => %d missing)' % (
+            key, formatted_result, desired, total - covered,
         )
     else:
         return '%s: %s' % (key, formatted_result)
@@ -182,12 +176,12 @@ def format_entry(key, result, desired, actual):
 
 def main():
     report = parse_report_summary(get_report_summary())
-    comparison = compare_coverage(report, DESIRED_COVERAGE)
+    comparison = compare_coverage(report, COVERAGE_TOLERANCE)
     all_same = True
     for key, value in sorted(comparison.items()):
         if value != 0:
             all_same = False
-        print format_entry(key, value, DESIRED_COVERAGE[key], report[key])
+        print format_entry(key, value, COVERAGE_TOLERANCE[key], report[key])
     sys.exit(0 if all_same else 2)
 
 
