@@ -14,6 +14,7 @@ module GraphQL.API
   , Defaultable(..)
   , HasObjectDefinition(..)
   , HasAnnotatedInputType(..)
+  , SchemaError(..)
   ) where
 
 import GraphQL.Internal.API
@@ -29,4 +30,5 @@ import GraphQL.Internal.API
   , Defaultable(..)
   , HasObjectDefinition(..)
   , HasAnnotatedInputType(..)
+  , SchemaError(..)
   )

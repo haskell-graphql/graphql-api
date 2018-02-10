@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Description: Fully realized GraphQL schema type system at the Haskell value level
@@ -21,7 +20,6 @@ module GraphQL.Internal.Schema
   , FieldDefinition(..)
   , Interfaces
   , InterfaceTypeDefinition(..)
-  , NonEmptyList(..)
   , ObjectTypeDefinition(..)
   , UnionTypeDefinition(..)
   -- ** Input types
@@ -63,9 +61,6 @@ makeSchema = Schema . getDefinedTypes
 -- | Find the type with the given name in the schema.
 lookupType :: Schema -> Name -> Maybe TypeDefinition
 lookupType (Schema schema) name = Map.lookup name schema
-
--- XXX: Use the built-in NonEmptyList in Haskell
-newtype NonEmptyList a = NonEmptyList [a] deriving (Eq, Ord, Show, Functor, Foldable)
 
 -- | A thing that defines types. Excludes definitions of input types.
 class DefinesTypes t where
@@ -141,7 +136,7 @@ instance DefinesTypes TypeDefinition where
       TypeDefinitionTypeExtension _ ->
         panic "TODO: we should remove the 'extend' behaviour entirely"
 
-data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces (NonEmptyList FieldDefinition)
+data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces (NonEmpty FieldDefinition)
                             deriving (Eq, Ord, Show)
 
 instance HasName ObjectTypeDefinition where
@@ -170,7 +165,7 @@ data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputType) (May
 instance HasName ArgumentDefinition where
   getName (ArgumentDefinition name _ _) = name
 
-data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmptyList FieldDefinition)
+data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmpty FieldDefinition)
                                deriving (Eq, Ord, Show)
 
 instance HasName InterfaceTypeDefinition where
@@ -179,7 +174,7 @@ instance HasName InterfaceTypeDefinition where
 instance DefinesTypes InterfaceTypeDefinition where
   getDefinedTypes i@(InterfaceTypeDefinition name fields) = Map.singleton name (TypeDefinitionInterface i) <> foldMap getDefinedTypes fields
 
-data UnionTypeDefinition = UnionTypeDefinition Name (NonEmptyList ObjectTypeDefinition)
+data UnionTypeDefinition = UnionTypeDefinition Name (NonEmpty ObjectTypeDefinition)
                            deriving (Eq, Ord, Show)
 
 instance HasName UnionTypeDefinition where
@@ -237,7 +232,7 @@ newtype EnumValueDefinition = EnumValueDefinition Name
 instance HasName EnumValueDefinition where
   getName (EnumValueDefinition name) = name
 
-data InputObjectTypeDefinition = InputObjectTypeDefinition Name (NonEmptyList InputObjectFieldDefinition)
+data InputObjectTypeDefinition = InputObjectTypeDefinition Name (NonEmpty InputObjectFieldDefinition)
                                  deriving (Eq, Ord, Show)
 
 instance HasName InputObjectTypeDefinition where
@@ -305,4 +300,4 @@ doesFragmentTypeApply objectType fragmentType =
     _ -> False
   where
     implements (ObjectTypeDefinition _ interfaces _) int = int `elem` interfaces
-    branchOf obj (UnionTypeDefinition _ (NonEmptyList branches)) = obj `elem` branches
+    branchOf obj (UnionTypeDefinition _ branches) = obj `elem` branches

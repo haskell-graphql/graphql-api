@@ -2,6 +2,11 @@
 graphql-api changelog
 =====================
 
+0.4.0 (YYYY-MM-DD)
+==================
+
+* Schemas that have empty field lists or empty unions will fail much earlier
+
 0.3.0 (2018-02-08)
 ==================
 

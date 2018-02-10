@@ -53,7 +53,7 @@ import GraphQL.Value
   , FromValue(..)
   , ToValue(..)
   )
-import GraphQL.Internal.Name (Name, NameError(..), HasName(..), nameFromSymbol)
+import GraphQL.Internal.Name (Name, HasName(..))
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Validation
@@ -68,7 +68,7 @@ import GraphQL.Internal.Validation
 
 data ResolverError
   -- | There was a problem in the schema. Server-side problem.
-  = SchemaError NameError
+  = SchemaError API.SchemaError
   -- | Couldn't find the requested field in the object. A client-side problem.
   | FieldNotFoundError Name
   -- | No value provided for name, and no default specified. Client-side problem.
@@ -216,7 +216,7 @@ resolveField :: forall dispatchType (m :: Type -> Type).
   => FieldHandler m dispatchType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
 resolveField handler nextHandler field =
   -- check name before
-  case nameFromSymbol @(FieldName dispatchType) of
+  case API.nameFromSymbol @(FieldName dispatchType) of
     Left err -> pure (Result [SchemaError err] (Just GValue.ValueNull))
     Right name'
       | getName field == name' ->
@@ -281,7 +281,7 @@ instance forall ksK t f m name.
   , Monad m
   ) => BuildFieldResolver m (EnumArgument (API.Argument ksK (API.Enum name t)) f) where
   buildFieldResolver handler field = do
-    argName <- first SchemaError (nameFromSymbol @ksK)
+    argName <- first SchemaError (API.nameFromSymbol @ksK)
     value <- case lookupArgument field argName of
       Nothing -> valueMissing @t argName
       Just (ValueEnum enum) -> first (InvalidValue argName) (API.enumFromValue @t enum)

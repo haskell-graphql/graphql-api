@@ -27,7 +27,7 @@ import Protolude
 import Data.Attoparsec.Text (parseOnly, endOfInput)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
-import GraphQL.API (HasObjectDefinition(..))
+import GraphQL.API (HasObjectDefinition(..), SchemaError(..))
 import GraphQL.Internal.Execution
   ( VariableValues
   , ExecutionError
@@ -52,7 +52,7 @@ import GraphQL.Internal.Output
 import GraphQL.Internal.Schema (Schema)
 import qualified GraphQL.Internal.Schema as Schema
 import GraphQL.Resolver (HasResolver(..), Result(..))
-import GraphQL.Value (Name, NameError, Value, pattern ValueObject)
+import GraphQL.Value (Name, Value, pattern ValueObject)
 
 -- | Errors that can happen while processing a query document.
 data QueryError
@@ -66,7 +66,7 @@ data QueryError
   -- | Validated, but failed during execution.
   | ExecutionError ExecutionError
   -- | Error in the schema.
-  | SchemaError NameError
+  | SchemaError SchemaError
   -- | Got a value that wasn't an object.
   | NonObjectResult Value
   deriving (Eq, Show)

@@ -24,7 +24,6 @@ import GraphQL.Internal.Schema
   , EnumValueDefinition(..)
   , FieldDefinition(..)
   , ObjectTypeDefinition(..)
-  , NonEmptyList(..)
   , InterfaceTypeDefinition(..)
   , AnnotatedType(..)
   , ListType(..)
@@ -47,15 +46,15 @@ tests = testSpec "Type" $ do
     getInterfaceDefinition @Sentient `shouldBe`
       Right (InterfaceTypeDefinition
         "Sentient"
-        (NonEmptyList [FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
+        (FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString))) :| []))
   describe "full example" $
     it "encodes correctly" $ do
     getDefinition @Human `shouldBe`
       Right (ObjectTypeDefinition "Human"
         [ InterfaceTypeDefinition "Sentient" (
-            NonEmptyList [FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))])
+            FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString))) :| [])
         ]
-        (NonEmptyList [FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString)))]))
+        (FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString))) :| []))
   describe "output Enum" $
     it "encodes correctly" $ do
     getAnnotatedType @(Enum "DogCommand" DogCommand) `shouldBe`
@@ -68,9 +67,7 @@ tests = testSpec "Type" $ do
     it "encodes correctly" $ do
     getAnnotatedType @CatOrDog `shouldBe`
       TypeNamed . DefinedType . TypeDefinitionUnion . UnionTypeDefinition "CatOrDog"
-        . NonEmptyList <$> sequence [ getDefinition @Cat
-                                    , getDefinition @Dog
-                                    ]
+        <$> sequence (getDefinition @Cat :| [getDefinition @Dog])
   describe "List" $
     it "encodes correctly" $ do
     getAnnotatedType @(List Int) `shouldBe` Right (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinType GInt)))))
