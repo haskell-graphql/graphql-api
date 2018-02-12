@@ -64,8 +64,19 @@ jobs:
           # Build with --pedantic here to avoid introducing warnings. We
           # *don't* build with -Werror on Hackage as that is strongly
           # discouraged.
+          #
+          # Build with --coverage to ratchet our test coverage.
           name: Tests
-          command: STACK_YAML=stack-8.2.yaml stack test --skip-ghc-check --no-terminal --pedantic
+          command: STACK_YAML=stack-8.2.yaml stack test --skip-ghc-check --no-terminal --pedantic --coverage
+      - store_artifacts:
+          path: /root/project/.stack-work/install/x86_64-linux/lts-10.4/8.2.2/hpc
+      - run:
+          # There's probably a clever way of separating this from the 8.2 build,
+          # but I can't be bothered figuring that out right now.
+          # Thus, tacking the coverage check onto one of the builds,
+          # arbitrarily picking 8.2 because I feel like it.
+          name: Coverage
+          command: STACK_YAML=stack-8.2.yaml ./scripts/hpc-ratchet
 
 workflows:
   version: 2

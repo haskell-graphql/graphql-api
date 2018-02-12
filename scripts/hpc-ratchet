@@ -1,0 +1,189 @@
+#!/usr/bin/python
+"""Ensure our test coverage only increases.
+
+Easier than figuring out how to get hpc-coveralls to work with Stack.
+
+If this fails, and the coverage went down: add some tests.
+If this fails, and the coverage went up: edit ``DESIRED_COVERAGE`` to match the new value.
+If this succeeds, great.
+
+If you want to get details of what's covered, run::
+
+    $ stack test --coverage
+
+And look at the generated HTML.
+"""
+
+from __future__ import division
+from pprint import pprint
+import re
+import subprocess
+import sys
+
+
+EXPRESSIONS = 'expressions'
+BOOLEANS = 'booleans'
+ALTERNATIVES = 'alternatives'
+LOCAL_DECLS = 'local_decls'
+TOP_LEVEL_DECLS = 'top_level_decls'
+
+
+"""The lack of coverage we are willing to tolerate.
+
+In a just world, this would be a separate config file, or command-line arguments.
+
+Each item represents the number of "things" we are OK with not being covered.
+"""
+COVERAGE_TOLERANCE = {
+    ALTERNATIVES: 175,
+    BOOLEANS: 8,
+    EXPRESSIONS: 1494,
+    LOCAL_DECLS: 15,
+    TOP_LEVEL_DECLS: 685,
+}
+
+
+def get_report_summary():
+    """Run ``stack hpc report --all`` and return the output.
+
+    Assumes that ``stack test --coverage`` has already been run.
+    """
+    process = subprocess.Popen(["stack", "hpc", "report", "--all"], stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    return stderr
+
+
+"""Parse a line from the summary.
+
+Takes a line like:
+    NN% thingy wotsit used (YYYY/ZZZZ)
+
+And turns it into:
+    ("thingy wotsit used", "YYYY", "ZZZZ")
+"""
+_summary_line_re = re.compile(r'^\d\d% ([a-z -]+) \((\d+)/(\d+)\)$')
+
+
+"""Map from the human-readable descriptions to keys in the summary dict."""
+_summary_line_entries = {
+    'expressions used': EXPRESSIONS,
+    'boolean coverage': BOOLEANS,
+    'alternatives used': ALTERNATIVES,
+    'local declarations used': LOCAL_DECLS,
+    'top-level declarations used': TOP_LEVEL_DECLS,
+}
+
+def parse_summary_line(summary_line):
+    """Parse a line in the summary that indicates coverage we want to ratchet.
+
+    Turns::
+
+        NN% thingy wotsit used (YYYY/ZZZZ)
+
+    Into::
+
+        ('thingy', YYYY, ZZZZ)
+
+    Returns ``None`` if the line doesn't match the pattern.
+    """
+    match = _summary_line_re.match(summary_line.strip())
+    if match is None:
+        return
+    description, covered, total = match.groups()
+    try:
+        key = _summary_line_entries[description]  # XXX: Explodes if output changes.
+    except KeyError:
+        return
+    return key, int(covered), int(total)
+
+
+def parse_report_summary(summary):
+    """Parse the output of ``stack hpc report --all``.
+
+    Turns this::
+
+        Getting project config file from STACK_YAML environment
+        Generating combined report
+         57% expressions used (2172/3801)
+         47% boolean coverage (9/19)
+              38% guards (5/13), 4 always True, 4 unevaluated
+              75% 'if' conditions (3/4), 1 unevaluated
+              50% qualifiers (1/2), 1 always True
+         45% alternatives used (156/344)
+         81% local declarations used (70/86)
+         33% top-level declarations used (348/1052)
+        The combined report is available at /path/hpc_index.html
+
+    Into this::
+
+        {'expressions': (2172, 3801),
+         'booleans': (9, 19),
+         'alternatives': (156, 344),
+         'local_decls': (70, 86),
+         'top_level_decls': (348, 1052),
+        }
+    """
+    report = {}
+    for line in summary.splitlines():
+        parsed = parse_summary_line(line)
+        if not parsed:
+            continue
+        key, covered, total = parsed
+        report[key] = (covered, total)
+    return report
+
+
+def compare_values((covered, total), tolerance):
+    """Compare measured coverage values with our tolerated lack of coverage.
+
+    Return -1 if coverage has got worse, 0 if it is the same, 1 if it is better.
+    """
+    missing = total - covered
+    return cmp(tolerance, missing)
+
+
+def compare_coverage(report, desired):
+    comparison = {}
+    for key, actual in report.items():
+        tolerance = desired.get(key, 0)
+        if actual:
+            comparison[key] = compare_values(actual, tolerance)
+        else:
+            comparison[key] = None
+    return comparison
+
+
+def format_result(result):
+    if result < 0:
+        return 'WORSE'
+    elif result == 0:
+        return 'OK'
+    else:
+        return 'BETTER'
+
+
+def format_entry(key, result, desired, actual):
+    covered, total = actual
+    formatted_result = format_result(result)
+    # TODO: Align results
+    if result:
+        return '%s: %s (%d missing => %d missing)' % (
+            key, formatted_result, desired, total - covered,
+        )
+    else:
+        return '%s: %s' % (key, formatted_result)
+
+
+def main():
+    report = parse_report_summary(get_report_summary())
+    comparison = compare_coverage(report, COVERAGE_TOLERANCE)
+    all_same = True
+    for key, value in sorted(comparison.items()):
+        if value != 0:
+            all_same = False
+        print format_entry(key, value, COVERAGE_TOLERANCE.get(key, 0), report[key])
+    sys.exit(0 if all_same else 2)
+
+
+if __name__ == '__main__':
+    main()
