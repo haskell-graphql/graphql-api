@@ -1,0 +1,7 @@
+# LTS 10.4 is the latest LTS that supports GHC 8.2 at the time of writing.
+resolver: lts-10.4
+
+packages:
+  - "."
+  - "./docs/source/tutorial"
+  - "./graphql-wai"

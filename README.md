@@ -38,6 +38,7 @@ We can define this schema in Haskell and implement a simple handler like so:
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DataKinds #-}
 
 import Data.Text (Text)
 import Data.Monoid ((<>))
