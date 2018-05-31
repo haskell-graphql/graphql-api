@@ -14,3 +14,5 @@ stack haddock
 
 Why is there a makefile ? 
 why is there no default stack.yml ? (required for some ide tools)
+
+-> current master branch contains code for the **next release**, current release is on hackage and its source code is available in a branch

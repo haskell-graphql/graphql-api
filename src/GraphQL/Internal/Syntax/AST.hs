@@ -77,25 +77,25 @@ data OperationDefinition
   | AnonymousQuery SelectionSet
   deriving (Eq,Show)
 
--- | A node is the opening of a SelectionSet (curly braces) in an OperationDefinition 
+-- | A node is the opening of a 'SelectionSet' (materialized by curly braces) in an 'OperationDefinition' 
 --
 -- Example :
 -- @
 -- query Test { drinkList {id name} }
 -- @
--- drinkList and Test are nodes
+-- Contains 2 nodes: drinkList and Test
 -- 
 data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
             deriving (Eq,Show)
 
 
--- | A variable defined within a given OperationDefinition 
---
+-- | A variable defined within in the context of a 'QueryDocument' 
+-- 
 -- Example :
 -- @
 -- query RollDice($dice: Int!, $sides: Int) { rollDice(numDice: $dice, numSides: $sides) }
 -- @
--- Then $dice: Int! = 3 and $sides: Int are VariableDefinition
+-- Contains 2 'VariableDefinition' : @$dice: Int! = 3@ and @$sides: Int@ are
 --
 data VariableDefinition = VariableDefinition Variable GType (Maybe DefaultValue)
                           deriving (Eq,Show)
@@ -117,8 +117,8 @@ data Field = Field (Maybe Alias) Name [Argument] [Directive] SelectionSet
 
 type Alias = Name
 
--- | An argument is a value passed to a Field
---
+-- | An argument is a value passed to a 'Field', 'Directive' etc
+-- see also 'GraphQL.Internal.Validation.Arguments'
 -- Example :
 -- @
 -- query RollDice($dice: Int!, $sides: Int) { rollDice(numDice: $dice, numSides: $sides) }
@@ -221,13 +221,7 @@ data TypeDefinition = TypeDefinitionObject        ObjectTypeDefinition
                     | TypeDefinitionInputObject   InputObjectTypeDefinition
                     | TypeDefinitionTypeExtension TypeExtensionDefinition
                       deriving (Eq,Show)
-
--- | A GraphQL Object definition
--- 
--- Example (in haskell):
--- @
--- type User = Object "User" '[] '[Field "name" Text]
--- @            
+          
 data ObjectTypeDefinition = ObjectTypeDefinition Name Interfaces [FieldDefinition]
                             deriving (Eq,Show)
 
