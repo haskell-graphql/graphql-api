@@ -37,6 +37,7 @@ module GraphQL.Internal.Schema
   -- * The schema
   , Schema
   , makeSchema
+  , emptySchema
   , lookupType
   ) where
 
@@ -58,6 +59,9 @@ newtype Schema = Schema (Map Name TypeDefinition) deriving (Eq, Ord, Show)
 -- need to be reachable from a single root object. However, it's a start.
 makeSchema :: ObjectTypeDefinition -> Schema
 makeSchema = Schema . getDefinedTypes
+
+emptySchema :: Schema
+emptySchema = Schema (Map.empty :: (Map Name TypeDefinition))
 
 -- | Find the type with the given name in the schema.
 lookupType :: Schema -> Name -> Maybe TypeDefinition

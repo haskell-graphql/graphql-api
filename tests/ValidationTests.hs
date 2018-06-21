@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 
 -- | Tests for query validation.
 module ValidationTests (tests) where
@@ -11,8 +12,9 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Internal.Name (Name)
+import qualified Data.Map as Map
 import qualified GraphQL.Internal.Syntax.AST as AST
-import GraphQL.Internal.Schema (Schema)
+import GraphQL.Internal.Schema (Schema, emptySchema)
 import GraphQL.Internal.Validation
   ( ValidationError(..)
   , findDuplicates
@@ -27,11 +29,11 @@ someName = "name"
 
 dog :: Name
 dog = "dog"
-
+   
 -- | Schema used for these tests. Since none of them do type-level stuff, we
 -- don't need to define it.
 schema :: Schema
-schema = panic "schema evaluated. We weren't expecting that."
+schema = emptySchema
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do
