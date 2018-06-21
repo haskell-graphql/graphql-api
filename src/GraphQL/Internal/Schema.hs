@@ -305,6 +305,7 @@ doesFragmentTypeApply objectType fragmentType =
 
 -- | Convert the given TypeDefinition to an InputTypeDefinition if it's a valid InputTypeDefinition
 -- (because InputTypeDefinition is a subset of TypeDefinition)
+-- see <http://facebook.github.io/graphql/June2018/#sec-Input-and-Output-Types>
 getInputTypeDefinition :: TypeDefinition -> Maybe InputTypeDefinition
 getInputTypeDefinition td =
   case td of

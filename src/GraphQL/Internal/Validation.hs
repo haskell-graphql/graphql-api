@@ -658,29 +658,32 @@ validateVariableDefinitions schema vars = do
 
 -- | Ensure that a variable definition is a valid one.
 validateVariableDefinition :: Schema -> AST.VariableDefinition -> Validation VariableDefinition
-validateVariableDefinition schema (AST.VariableDefinition name varType value) =
-  case validateTypeAssertion schema varType of
+validateVariableDefinition schema (AST.VariableDefinition var varType value) =
+  case validateTypeAssertion schema var varType of
     Left e -> throwE e 
-    Right t -> VariableDefinition name t <$> traverse validateDefaultValue value
+    Right t -> VariableDefinition var t <$> traverse validateDefaultValue value
 
-validateTypeAssertion :: Schema -> AST.GType -> Either ValidationError (AnnotatedType InputType)
-validateTypeAssertion schema varTypeAST = 
+-- | Ensure that a variable has a correct type declaration given a schema.
+validateTypeAssertion :: Schema -> Variable -> AST.GType -> Either ValidationError (AnnotatedType InputType)
+validateTypeAssertion schema var varTypeAST = 
   case typeDef of
-    Nothing -> fmap (astAnnotationToSchemaAnnotation varTypeAST) (validateVariableTypeBuiltin varTypeNameAST) 
-    Just value -> astAnnotationToSchemaAnnotation varTypeAST . DefinedInputType <$> maybeToEither (VariableTypeNotFound varTypeNameAST) (getInputTypeDefinition value)
+    Nothing -> fmap (astAnnotationToSchemaAnnotation varTypeAST) (validateVariableTypeBuiltin var varTypeNameAST) 
+    Just value -> astAnnotationToSchemaAnnotation varTypeAST . DefinedInputType <$> maybeToEither (VariableTypeIsNotInputType var varTypeNameAST) (getInputTypeDefinition value)
   where 
     varTypeNameAST = getName varTypeAST
     typeDef = lookupType schema varTypeNameAST
 
-validateVariableTypeBuiltin :: Name -> Either ValidationError InputType
-validateVariableTypeBuiltin name
-  | name == getName GInt = Right (BuiltinInputType GInt)
-  | name == getName GBool = Right (BuiltinInputType GBool)
-  | name == getName GString = Right (BuiltinInputType GString)
-  | name == getName GFloat = Right (BuiltinInputType GFloat)
-  | name == getName GID = Right (BuiltinInputType GID)
-  | otherwise = Left (VariableTypeNotFound name)
+-- | validate a variable type which has no type definition (either builtin or not in the schema)
+validateVariableTypeBuiltin :: Variable -> Name -> Either ValidationError InputType
+validateVariableTypeBuiltin var tname
+  | tname == getName GInt = Right (BuiltinInputType GInt)
+  | tname == getName GBool = Right (BuiltinInputType GBool)
+  | tname == getName GString = Right (BuiltinInputType GString)
+  | tname == getName GFloat = Right (BuiltinInputType GFloat)
+  | tname == getName GID = Right (BuiltinInputType GID)
+  | otherwise = Left (VariableTypeNotFound var tname)
 
+-- | simple translation between ast annotation types and schema annotation types
 astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
 astAnnotationToSchemaAnnotation gtype schematn = 
   case gtype of
@@ -813,7 +816,10 @@ data ValidationError
   -- | There's a type condition that's not present in the schema.
   | TypeConditionNotFound Name
   -- | There's a variable type that's not present in the schema.
-  | VariableTypeNotFound Name
+  | VariableTypeNotFound Variable Name
+  -- | A variable was defined with a non input type.
+  -- <http://facebook.github.io/graphql/June2018/#sec-Variables-Are-Input-Types>
+  | VariableTypeIsNotInputType Variable Name
   deriving (Eq, Show)
 
 instance GraphQLError ValidationError where
@@ -836,7 +842,8 @@ instance GraphQLError ValidationError where
   formatError (MismatchedArguments name) = "Two different sets of arguments given for same response key: " <> show name
   formatError (IncompatibleFields name) = "Field " <> show name <> " has a leaf in one place and a non-leaf in another."
   formatError (TypeConditionNotFound name) = "Type condition " <> show name <> " not found in schema."
-  formatError (VariableTypeNotFound name) = "Variable type named " <> show name <> " not found in schema."
+  formatError (VariableTypeNotFound var name) = "Type named " <> show name <> " for variable " <> show var <> " is not in the schema."
+  formatError (VariableTypeIsNotInputType var name) = "Type named " <> show name <> " for variable " <> show var <> " is not an input type."
 
 type ValidationErrors = NonEmpty ValidationError
 
