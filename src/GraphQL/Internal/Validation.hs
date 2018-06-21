@@ -687,9 +687,9 @@ validateVariableTypeBuiltin var tname
 astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
 astAnnotationToSchemaAnnotation gtype schematn = 
   case gtype of
-    AST.TypeNamed asttn -> TypeNamed schematn
+    AST.TypeNamed _ -> TypeNamed schematn
     AST.TypeList (AST.ListType asttn) -> astAnnotationToSchemaAnnotation asttn schematn
-    AST.TypeNonNull (AST.NonNullTypeNamed asttn) -> TypeNonNull (NonNullTypeNamed schematn)
+    AST.TypeNonNull (AST.NonNullTypeNamed _) -> TypeNonNull (NonNullTypeNamed schematn)
     AST.TypeNonNull (AST.NonNullTypeList (AST.ListType asttn)) -> astAnnotationToSchemaAnnotation asttn schematn
 
 -- | Ensure that a default value contains no variables.
