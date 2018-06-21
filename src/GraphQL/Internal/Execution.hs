@@ -28,13 +28,15 @@ import GraphQL.Value
   , Object'(..)
   )
 import GraphQL.Internal.Output (GraphQLError(..))
+import GraphQL.Internal.Schema
+  ( AnnotatedType (TypeNonNull)
+  )
 import GraphQL.Internal.Validation
   ( Operation
   , QueryDocument(..)
   , VariableDefinition(..)
   , VariableValue
   , Variable
-  , GType(..)
   )
 
 -- | Get an operation from a GraphQL document

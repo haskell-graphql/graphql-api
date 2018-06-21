@@ -81,6 +81,13 @@ import GraphQL.Internal.Schema
   , Schema
   , doesFragmentTypeApply
   , lookupType
+  , AnnotatedType(..)
+  , InputType
+  , InputType (BuiltinInputType, DefinedInputType) 
+  , Builtin (..)
+  , AnnotatedType (TypeNamed, TypeNonNull)
+  , NonNullType(NonNullTypeNamed)
+  , getInputTypeDefinition
   )
 import GraphQL.Value
   ( Value
@@ -174,7 +181,7 @@ validateOperations schema fragments ops = do
   traverse validateNode deduped
   where
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType <$> lift (validateVariableDefinitions vars)
+      operationType <$> lift ((validateVariableDefinitions schema) vars)
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet schema fragments ss
 
@@ -626,7 +633,8 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 data VariableDefinition
   = VariableDefinition
     { variable :: Variable -- ^ The name of the variable
-    , variableType :: AST.GType -- ^ The type of the variable
+    -- , variableType :: AST.GType -- ^ The type of the variable
+    , variableType :: AnnotatedType InputType -- ^ The type of the variable
     , defaultValue :: Maybe Value -- ^ An optional default value for the variable
     } deriving (Eq, Ord, Show)
 
@@ -642,16 +650,44 @@ emptyVariableDefinitions :: VariableDefinitions
 emptyVariableDefinitions = mempty
 
 -- | Ensure that a set of variable definitions is valid.
-validateVariableDefinitions :: [AST.VariableDefinition] -> Validation VariableDefinitions
-validateVariableDefinitions vars = do
-  validatedDefns <- traverse validateVariableDefinition vars
+validateVariableDefinitions :: Schema -> [AST.VariableDefinition] -> Validation VariableDefinitions
+validateVariableDefinitions schema vars = do
+  validatedDefns <- traverse (validateVariableDefinition schema) vars
   let items = [ (variable defn, defn) | defn <- validatedDefns]
   mapErrors DuplicateVariableDefinition (makeMap items)
 
 -- | Ensure that a variable definition is a valid one.
-validateVariableDefinition :: AST.VariableDefinition -> Validation VariableDefinition
-validateVariableDefinition (AST.VariableDefinition name varType value) =
-  VariableDefinition name varType <$> traverse validateDefaultValue value
+validateVariableDefinition :: Schema -> AST.VariableDefinition -> Validation VariableDefinition
+validateVariableDefinition schema (AST.VariableDefinition name varType value) =
+  case validateTypeAssertion schema varType of
+    Left e -> throwE e 
+    Right t -> VariableDefinition name t <$> traverse validateDefaultValue value
+
+validateTypeAssertion :: Schema -> AST.GType -> Either ValidationError (AnnotatedType InputType)
+validateTypeAssertion schema varTypeAST = 
+  case typeDef of
+    Nothing -> fmap (astAnnotationToSchemaAnnotation varTypeAST) (validateVariableTypeBuiltin varTypeNameAST) 
+    Just value -> astAnnotationToSchemaAnnotation varTypeAST . DefinedInputType <$> maybeToEither (VariableTypeNotFound varTypeNameAST) (getInputTypeDefinition value)
+  where 
+    varTypeNameAST = getName varTypeAST
+    typeDef = lookupType schema varTypeNameAST
+
+validateVariableTypeBuiltin :: Name -> Either ValidationError InputType
+validateVariableTypeBuiltin name
+  | name == getName GInt = Right (BuiltinInputType GInt)
+  | name == getName GBool = Right (BuiltinInputType GBool)
+  | name == getName GString = Right (BuiltinInputType GString)
+  | name == getName GFloat = Right (BuiltinInputType GFloat)
+  | name == getName GID = Right (BuiltinInputType GID)
+  | otherwise = Left (VariableTypeNotFound name)
+
+astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
+astAnnotationToSchemaAnnotation gtype schematn = 
+  case gtype of
+    AST.TypeNamed asttn -> TypeNamed schematn
+    AST.TypeList (AST.ListType asttn) -> astAnnotationToSchemaAnnotation asttn schematn
+    AST.TypeNonNull (AST.NonNullTypeNamed asttn) -> TypeNonNull (NonNullTypeNamed schematn)
+    AST.TypeNonNull (AST.NonNullTypeList (AST.ListType asttn)) -> astAnnotationToSchemaAnnotation asttn schematn
 
 -- | Ensure that a default value contains no variables.
 validateDefaultValue :: AST.DefaultValue -> Validation Value
@@ -776,6 +812,8 @@ data ValidationError
   | IncompatibleFields Name
   -- | There's a type condition that's not present in the schema.
   | TypeConditionNotFound Name
+  -- | There's a variable type that's not present in the schema.
+  | VariableTypeNotFound Name
   deriving (Eq, Show)
 
 instance GraphQLError ValidationError where
@@ -798,6 +836,7 @@ instance GraphQLError ValidationError where
   formatError (MismatchedArguments name) = "Two different sets of arguments given for same response key: " <> show name
   formatError (IncompatibleFields name) = "Field " <> show name <> " has a leaf in one place and a non-leaf in another."
   formatError (TypeConditionNotFound name) = "Type condition " <> show name <> " not found in schema."
+  formatError (VariableTypeNotFound name) = "Variable type named " <> show name <> " not found in schema."
 
 type ValidationErrors = NonEmpty ValidationError
 

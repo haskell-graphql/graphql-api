@@ -33,6 +33,7 @@ module GraphQL.Internal.Schema
   , NonNullType(..)
   , DefinesTypes(..)
   , doesFragmentTypeApply
+  , getInputTypeDefinition
   -- * The schema
   , Schema
   , makeSchema
@@ -301,3 +302,13 @@ doesFragmentTypeApply objectType fragmentType =
   where
     implements (ObjectTypeDefinition _ interfaces _) int = int `elem` interfaces
     branchOf obj (UnionTypeDefinition _ branches) = obj `elem` branches
+
+-- | Convert the given TypeDefinition to an InputTypeDefinition if it's a valid InputTypeDefinition
+-- (because InputTypeDefinition is a subset of TypeDefinition)
+getInputTypeDefinition :: TypeDefinition -> Maybe InputTypeDefinition
+getInputTypeDefinition td =
+  case td of
+    TypeDefinitionInputObject itd -> Just (InputTypeDefinitionObject itd) 
+    TypeDefinitionScalar itd -> Just (InputTypeDefinitionScalar itd) 
+    TypeDefinitionEnum itd -> Just (InputTypeDefinitionEnum itd)
+    _ -> Nothing
