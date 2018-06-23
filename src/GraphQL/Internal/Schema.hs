@@ -60,6 +60,8 @@ newtype Schema = Schema (Map Name TypeDefinition) deriving (Eq, Ord, Show)
 makeSchema :: ObjectTypeDefinition -> Schema
 makeSchema = Schema . getDefinedTypes
 
+-- | Create an empty schema for testing purpose.
+--
 emptySchema :: Schema
 emptySchema = Schema (Map.empty :: (Map Name TypeDefinition))
 
