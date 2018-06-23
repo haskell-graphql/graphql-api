@@ -181,7 +181,7 @@ validateOperations schema fragments ops = do
   traverse validateNode deduped
   where
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType <$> lift ((validateVariableDefinitions schema) vars)
+      operationType <$> lift (validateVariableDefinitions schema vars)
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet schema fragments ss
 
