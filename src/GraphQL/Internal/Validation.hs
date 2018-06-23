@@ -633,7 +633,6 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 data VariableDefinition
   = VariableDefinition
     { variable :: Variable -- ^ The name of the variable
-    -- , variableType :: AST.GType -- ^ The type of the variable
     , variableType :: AnnotatedType InputType -- ^ The type of the variable
     , defaultValue :: Maybe Value -- ^ An optional default value for the variable
     } deriving (Eq, Ord, Show)
