@@ -10,6 +10,7 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import qualified Data.Set as Set
 
 import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
@@ -125,7 +126,7 @@ tests = testSpec "Validation" $ do
                       (AST.Node Nothing
                        [ AST.VariableDefinition
                            (AST.Variable "atOtherHomes")
-                           (AST.TypeNamed (AST.NamedType "NonExistingType"))
+                           (AST.TypeNamed (AST.NamedType "MyNonExistingType"))
                            (Just (AST.ValueBoolean True))
                        ] []
                        [ AST.SelectionField
@@ -138,7 +139,50 @@ tests = testSpec "Validation" $ do
                             ])
                        ]))
                 ]
-      getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "NonExistingType"]
+      getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "MyNonExistingType"]
+
+    it "Detects unused variable definition" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNamed (AST.NamedType "String"))
+                           (Just (AST.ValueBoolean True))
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
+
+    -- This test case should fail. FIXME ! + another one: mismatch between variable and default value
+    it "Detects type mismatch between variables and arguments" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNamed (AST.NamedType "String"))
+                           Nothing
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [ AST.Argument "atOtherHomes"
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                 ] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` []
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do
