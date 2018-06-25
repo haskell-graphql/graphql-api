@@ -167,13 +167,18 @@ instance HasName FieldDefinition where
   getName (FieldDefinition name _ _) = name
 
 instance DefinesTypes FieldDefinition where
-  getDefinedTypes (FieldDefinition _ _ retVal) = getDefinedTypes (getAnnotatedType retVal)
+  getDefinedTypes (FieldDefinition _ args retVal) = 
+    getDefinedTypes (getAnnotatedType retVal) <>
+    foldMap getDefinedTypes args
 
 data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                           deriving (Eq, Ord, Show)
 
 instance HasName ArgumentDefinition where
   getName (ArgumentDefinition name _ _) = name
+
+instance DefinesTypes ArgumentDefinition where
+  getDefinedTypes (ArgumentDefinition _ annotatedType _) = getDefinedTypes $ getAnnotatedType annotatedType
 
 data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmpty FieldDefinition)
                                deriving (Eq, Ord, Show)
@@ -266,6 +271,12 @@ instance HasName InputType where
   getName (DefinedInputType x) = getName x
   getName (BuiltinInputType x) = getName x
 
+instance DefinesTypes InputType where
+  getDefinedTypes inputType =
+    case inputType of 
+       DefinedInputType typeDefinition -> getDefinedTypes typeDefinition
+       BuiltinInputType _ -> mempty
+
 data InputTypeDefinition
   = InputTypeDefinitionObject        InputObjectTypeDefinition
   | InputTypeDefinitionScalar        ScalarTypeDefinition
@@ -276,6 +287,13 @@ instance HasName InputTypeDefinition where
   getName (InputTypeDefinitionObject x) = getName x
   getName (InputTypeDefinitionScalar x) = getName x
   getName (InputTypeDefinitionEnum x) = getName x
+
+instance DefinesTypes InputTypeDefinition where
+  getDefinedTypes inputTypeDefinition =
+    case inputTypeDefinition of 
+       InputTypeDefinitionObject typeDefinition -> getDefinedTypes (TypeDefinitionInputObject typeDefinition)
+       InputTypeDefinitionScalar typeDefinition -> getDefinedTypes (TypeDefinitionScalar typeDefinition)
+       InputTypeDefinitionEnum typeDefinition -> getDefinedTypes (TypeDefinitionEnum typeDefinition)
 
 -- | A literal value specified as a default as part of a type definition.
 --
