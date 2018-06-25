@@ -12,7 +12,6 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import GraphQL.Internal.Name (Name)
-import qualified Data.Map as Map
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Schema (Schema, emptySchema)
 import GraphQL.Internal.Validation
@@ -54,7 +53,7 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   (AST.Query
-                    (AST.Node (Nothing) [] []
+                    (AST.Node Nothing [] []
                       [ AST.SelectionField
                         (AST.Field Nothing dog [] []
                           [ AST.SelectionField (AST.Field Nothing someName [] [] [])
