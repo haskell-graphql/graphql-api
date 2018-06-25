@@ -82,11 +82,8 @@ import GraphQL.Internal.Schema
   , doesFragmentTypeApply
   , lookupType
   , AnnotatedType(..)
-  , InputType
   , InputType (BuiltinInputType, DefinedInputType) 
-  , Builtin (..)
-  , AnnotatedType (TypeNamed, TypeNonNull)
-  , NonNullType(NonNullTypeNamed)
+  , AnnotatedType
   , getInputTypeDefinition
   , builtinFromName
   , astAnnotationToSchemaAnnotation
