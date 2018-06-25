@@ -34,6 +34,7 @@ module GraphQL.Internal.Schema
   , DefinesTypes(..)
   , doesFragmentTypeApply
   , getInputTypeDefinition
+  , builtinFromName
   -- * The schema
   , Schema
   , makeSchema
@@ -319,3 +320,16 @@ getInputTypeDefinition td =
     TypeDefinitionScalar itd -> Just (InputTypeDefinitionScalar itd) 
     TypeDefinitionEnum itd -> Just (InputTypeDefinitionEnum itd)
     _ -> Nothing
+
+-- | Create a 'Builtin' type from a 'Name'
+-- 
+-- Mostly used for the AST validation 
+-- theobat: There's probably a better way to do it but can't find it right now 
+builtinFromName :: Name -> Maybe Builtin
+builtinFromName typeName
+  | typeName == getName GInt = Just GInt
+  | typeName == getName GBool = Just GBool
+  | typeName == getName GString = Just GString
+  | typeName == getName GFloat = Just GFloat
+  | typeName == getName GID = Just GID
+  | otherwise = Nothing

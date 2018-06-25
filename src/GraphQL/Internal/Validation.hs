@@ -88,6 +88,7 @@ import GraphQL.Internal.Schema
   , AnnotatedType (TypeNamed, TypeNonNull)
   , NonNullType(NonNullTypeNamed)
   , getInputTypeDefinition
+  , builtinFromName
   )
 import GraphQL.Value
   ( Value
@@ -658,29 +659,34 @@ validateVariableDefinitions schema vars = do
 -- | Ensure that a variable definition is a valid one.
 validateVariableDefinition :: Schema -> AST.VariableDefinition -> Validation VariableDefinition
 validateVariableDefinition schema (AST.VariableDefinition var varType value) =
-  case validateTypeAssertion schema var varType of
-    Left e -> throwE e 
-    Right t -> VariableDefinition var t <$> traverse validateDefaultValue value
+  VariableDefinition var
+    <$> validateTypeAssertion schema var varType
+    <*> traverse validateDefaultValue value
 
 -- | Ensure that a variable has a correct type declaration given a schema.
-validateTypeAssertion :: Schema -> Variable -> AST.GType -> Either ValidationError (AnnotatedType InputType)
-validateTypeAssertion schema var varTypeAST = 
-  case typeDef of
-    Nothing -> fmap (astAnnotationToSchemaAnnotation varTypeAST) (validateVariableTypeBuiltin var varTypeNameAST) 
-    Just value -> astAnnotationToSchemaAnnotation varTypeAST . DefinedInputType <$> maybeToEither (VariableTypeIsNotInputType var varTypeNameAST) (getInputTypeDefinition value)
+validateTypeAssertion :: Schema -> Variable -> AST.GType -> Validation (AnnotatedType InputType)
+validateTypeAssertion schema var varTypeAST =
+  astAnnotationToSchemaAnnotation varTypeAST <$>
+  case lookupType schema varTypeNameAST of
+    Nothing -> validateVariableTypeBuiltin var varTypeNameAST
+    Just cleanTypeDef -> validateVariableTypeDefinition var cleanTypeDef
   where 
     varTypeNameAST = getName varTypeAST
-    typeDef = lookupType schema varTypeNameAST
 
--- | validate a variable type which has no type definition (either builtin or not in the schema)
-validateVariableTypeBuiltin :: Variable -> Name -> Either ValidationError InputType
-validateVariableTypeBuiltin var tname
-  | tname == getName GInt = Right (BuiltinInputType GInt)
-  | tname == getName GBool = Right (BuiltinInputType GBool)
-  | tname == getName GString = Right (BuiltinInputType GString)
-  | tname == getName GFloat = Right (BuiltinInputType GFloat)
-  | tname == getName GID = Right (BuiltinInputType GID)
-  | otherwise = Left (VariableTypeNotFound var tname)
+-- | Validate a variable type which has a type definition in the schema.
+validateVariableTypeDefinition :: Variable -> TypeDefinition -> Validation InputType
+validateVariableTypeDefinition var typeDef = 
+  case getInputTypeDefinition typeDef of 
+    Nothing -> throwE (VariableTypeIsNotInputType var $ getName typeDef)
+    Just value -> pure (DefinedInputType value)
+ 
+
+-- | Validate a variable type which has no type definition (either builtin or not in the schema).
+validateVariableTypeBuiltin :: Variable -> Name -> Validation InputType
+validateVariableTypeBuiltin var typeName = 
+  case builtinFromName typeName of
+    Nothing -> throwE (VariableTypeNotFound var typeName)
+    Just builtin -> pure (BuiltinInputType builtin)
 
 -- | simple translation between ast annotation types and schema annotation types
 astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
