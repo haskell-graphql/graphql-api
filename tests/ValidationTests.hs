@@ -29,7 +29,7 @@ someName = "name"
 
 dog :: Name
 dog = "dog"
-   
+
 -- | Schema used for these tests. Since none of them do type-level stuff, we
 -- don't need to define it.
 schema :: Schema
@@ -160,29 +160,6 @@ tests = testSpec "Validation" $ do
                        ]))
                 ]
       getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
-
-    -- This test case should fail. FIXME ! + another one: mismatch between variable and default value
-    it "Detects type mismatch between variables and arguments" $ do
-      let doc = AST.QueryDocument
-                [ AST.DefinitionOperation
-                    (AST.Query
-                      (AST.Node Nothing
-                       [ AST.VariableDefinition
-                           (AST.Variable "atOtherHomes")
-                           (AST.TypeNamed (AST.NamedType "String"))
-                           Nothing
-                       ] []
-                       [ AST.SelectionField
-                           (AST.Field Nothing dog [] []
-                            [ AST.SelectionField
-                                (AST.Field Nothing "isHousetrained"
-                                 [ AST.Argument "atOtherHomes"
-                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
-                                 ] [] [])
-                            ])
-                       ]))
-                ]
-      getErrors schema doc `shouldBe` []
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do
