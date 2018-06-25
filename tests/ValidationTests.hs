@@ -118,6 +118,28 @@ tests = testSpec "Validation" $ do
                 ]
       getErrors schema doc `shouldBe` [MixedAnonymousOperations 2 []]
 
+    it "Detects non-existing type in variable definition" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNamed (AST.NamedType "NonExistingType"))
+                           (Just (AST.ValueBoolean True))
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [ AST.Argument "atOtherHomes"
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                 ] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "NonExistingType"]
+
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do
       \xs -> findDuplicates @Int (ordNub xs) === []
