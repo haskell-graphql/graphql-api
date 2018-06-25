@@ -179,7 +179,7 @@ data GType = TypeNamed NamedType
            | TypeNonNull NonNullType
            deriving (Eq, Ord, Show)
 
- -- | Get the name of the given GType.
+-- | Get the name of the given 'GType'.
 instance HasName GType where
   getName (TypeNamed (NamedType n)) = n
   getName (TypeList (ListType t)) = getName t
