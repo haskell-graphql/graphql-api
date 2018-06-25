@@ -35,6 +35,7 @@ module GraphQL.Internal.Schema
   , doesFragmentTypeApply
   , getInputTypeDefinition
   , builtinFromName
+  , astAnnotationToSchemaAnnotation
   -- * The schema
   , Schema
   , makeSchema
@@ -45,6 +46,7 @@ module GraphQL.Internal.Schema
 import Protolude
 
 import qualified Data.Map as Map
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Value (Value)
 import GraphQL.Internal.Name (HasName(..), Name)
 
@@ -333,3 +335,15 @@ builtinFromName typeName
   | typeName == getName GFloat = Just GFloat
   | typeName == getName GID = Just GID
   | otherwise = Nothing
+
+-- | Simple translation between 'AST' annotation types and 'Schema' annotation types
+--
+-- AST type annotations do not need any validation.
+-- GraphQL annotations are semantic decorations around type names to indicate type composition (list/non null).
+astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
+astAnnotationToSchemaAnnotation gtype schematn = 
+  case gtype of
+    AST.TypeNamed _ -> TypeNamed schematn
+    AST.TypeList (AST.ListType asttn) -> TypeList (ListType $ astAnnotationToSchemaAnnotation asttn schematn)
+    AST.TypeNonNull (AST.NonNullTypeNamed _) -> TypeNonNull (NonNullTypeNamed schematn)
+    AST.TypeNonNull (AST.NonNullTypeList (AST.ListType asttn)) -> astAnnotationToSchemaAnnotation asttn schematn

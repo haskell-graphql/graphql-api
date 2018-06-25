@@ -89,6 +89,7 @@ import GraphQL.Internal.Schema
   , NonNullType(NonNullTypeNamed)
   , getInputTypeDefinition
   , builtinFromName
+  , astAnnotationToSchemaAnnotation
   )
 import GraphQL.Value
   ( Value
@@ -687,15 +688,6 @@ validateVariableTypeBuiltin var typeName =
   case builtinFromName typeName of
     Nothing -> throwE (VariableTypeNotFound var typeName)
     Just builtin -> pure (BuiltinInputType builtin)
-
--- | simple translation between ast annotation types and schema annotation types
-astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
-astAnnotationToSchemaAnnotation gtype schematn = 
-  case gtype of
-    AST.TypeNamed _ -> TypeNamed schematn
-    AST.TypeList (AST.ListType asttn) -> astAnnotationToSchemaAnnotation asttn schematn
-    AST.TypeNonNull (AST.NonNullTypeNamed _) -> TypeNonNull (NonNullTypeNamed schematn)
-    AST.TypeNonNull (AST.NonNullTypeList (AST.ListType asttn)) -> astAnnotationToSchemaAnnotation asttn schematn
 
 -- | Ensure that a default value contains no variables.
 validateDefaultValue :: AST.DefaultValue -> Validation Value
