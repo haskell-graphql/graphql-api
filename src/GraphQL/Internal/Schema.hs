@@ -341,9 +341,9 @@ builtinFromName typeName
 -- AST type annotations do not need any validation.
 -- GraphQL annotations are semantic decorations around type names to indicate type composition (list/non null).
 astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
-astAnnotationToSchemaAnnotation gtype schematn = 
+astAnnotationToSchemaAnnotation gtype schemaTypeName = 
   case gtype of
-    AST.TypeNamed _ -> TypeNamed schematn
-    AST.TypeList (AST.ListType asttn) -> TypeList (ListType $ astAnnotationToSchemaAnnotation asttn schematn)
-    AST.TypeNonNull (AST.NonNullTypeNamed _) -> TypeNonNull (NonNullTypeNamed schematn)
-    AST.TypeNonNull (AST.NonNullTypeList (AST.ListType asttn)) -> astAnnotationToSchemaAnnotation asttn schematn
+    AST.TypeNamed _ -> TypeNamed schemaTypeName
+    AST.TypeList (AST.ListType astTypeName) -> TypeList (ListType $ astAnnotationToSchemaAnnotation astTypeName schemaTypeName)
+    AST.TypeNonNull (AST.NonNullTypeNamed _) -> TypeNonNull (NonNullTypeNamed schemaTypeName)
+    AST.TypeNonNull (AST.NonNullTypeList (AST.ListType astTypeName)) -> astAnnotationToSchemaAnnotation astTypeName schemaTypeName
