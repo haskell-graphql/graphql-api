@@ -14,7 +14,7 @@ import qualified Data.Set as Set
 
 import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
-import GraphQL.Internal.Schema (Schema, emptySchema)
+import GraphQL.Internal.Schema (emptySchema, Schema)
 import GraphQL.Internal.Validation
   ( ValidationError(..)
   , findDuplicates

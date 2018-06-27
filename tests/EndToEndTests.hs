@@ -377,8 +377,18 @@ tests = testSpec "End-to-end tests" $ do
                  }
                }
               |]
-      it "Errors when no variables provided" $ do
-        response <- executeQuery  @QueryRoot (rootHandler mortgage) query Nothing mempty
+      let Right badQuery =
+            compileQuery schema
+            [r|query myQuery($whichCommand: String!) {
+                 dog {
+                   name
+                   doesKnowCommand(dogCommand: $whichCommand)
+                 }
+               }
+              |]
+      it "Errors when variable and argument types are in conflict" $ do
+        let vars = Map.singleton (Variable "whichCommand") $ toValue @Text "cow"
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) badQuery Nothing vars
         let expected =
               object
               [ "data" .= object
@@ -394,6 +404,25 @@ tests = testSpec "End-to-end tests" $ do
                   -- a typeclass for client-friendly "Show" (separate from
                   -- actual Show which remains extremely useful for debugging)
                   -- and use that when including values in error messages.
+                  [ "message" .= ("Could not coerce Name {unName = \"dogCommand\"} to valid value: ValueScalar' (ConstString (String \"cow\")) not an enum: [Right (Name {unName = \"Sit\"}),Right (Name {unName = \"Down\"}),Right (Name {unName = \"Heel\"})]" :: Text)
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Errors when no variables provided" $ do
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) query Nothing mempty
+        let expected =
+              object
+              [ "data" .= object
+                [ "dog" .= object
+                  [ "name" .= ("Mortgage" :: Text)
+                  , "doesKnowCommand" .= Null
+                  ]
+                ]
+              , "errors" .=
+                [
+                  object
+                  -- TODO: cf previous test case
                   [ "message" .= ("Could not coerce Name {unName = \"dogCommand\"} to valid value: ValueScalar' ConstNull not an enum: [Right (Name {unName = \"Sit\"}),Right (Name {unName = \"Down\"}),Right (Name {unName = \"Heel\"})]" :: Text)
                   ]
                 ]

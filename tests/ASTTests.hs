@@ -211,3 +211,38 @@ tests = testSpec "AST" $ do
                             ]))
                      ]
       parsed `shouldBe` expected
+    it "parses anonymous query with variable annotation" $ do
+      let query = [r|
+                    query ($atOtherHomes: [Home!]) {
+                      dog {
+                        isHousetrained(atOtherHomes: $atOtherHomes)
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [ AST.VariableDefinition
+                                (AST.Variable "atOtherHomes")
+                                (AST.TypeList 
+                                  (AST.ListType 
+                                    (AST.TypeNonNull
+                                      (AST.NonNullTypeNamed (AST.NamedType "Home"))
+                                    )
+                                  )
+                                )
+                                Nothing
+                            ] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected

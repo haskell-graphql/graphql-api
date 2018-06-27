@@ -22,6 +22,7 @@ module GraphQL.Internal.Schema
   , InterfaceTypeDefinition(..)
   , ObjectTypeDefinition(..)
   , UnionTypeDefinition(..)
+  , ScalarTypeDefinition(..)
   -- ** Input types
   , InputType(..)
   , InputTypeDefinition(..)

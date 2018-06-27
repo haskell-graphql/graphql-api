@@ -30,9 +30,16 @@ import GraphQL.Internal.Schema
   , UnionTypeDefinition(..)
   , GType(..)
   , TypeDefinition(..)
+  , InputTypeDefinition(..)
+  , InputObjectTypeDefinition(..)
+  , InputObjectFieldDefinition(..)
+  , ScalarTypeDefinition(..)
+  , AnnotatedType(..)
   , NonNullType(..)
   , Builtin(..)
   , InputType(..)
+  , getInputTypeDefinition
+  , builtinFromName
   )
 import ExampleSchema
 
@@ -72,3 +79,35 @@ tests = testSpec "Type" $ do
     it "encodes correctly" $ do
     getAnnotatedType @(List Int) `shouldBe` Right (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinType GInt)))))
     getAnnotatedInputType @(List Int) `shouldBe` Right (TypeList (ListType (TypeNonNull (NonNullTypeNamed (BuiltinInputType GInt)))))
+  describe "TypeDefinition accepted as InputTypes" $
+    it "Enum/InputObject/Scalar" $ do
+    getInputTypeDefinition (TypeDefinitionEnum (EnumTypeDefinition "DogCommand"
+     [ EnumValueDefinition "Sit"
+     , EnumValueDefinition "Down"
+     , EnumValueDefinition "Heel"
+     ])) `shouldBe` Just (InputTypeDefinitionEnum (EnumTypeDefinition "DogCommand"
+     [ EnumValueDefinition "Sit"
+     , EnumValueDefinition "Down"
+     , EnumValueDefinition "Heel"
+     ]))
+    -- it "InputObject" $ do
+    getInputTypeDefinition (TypeDefinitionInputObject (InputObjectTypeDefinition  "Human"
+     (InputObjectFieldDefinition "name" (TypeNonNull (NonNullTypeNamed (BuiltinInputType GString))) Nothing :| [])
+     )) `shouldBe` Just (InputTypeDefinitionObject (InputObjectTypeDefinition "Human"
+     (InputObjectFieldDefinition "name" (TypeNonNull (NonNullTypeNamed (BuiltinInputType GString))) Nothing :| [])
+     ))
+    getInputTypeDefinition (TypeDefinitionScalar (ScalarTypeDefinition  "Human")) `shouldBe` Just (InputTypeDefinitionScalar (ScalarTypeDefinition  "Human"))
+  describe "TypeDefinition refused as InputTypes" $
+    -- todo: add all the others (union type, ..?)
+    it "Object" $ do
+    getInputTypeDefinition (TypeDefinitionObject (ObjectTypeDefinition "Human" []
+        (FieldDefinition "name" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GString))) :| []))) `shouldBe` Nothing
+  describe "Builtin types from name" $
+    it "Int/Bool/String/Float/ID" $ do
+    builtinFromName "Int" `shouldBe` Just GInt
+    builtinFromName "Boolean" `shouldBe` Just GBool
+    builtinFromName "String" `shouldBe` Just GString
+    builtinFromName "Float" `shouldBe` Just GFloat
+    builtinFromName "ID" `shouldBe` Just GID
+    builtinFromName "RANDOMSTRING" `shouldBe` Nothing
+
