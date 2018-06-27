@@ -90,7 +90,6 @@ tests = testSpec "Type" $ do
      , EnumValueDefinition "Down"
      , EnumValueDefinition "Heel"
      ]))
-    -- it "InputObject" $ do
     getInputTypeDefinition (TypeDefinitionInputObject (InputObjectTypeDefinition  "Human"
      (InputObjectFieldDefinition "name" (TypeNonNull (NonNullTypeNamed (BuiltinInputType GString))) Nothing :| [])
      )) `shouldBe` Just (InputTypeDefinitionObject (InputObjectTypeDefinition "Human"
@@ -110,4 +109,3 @@ tests = testSpec "Type" $ do
     builtinFromName "Float" `shouldBe` Just GFloat
     builtinFromName "ID" `shouldBe` Just GID
     builtinFromName "RANDOMSTRING" `shouldBe` Nothing
-

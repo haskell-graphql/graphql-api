@@ -377,6 +377,15 @@ tests = testSpec "End-to-end tests" $ do
                  }
                }
               |]
+      let Right annotatedQuery =
+            compileQuery schema
+            [r|query myQuery($whichCommand: DogCommand!) {
+                 dog {
+                   name
+                   doesKnowCommand(dogCommand: $whichCommand)
+                 }
+               }
+              |]
       let Right badQuery =
             compileQuery schema
             [r|query myQuery($whichCommand: String!) {
@@ -444,6 +453,34 @@ tests = testSpec "End-to-end tests" $ do
                 [ "dog" .= object
                   [ "name" .= ("Mortgage" :: Text)
                   , "doesKnowCommand" .= False
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Substitutes annotated variables when they are provided" $ do
+        let Right varName = makeName "whichCommand"
+        let vars = Map.singleton (Variable varName) (toValue Sit)
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) annotatedQuery Nothing vars
+        let expected =
+              object
+              [ "data" .= object
+                [ "dog" .= object
+                  [ "name" .= ("Mortgage" :: Text)
+                  , "doesKnowCommand" .= False
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Errors when non-null variable is not provided" $ do
+        let Right varName = makeName "whichCommand"
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) annotatedQuery Nothing mempty
+        let expected =
+              object
+              [ "data" .= Null
+              , "errors" .=
+                [
+                  object
+                  [ "message" .= ("Execution error: MissingValue (Variable (Name {unName = \"whichCommand\"}))" :: Text)
                   ]
                 ]
               ]
