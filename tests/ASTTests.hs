@@ -246,3 +246,34 @@ tests = testSpec "AST" $ do
                             ]))
                      ]
       parsed `shouldBe` expected
+    it "parses anonymous query with inline argument as a list of object" $ do
+      -- keys are not quoted for inline objects
+      let query = [r|
+                    query {
+                      dog {
+                        isHousetrained(atOtherHomes: [{testKey: 123, anotherKey: "string"}])
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueList (AST.ListValue [
+                                            (AST.ValueObject (AST.ObjectValue [
+                                              (AST.ObjectField "testKey" (AST.ValueInt 123)),
+                                              (AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string")))
+                                            ]))
+                                          ]))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected
