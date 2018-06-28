@@ -35,11 +35,11 @@ In a just world, this would be a separate config file, or command-line arguments
 Each item represents the number of "things" we are OK with not being covered.
 """
 COVERAGE_TOLERANCE = {
-    ALTERNATIVES: 175,
+    ALTERNATIVES: 161,
     BOOLEANS: 8,
-    EXPRESSIONS: 1494,
-    LOCAL_DECLS: 15,
-    TOP_LEVEL_DECLS: 685,
+    EXPRESSIONS: 1416,
+    LOCAL_DECLS: 14,
+    TOP_LEVEL_DECLS: 669,
 }
 
 
