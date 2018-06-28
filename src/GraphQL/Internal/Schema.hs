@@ -22,6 +22,7 @@ module GraphQL.Internal.Schema
   , InterfaceTypeDefinition(..)
   , ObjectTypeDefinition(..)
   , UnionTypeDefinition(..)
+  , ScalarTypeDefinition(..)
   -- ** Input types
   , InputType(..)
   , InputTypeDefinition(..)
@@ -33,15 +34,20 @@ module GraphQL.Internal.Schema
   , NonNullType(..)
   , DefinesTypes(..)
   , doesFragmentTypeApply
+  , getInputTypeDefinition
+  , builtinFromName
+  , astAnnotationToSchemaAnnotation
   -- * The schema
   , Schema
   , makeSchema
+  , emptySchema
   , lookupType
   ) where
 
 import Protolude
 
 import qualified Data.Map as Map
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Value (Value)
 import GraphQL.Internal.Name (HasName(..), Name)
 
@@ -57,6 +63,11 @@ newtype Schema = Schema (Map Name TypeDefinition) deriving (Eq, Ord, Show)
 -- need to be reachable from a single root object. However, it's a start.
 makeSchema :: ObjectTypeDefinition -> Schema
 makeSchema = Schema . getDefinedTypes
+
+-- | Create an empty schema for testing purpose.
+--
+emptySchema :: Schema
+emptySchema = Schema (Map.empty :: (Map Name TypeDefinition))
 
 -- | Find the type with the given name in the schema.
 lookupType :: Schema -> Name -> Maybe TypeDefinition
@@ -157,13 +168,18 @@ instance HasName FieldDefinition where
   getName (FieldDefinition name _ _) = name
 
 instance DefinesTypes FieldDefinition where
-  getDefinedTypes (FieldDefinition _ _ retVal) = getDefinedTypes (getAnnotatedType retVal)
+  getDefinedTypes (FieldDefinition _ args retVal) = 
+    getDefinedTypes (getAnnotatedType retVal) <>
+    foldMap getDefinedTypes args
 
 data ArgumentDefinition = ArgumentDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                           deriving (Eq, Ord, Show)
 
 instance HasName ArgumentDefinition where
   getName (ArgumentDefinition name _ _) = name
+
+instance DefinesTypes ArgumentDefinition where
+  getDefinedTypes (ArgumentDefinition _ annotatedType _) = getDefinedTypes $ getAnnotatedType annotatedType
 
 data InterfaceTypeDefinition = InterfaceTypeDefinition Name (NonEmpty FieldDefinition)
                                deriving (Eq, Ord, Show)
@@ -256,6 +272,12 @@ instance HasName InputType where
   getName (DefinedInputType x) = getName x
   getName (BuiltinInputType x) = getName x
 
+instance DefinesTypes InputType where
+  getDefinedTypes inputType =
+    case inputType of 
+       DefinedInputType typeDefinition -> getDefinedTypes typeDefinition
+       BuiltinInputType _ -> mempty
+
 data InputTypeDefinition
   = InputTypeDefinitionObject        InputObjectTypeDefinition
   | InputTypeDefinitionScalar        ScalarTypeDefinition
@@ -266,6 +288,13 @@ instance HasName InputTypeDefinition where
   getName (InputTypeDefinitionObject x) = getName x
   getName (InputTypeDefinitionScalar x) = getName x
   getName (InputTypeDefinitionEnum x) = getName x
+
+instance DefinesTypes InputTypeDefinition where
+  getDefinedTypes inputTypeDefinition =
+    case inputTypeDefinition of 
+       InputTypeDefinitionObject typeDefinition -> getDefinedTypes (TypeDefinitionInputObject typeDefinition)
+       InputTypeDefinitionScalar typeDefinition -> getDefinedTypes (TypeDefinitionScalar typeDefinition)
+       InputTypeDefinitionEnum typeDefinition -> getDefinedTypes (TypeDefinitionEnum typeDefinition)
 
 -- | A literal value specified as a default as part of a type definition.
 --
@@ -301,3 +330,39 @@ doesFragmentTypeApply objectType fragmentType =
   where
     implements (ObjectTypeDefinition _ interfaces _) int = int `elem` interfaces
     branchOf obj (UnionTypeDefinition _ branches) = obj `elem` branches
+
+-- | Convert the given 'TypeDefinition' to an 'InputTypeDefinition' if it's a valid 'InputTypeDefinition'
+-- (because 'InputTypeDefinition' is a subset of 'TypeDefinition')
+-- see <http://facebook.github.io/graphql/June2018/#sec-Input-and-Output-Types>
+getInputTypeDefinition :: TypeDefinition -> Maybe InputTypeDefinition
+getInputTypeDefinition td =
+  case td of
+    TypeDefinitionInputObject itd -> Just (InputTypeDefinitionObject itd) 
+    TypeDefinitionScalar itd -> Just (InputTypeDefinitionScalar itd) 
+    TypeDefinitionEnum itd -> Just (InputTypeDefinitionEnum itd)
+    _ -> Nothing
+
+-- | Create a 'Builtin' type from a 'Name'
+-- 
+-- Mostly used for the AST validation 
+-- theobat: There's probably a better way to do it but can't find it right now 
+builtinFromName :: Name -> Maybe Builtin
+builtinFromName typeName
+  | typeName == getName GInt = Just GInt
+  | typeName == getName GBool = Just GBool
+  | typeName == getName GString = Just GString
+  | typeName == getName GFloat = Just GFloat
+  | typeName == getName GID = Just GID
+  | otherwise = Nothing
+
+-- | Simple translation between 'AST' annotation types and 'Schema' annotation types
+--
+-- AST type annotations do not need any validation.
+-- GraphQL annotations are semantic decorations around type names to indicate type composition (list/non null).
+astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
+astAnnotationToSchemaAnnotation gtype schemaTypeName = 
+  case gtype of
+    AST.TypeNamed _ -> TypeNamed schemaTypeName
+    AST.TypeList (AST.ListType astTypeName) -> TypeList (ListType $ astAnnotationToSchemaAnnotation astTypeName schemaTypeName)
+    AST.TypeNonNull (AST.NonNullTypeNamed _) -> TypeNonNull (NonNullTypeNamed schemaTypeName)
+    AST.TypeNonNull (AST.NonNullTypeList (AST.ListType astTypeName)) -> TypeNonNull (NonNullTypeList (ListType (astAnnotationToSchemaAnnotation astTypeName schemaTypeName)))

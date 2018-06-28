@@ -115,6 +115,16 @@ tests = testSpec "AST" $ do
                      ]
       parsed `shouldBe` expected
 
+    it "errors on missing selection set" $ do
+      let query = [r|query {
+                       dog {
+                         
+                       }
+                     }|]
+      let Left parsed = parseOnly Parser.queryDocument query
+      -- this is not very explicit
+      parsed `shouldBe` "query document error! > definition error!: string"
+
     it "parses invalid documents" $ do
       let query = [r|{
                        dog {
@@ -209,5 +219,100 @@ tests = testSpec "AST" $ do
                                       ] [] [])
                                  ])
                             ]))
+                     ]
+      parsed `shouldBe` expected
+    it "parses anonymous query with variable annotation" $ do
+      let query = [r|
+                    query ($atOtherHomes: [Home!]) {
+                      dog {
+                        isHousetrained(atOtherHomes: $atOtherHomes)
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [ AST.VariableDefinition
+                                (AST.Variable "atOtherHomes")
+                                (AST.TypeList 
+                                  (AST.ListType 
+                                    (AST.TypeNonNull
+                                      (AST.NonNullTypeNamed (AST.NamedType "Home"))
+                                    )
+                                  )
+                                )
+                                Nothing
+                            ] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected
+    it "parses anonymous query with inline argument (List, Object, Enum, String, Number)" $ do
+      -- keys are not quoted for inline objects
+      let query = [r|
+                    query {
+                      dog {
+                        isHousetrained(atOtherHomes: [{testKey: 123, anotherKey: "string"}])
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueList (AST.ListValue [
+                                            (AST.ValueObject (AST.ObjectValue [
+                                              (AST.ObjectField "testKey" (AST.ValueInt 123)),
+                                              (AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string")))
+                                            ]))
+                                          ]))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      parsed `shouldBe` expected
+    it "parses anonymous query with fragment" $ do
+      -- keys are not quoted for inline objects
+      let query = [r|
+                    fragment dogTest on Dog {
+                      name
+                    }
+                    query {
+                      dog {
+                        ...dogTest
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [(AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
+                        (AST.NamedType "Dog") [] [
+                          AST.SelectionField (AST.Field Nothing "name" [] [] [])
+                        ])),
+                        (AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [AST.SelectionField
+                              (AST.Field Nothing dog [] []
+                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
+                                ])    
+                            ])))
                      ]
       parsed `shouldBe` expected

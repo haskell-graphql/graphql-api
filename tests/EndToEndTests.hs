@@ -377,8 +377,27 @@ tests = testSpec "End-to-end tests" $ do
                  }
                }
               |]
-      it "Errors when no variables provided" $ do
-        response <- executeQuery  @QueryRoot (rootHandler mortgage) query Nothing mempty
+      let Right annotatedQuery =
+            compileQuery schema
+            [r|query myQuery($whichCommand: DogCommand!) {
+                 dog {
+                   name
+                   doesKnowCommand(dogCommand: $whichCommand)
+                 }
+               }
+              |]
+      let Right badQuery =
+            compileQuery schema
+            [r|query myQuery($whichCommand: String!) {
+                 dog {
+                   name
+                   doesKnowCommand(dogCommand: $whichCommand)
+                 }
+               }
+              |]
+      it "Errors when variable and argument types are in conflict" $ do
+        let vars = Map.singleton (Variable "whichCommand") $ toValue @Text "cow"
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) badQuery Nothing vars
         let expected =
               object
               [ "data" .= object
@@ -394,6 +413,24 @@ tests = testSpec "End-to-end tests" $ do
                   -- a typeclass for client-friendly "Show" (separate from
                   -- actual Show which remains extremely useful for debugging)
                   -- and use that when including values in error messages.
+                  [ "message" .= ("Could not coerce Name {unName = \"dogCommand\"} to valid value: ValueScalar' (ConstString (String \"cow\")) not an enum: [Right (Name {unName = \"Sit\"}),Right (Name {unName = \"Down\"}),Right (Name {unName = \"Heel\"})]" :: Text)
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Errors when no variables provided" $ do
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) query Nothing mempty
+        let expected =
+              object
+              [ "data" .= object
+                [ "dog" .= object
+                  [ "name" .= ("Mortgage" :: Text)
+                  , "doesKnowCommand" .= Null
+                  ]
+                ]
+              , "errors" .=
+                [
+                  object
                   [ "message" .= ("Could not coerce Name {unName = \"dogCommand\"} to valid value: ValueScalar' ConstNull not an enum: [Right (Name {unName = \"Sit\"}),Right (Name {unName = \"Down\"}),Right (Name {unName = \"Heel\"})]" :: Text)
                   ]
                 ]
@@ -415,6 +452,33 @@ tests = testSpec "End-to-end tests" $ do
                 [ "dog" .= object
                   [ "name" .= ("Mortgage" :: Text)
                   , "doesKnowCommand" .= False
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Substitutes annotated variables when they are provided" $ do
+        let Right varName = makeName "whichCommand"
+        let vars = Map.singleton (Variable varName) (toValue Sit)
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) annotatedQuery Nothing vars
+        let expected =
+              object
+              [ "data" .= object
+                [ "dog" .= object
+                  [ "name" .= ("Mortgage" :: Text)
+                  , "doesKnowCommand" .= False
+                  ]
+                ]
+              ]
+        toJSON (toValue response) `shouldBe` expected
+      it "Errors when non-null variable is not provided" $ do
+        response <- executeQuery  @QueryRoot (rootHandler mortgage) annotatedQuery Nothing mempty
+        let expected =
+              object
+              [ "data" .= Null
+              , "errors" .=
+                [
+                  object
+                  [ "message" .= ("Execution error: MissingValue (Variable (Name {unName = \"whichCommand\"}))" :: Text)
                   ]
                 ]
               ]

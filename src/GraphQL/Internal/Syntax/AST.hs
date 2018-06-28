@@ -53,8 +53,11 @@ import Protolude
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Name (Name)
-
+import GraphQL.Internal.Name          
+  ( Name
+  , HasName(..)
+  )
+  
 -- * Documents
 
 -- | A 'QueryDocument' is something a user might send us.
@@ -175,6 +178,13 @@ data GType = TypeNamed NamedType
            | TypeList ListType
            | TypeNonNull NonNullType
            deriving (Eq, Ord, Show)
+
+-- | Get the name of the given 'GType'.
+instance HasName GType where
+  getName (TypeNamed (NamedType n)) = n
+  getName (TypeList (ListType t)) = getName t
+  getName (TypeNonNull (NonNullTypeNamed (NamedType n))) = n
+  getName (TypeNonNull (NonNullTypeList (ListType l))) = getName l
 
 newtype NamedType = NamedType Name deriving (Eq, Ord, Show)
 

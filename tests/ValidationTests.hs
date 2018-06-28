@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 
 -- | Tests for query validation.
 module ValidationTests (tests) where
@@ -9,14 +10,16 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck ((===))
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import qualified Data.Set as Set
 
 import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
-import GraphQL.Internal.Schema (Schema)
+import GraphQL.Internal.Schema (emptySchema, Schema)
 import GraphQL.Internal.Validation
   ( ValidationError(..)
   , findDuplicates
   , getErrors
+  , formatErrors
   )
 
 me :: Maybe Name
@@ -31,7 +34,7 @@ dog = "dog"
 -- | Schema used for these tests. Since none of them do type-level stuff, we
 -- don't need to define it.
 schema :: Schema
-schema = panic "schema evaluated. We weren't expecting that."
+schema = emptySchema
 
 tests :: IO TestTree
 tests = testSpec "Validation" $ do
@@ -52,7 +55,7 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   (AST.Query
-                    (AST.Node (Nothing) [] []
+                    (AST.Node Nothing [] []
                       [ AST.SelectionField
                         (AST.Field Nothing dog [] []
                           [ AST.SelectionField (AST.Field Nothing someName [] [] [])
@@ -70,6 +73,29 @@ tests = testSpec "Validation" $ do
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "Boolean"))
                            (Just (AST.ValueBoolean True))
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [ AST.Argument "atOtherHomes"
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                 ] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` []
+    it "Treats anonymous queries with annotated variables as valid ([[Boolean]]!)" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNonNull (AST.NonNullTypeList (AST.ListType 
+                            (AST.TypeList (AST.ListType (AST.TypeNamed (AST.NamedType "Boolean"))))
+                           )))
+                           Nothing
                        ] []
                        [ AST.SelectionField
                            (AST.Field Nothing dog [] []
@@ -115,7 +141,108 @@ tests = testSpec "Validation" $ do
                     ]
                   )
                 ]
-      getErrors schema doc `shouldBe` [MixedAnonymousOperations 2 []]
+      let errors = getErrors schema doc
+      errors `shouldBe` [MixedAnonymousOperations 2 []]
+      formatErrors errors `shouldBe` ["Multiple anonymous operations defined. Found 2"]
+
+    it "Detects mixed operations" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                  ( AST.AnonymousQuery
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    ]
+                  )
+                , AST.DefinitionOperation
+                  ( AST.Query (AST.Node (pure "houseTrainedQuery") [] []
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    ]
+                  ))
+                ]
+      let errors = getErrors schema doc
+      errors `shouldBe` [MixedAnonymousOperations 1 [Just "houseTrainedQuery"]]
+      formatErrors errors `shouldBe` ["Document contains both anonymous operations (1) and named operations ([Just (Name {unName = \"houseTrainedQuery\"})])"]
+
+    it "Detects non-existing type in variable definition" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNamed (AST.NamedType "MyNonExistingType"))
+                           (Just (AST.ValueBoolean True))
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [ AST.Argument "atOtherHomes"
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                 ] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "MyNonExistingType"]
+
+    it "Detects unused variable definition" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNamed (AST.NamedType "String"))
+                           (Just (AST.ValueBoolean True))
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
+
+    it "Treats anonymous queries with inline arguments as valid" $ do
+      let doc = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueList (AST.ListValue [
+                                            (AST.ValueObject (AST.ObjectValue [
+                                              (AST.ObjectField "testKey" (AST.ValueInt 123)),
+                                              (AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string")))
+                                            ]))
+                                          ]))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      getErrors schema doc `shouldBe` []
+    it "Detects non-existent fragment type" $ do
+      let doc = AST.QueryDocument
+                  [(AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
+                    (AST.NamedType "Dog") [] [
+                      AST.SelectionField (AST.Field Nothing "name" [] [] [])
+                      ])),
+                        (AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [AST.SelectionField
+                              (AST.Field Nothing dog [] []
+                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
+                                ])    
+                            ])))
+                     ]
+      getErrors schema doc `shouldBe` [TypeConditionNotFound "Dog"]
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do

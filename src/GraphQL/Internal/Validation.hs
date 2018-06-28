@@ -58,6 +58,7 @@ module GraphQL.Internal.Validation
   , getResponseKey
   -- * Exported for testing
   , findDuplicates
+  , formatErrors
   ) where
 
 import Protolude hiding ((<>), throwE)
@@ -81,6 +82,12 @@ import GraphQL.Internal.Schema
   , Schema
   , doesFragmentTypeApply
   , lookupType
+  , AnnotatedType(..)
+  , InputType (BuiltinInputType, DefinedInputType) 
+  , AnnotatedType
+  , getInputTypeDefinition
+  , builtinFromName
+  , astAnnotationToSchemaAnnotation
   )
 import GraphQL.Value
   ( Value
@@ -174,7 +181,7 @@ validateOperations schema fragments ops = do
   traverse validateNode deduped
   where
     validateNode (operationType, AST.Node _ vars directives ss) =
-      operationType <$> lift (validateVariableDefinitions vars)
+      operationType <$> lift (validateVariableDefinitions schema vars)
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet schema fragments ss
 
@@ -626,7 +633,7 @@ validateArguments args = Arguments <$> mapErrors DuplicateArgument (makeMap [(na
 data VariableDefinition
   = VariableDefinition
     { variable :: Variable -- ^ The name of the variable
-    , variableType :: AST.GType -- ^ The type of the variable
+    , variableType :: AnnotatedType InputType -- ^ The type of the variable
     , defaultValue :: Maybe Value -- ^ An optional default value for the variable
     } deriving (Eq, Ord, Show)
 
@@ -642,16 +649,43 @@ emptyVariableDefinitions :: VariableDefinitions
 emptyVariableDefinitions = mempty
 
 -- | Ensure that a set of variable definitions is valid.
-validateVariableDefinitions :: [AST.VariableDefinition] -> Validation VariableDefinitions
-validateVariableDefinitions vars = do
-  validatedDefns <- traverse validateVariableDefinition vars
+validateVariableDefinitions :: Schema -> [AST.VariableDefinition] -> Validation VariableDefinitions
+validateVariableDefinitions schema vars = do
+  validatedDefns <- traverse (validateVariableDefinition schema) vars
   let items = [ (variable defn, defn) | defn <- validatedDefns]
   mapErrors DuplicateVariableDefinition (makeMap items)
 
 -- | Ensure that a variable definition is a valid one.
-validateVariableDefinition :: AST.VariableDefinition -> Validation VariableDefinition
-validateVariableDefinition (AST.VariableDefinition name varType value) =
-  VariableDefinition name varType <$> traverse validateDefaultValue value
+validateVariableDefinition :: Schema -> AST.VariableDefinition -> Validation VariableDefinition
+validateVariableDefinition schema (AST.VariableDefinition var varType value) =
+  VariableDefinition var
+    <$> validateTypeAssertion schema var varType
+    <*> traverse validateDefaultValue value
+
+-- | Ensure that a variable has a correct type declaration given a schema.
+validateTypeAssertion :: Schema -> Variable -> AST.GType -> Validation (AnnotatedType InputType)
+validateTypeAssertion schema var varTypeAST =
+  astAnnotationToSchemaAnnotation varTypeAST <$>
+  case lookupType schema varTypeNameAST of
+    Nothing -> validateVariableTypeBuiltin var varTypeNameAST
+    Just cleanTypeDef -> validateVariableTypeDefinition var cleanTypeDef
+  where 
+    varTypeNameAST = getName varTypeAST
+
+-- | Validate a variable type which has a type definition in the schema.
+validateVariableTypeDefinition :: Variable -> TypeDefinition -> Validation InputType
+validateVariableTypeDefinition var typeDef = 
+  case getInputTypeDefinition typeDef of 
+    Nothing -> throwE (VariableTypeIsNotInputType var $ getName typeDef)
+    Just value -> pure (DefinedInputType value)
+ 
+
+-- | Validate a variable type which has no type definition (either builtin or not in the schema).
+validateVariableTypeBuiltin :: Variable -> Name -> Validation InputType
+validateVariableTypeBuiltin var typeName = 
+  case builtinFromName typeName of
+    Nothing -> throwE (VariableTypeNotFound var typeName)
+    Just builtin -> pure (BuiltinInputType builtin)
 
 -- | Ensure that a default value contains no variables.
 validateDefaultValue :: AST.DefaultValue -> Validation Value
@@ -776,6 +810,11 @@ data ValidationError
   | IncompatibleFields Name
   -- | There's a type condition that's not present in the schema.
   | TypeConditionNotFound Name
+  -- | There's a variable type that's not present in the schema.
+  | VariableTypeNotFound Variable Name
+  -- | A variable was defined with a non input type.
+  -- <http://facebook.github.io/graphql/June2018/#sec-Variables-Are-Input-Types>
+  | VariableTypeIsNotInputType Variable Name
   deriving (Eq, Show)
 
 instance GraphQLError ValidationError where
@@ -798,6 +837,8 @@ instance GraphQLError ValidationError where
   formatError (MismatchedArguments name) = "Two different sets of arguments given for same response key: " <> show name
   formatError (IncompatibleFields name) = "Field " <> show name <> " has a leaf in one place and a non-leaf in another."
   formatError (TypeConditionNotFound name) = "Type condition " <> show name <> " not found in schema."
+  formatError (VariableTypeNotFound var name) = "Type named " <> show name <> " for variable " <> show var <> " is not in the schema."
+  formatError (VariableTypeIsNotInputType var name) = "Type named " <> show name <> " for variable " <> show var <> " is not an input type."
 
 type ValidationErrors = NonEmpty ValidationError
 
@@ -840,6 +881,11 @@ makeMap entries =
     Just dups -> throwErrors dups
 
 -- * Error handling
+
+-- | Utility function for tests, format ErrorTypes to their text representation
+-- returns a list of error messages
+formatErrors :: [ValidationError] -> [Text]
+formatErrors errors = formatError <$> errors
 
 -- | A 'Validator' is a value that can either be valid or have a non-empty
 -- list of errors.
