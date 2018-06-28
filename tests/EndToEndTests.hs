@@ -472,7 +472,6 @@ tests = testSpec "End-to-end tests" $ do
               ]
         toJSON (toValue response) `shouldBe` expected
       it "Errors when non-null variable is not provided" $ do
-        let Right varName = makeName "whichCommand"
         response <- executeQuery  @QueryRoot (rootHandler mortgage) annotatedQuery Nothing mempty
         let expected =
               object
