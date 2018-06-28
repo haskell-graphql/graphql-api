@@ -84,6 +84,29 @@ tests = testSpec "Validation" $ do
                        ]))
                 ]
       getErrors schema doc `shouldBe` []
+    it "Treats anonymous queries with annotated variables as valid ([[Boolean]]!)" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                    (AST.Query
+                      (AST.Node Nothing
+                       [ AST.VariableDefinition
+                           (AST.Variable "atOtherHomes")
+                           (AST.TypeNonNull (AST.NonNullTypeList (AST.ListType 
+                            (AST.TypeList (AST.ListType (AST.TypeNamed (AST.NamedType "Boolean"))))
+                           )))
+                           Nothing
+                       ] []
+                       [ AST.SelectionField
+                           (AST.Field Nothing dog [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing "isHousetrained"
+                                 [ AST.Argument "atOtherHomes"
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                 ] [] [])
+                            ])
+                       ]))
+                ]
+      getErrors schema doc `shouldBe` []
 
     it "Detects duplicate operation names" $ do
       let doc = AST.QueryDocument
@@ -160,6 +183,46 @@ tests = testSpec "Validation" $ do
                        ]))
                 ]
       getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
+
+    it "Treats anonymous queries with inline arguments as valid" $ do
+      let doc = AST.QueryDocument
+                     [ AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [ AST.SelectionField
+                                (AST.Field Nothing dog [] []
+                                 [ AST.SelectionField
+                                     (AST.Field Nothing "isHousetrained"
+                                      [ AST.Argument "atOtherHomes"
+                                          (AST.ValueList (AST.ListValue [
+                                            (AST.ValueObject (AST.ObjectValue [
+                                              (AST.ObjectField "testKey" (AST.ValueInt 123)),
+                                              (AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string")))
+                                            ]))
+                                          ]))
+                                      ] [] [])
+                                 ])
+                            ]))
+                     ]
+      getErrors schema doc `shouldBe` []
+    it "Detects non-existent fragment type" $ do
+      let doc = AST.QueryDocument
+                  [(AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
+                    (AST.NamedType "Dog") [] [
+                      AST.SelectionField (AST.Field Nothing "name" [] [] [])
+                      ])),
+                        (AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [AST.SelectionField
+                              (AST.Field Nothing dog [] []
+                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
+                                ])    
+                            ])))
+                     ]
+      getErrors schema doc `shouldBe` [TypeConditionNotFound "Dog"]
 
   describe "findDuplicates" $ do
     prop "returns empty on unique lists" $ do

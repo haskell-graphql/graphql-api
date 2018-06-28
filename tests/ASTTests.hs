@@ -277,3 +277,32 @@ tests = testSpec "AST" $ do
                             ]))
                      ]
       parsed `shouldBe` expected
+    it "parses anonymous query with fragment" $ do
+      -- keys are not quoted for inline objects
+      let query = [r|
+                    fragment dogTest on Dog {
+                      name
+                    }
+                    query {
+                      dog {
+                        ...dogTest
+                      }
+                    }
+                    |]
+      let Right parsed = parseOnly Parser.queryDocument query
+      let expected = AST.QueryDocument
+                     [(AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
+                        (AST.NamedType "Dog") [] [
+                          AST.SelectionField (AST.Field Nothing "name" [] [] [])
+                        ])),
+                        (AST.DefinitionOperation
+                         (AST.Query
+                           (AST.Node Nothing
+                            [] []
+                            [AST.SelectionField
+                              (AST.Field Nothing dog [] []
+                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
+                                ])    
+                            ])))
+                     ]
+      parsed `shouldBe` expected
