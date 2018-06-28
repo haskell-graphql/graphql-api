@@ -19,6 +19,7 @@ import GraphQL.Internal.Validation
   ( ValidationError(..)
   , findDuplicates
   , getErrors
+  , formatErrors
   )
 
 me :: Maybe Name
@@ -140,7 +141,26 @@ tests = testSpec "Validation" $ do
                     ]
                   )
                 ]
-      getErrors schema doc `shouldBe` [MixedAnonymousOperations 2 []]
+      let errors = getErrors schema doc
+      errors `shouldBe` [MixedAnonymousOperations 2 []]
+      formatErrors errors `shouldBe` ["Multiple anonymous operations defined. Found 2"]
+
+    it "Detects mixed operations" $ do
+      let doc = AST.QueryDocument
+                [ AST.DefinitionOperation
+                  ( AST.AnonymousQuery
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    ]
+                  )
+                , AST.DefinitionOperation
+                  ( AST.Query (AST.Node (pure "houseTrainedQuery") [] []
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    ]
+                  ))
+                ]
+      let errors = getErrors schema doc
+      errors `shouldBe` [MixedAnonymousOperations 1 [Just "houseTrainedQuery"]]
+      formatErrors errors `shouldBe` ["Document contains both anonymous operations (1) and named operations ([Just (Name {unName = \"houseTrainedQuery\"})])"]
 
     it "Detects non-existing type in variable definition" $ do
       let doc = AST.QueryDocument

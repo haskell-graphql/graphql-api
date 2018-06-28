@@ -58,6 +58,7 @@ module GraphQL.Internal.Validation
   , getResponseKey
   -- * Exported for testing
   , findDuplicates
+  , formatErrors
   ) where
 
 import Protolude hiding ((<>), throwE)
@@ -880,6 +881,11 @@ makeMap entries =
     Just dups -> throwErrors dups
 
 -- * Error handling
+
+-- | Utility function for tests, format ErrorTypes to their text representation
+-- returns a list of error messages
+formatErrors :: [ValidationError] -> [Text]
+formatErrors errors = formatError <$> errors
 
 -- | A 'Validator' is a value that can either be valid or have a non-empty
 -- list of errors.

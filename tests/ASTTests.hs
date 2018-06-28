@@ -115,6 +115,16 @@ tests = testSpec "AST" $ do
                      ]
       parsed `shouldBe` expected
 
+    it "errors on missing selection set" $ do
+      let query = [r|query {
+                       dog {
+                         
+                       }
+                     }|]
+      let Left parsed = parseOnly Parser.queryDocument query
+      -- this is not very explicit
+      parsed `shouldBe` "query document error! > definition error!: string"
+
     it "parses invalid documents" $ do
       let query = [r|{
                        dog {
@@ -246,7 +256,7 @@ tests = testSpec "AST" $ do
                             ]))
                      ]
       parsed `shouldBe` expected
-    it "parses anonymous query with inline argument as a list of object" $ do
+    it "parses anonymous query with inline argument (List, Object, Enum, String, Number)" $ do
       -- keys are not quoted for inline objects
       let query = [r|
                     query {
