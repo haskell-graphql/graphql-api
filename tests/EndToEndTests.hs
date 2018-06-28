@@ -431,7 +431,6 @@ tests = testSpec "End-to-end tests" $ do
               , "errors" .=
                 [
                   object
-                  -- TODO: cf previous test case
                   [ "message" .= ("Could not coerce Name {unName = \"dogCommand\"} to valid value: ValueScalar' ConstNull not an enum: [Right (Name {unName = \"Sit\"}),Right (Name {unName = \"Down\"}),Right (Name {unName = \"Heel\"})]" :: Text)
                   ]
                 ]
