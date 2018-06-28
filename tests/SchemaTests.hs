@@ -14,6 +14,7 @@ import GraphQL.API
   , getAnnotatedInputType
   , getDefinition
   )
+import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.API
   ( getAnnotatedType
   , getFieldDefinition
@@ -40,6 +41,7 @@ import GraphQL.Internal.Schema
   , InputType(..)
   , getInputTypeDefinition
   , builtinFromName
+  , astAnnotationToSchemaAnnotation
   )
 import ExampleSchema
 
@@ -109,3 +111,23 @@ tests = testSpec "Type" $ do
     builtinFromName "Float" `shouldBe` Just GFloat
     builtinFromName "ID" `shouldBe` Just GID
     builtinFromName "RANDOMSTRING" `shouldBe` Nothing
+  describe "Annotations from AST" $
+    it "annotation like [[ScalarType!]]!" $ do
+    let typeDefinitionScalar = (TypeDefinitionScalar (ScalarTypeDefinition "ScalarType"))
+    astAnnotationToSchemaAnnotation (
+      AST.TypeNonNull (
+        AST.NonNullTypeList (
+          AST.ListType (
+            AST.TypeList (
+              AST.ListType (
+                AST.TypeNonNull (
+                  AST.NonNullTypeNamed (AST.NamedType "ScalarType")
+      ))))))) typeDefinitionScalar `shouldBe` (
+        TypeNonNull (
+          NonNullTypeList (
+            ListType (
+              TypeList (
+                ListType (
+                  TypeNonNull (
+                    NonNullTypeNamed typeDefinitionScalar
+        )))))))
