@@ -26,6 +26,8 @@ module GraphQL.Internal.API
   , HasAnnotatedType(..)
   , HasAnnotatedInputType
   , HasObjectDefinition(..)
+  , HasFieldDefinitions(..)
+  , HasInterfaceDefinitions(..)
   , getArgumentDefinition
   , SchemaError(..)
   , nameFromSymbol
@@ -75,7 +77,6 @@ import GraphQL.Internal.Output (GraphQLError(..))
 data a :> b = a :> b
 infixr 8 :>
 
-
 data Object (name :: Symbol) (interfaces :: [Type]) (fields :: [Type])
 data Enum (name :: Symbol) (values :: Type)
 data Union (name :: Symbol) (types :: [Type])
@@ -86,7 +87,6 @@ data List (elemType :: Type)
 data Interface (name :: Symbol) (fields :: [Type])
 data Field (name :: Symbol) (fieldType :: Type)
 data Argument (name :: Symbol) (argType :: Type)
-
 
 -- | The type-level schema was somehow invalid.
 data SchemaError

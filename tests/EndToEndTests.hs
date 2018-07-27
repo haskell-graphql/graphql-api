@@ -8,18 +8,20 @@
 -- sanity checks on our reasoning.
 module EndToEndTests (tests) where
 
-import Protolude
+import Protolude hiding (diff)
 
 import Data.Aeson (Value(Null), toJSON, object, (.=))
+import Data.IORef (IORef, newIORef, readIORef, modifyIORef)
 import qualified Data.Map as Map
-import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
+import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery, interpretRequest, SchemaRoot(..), Response)
 import GraphQL.API (Object, Field, List, Argument, (:>), Defaultable(..), HasAnnotatedInputType(..))
 import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler, unionValue)
 import GraphQL.Value (ToValue(..), FromValue(..), makeName)
 import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, runIO)
 import Text.RawString.QQ (r)
+import Utils
 
 import ExampleSchema
 
@@ -40,6 +42,15 @@ type QueryRoot = Object "QueryRoot" '[]
    , Field "catOrDogList" (List CatOrDog)
    ]
 
+type DogWithTreats = Object "DogWithTreats" '[]
+  '[ Field "dog" Dog
+   , Field "treats" Int32
+   ]
+
+type MutationRoot = Object "MutationRoot" '[] 
+  '[ Argument "count" Int32 :> Field "giveTreats" DogWithTreats
+   ]
+
 -- | An object that is passed as an argument. i.e. an input object.
 --
 -- TODO: Ideally this would be Dog itself, or ServerDog at worst.
@@ -56,11 +67,11 @@ catOrDog = do
   name <- pure "MonadicFelix" -- we can do monadic actions
   unionValue @Cat (catHandler name Nothing 15)
 
-catOrDogList :: Handler IO (List CatOrDog)
-catOrDogList =
+catOrDogList :: ServerDog -> Handler IO (List CatOrDog)
+catOrDogList dog =
   pure [ unionValue @Cat (catHandler "Felix the Cat" (Just "felix") 42)
        , unionValue @Cat (catHandler "Henry" Nothing 10)
-       , unionValue @Dog (viewServerDog mortgage)
+       , unionValue @Dog (viewServerDog dog)
        ]
 
 catHandler :: Text -> Maybe Text -> Int32 -> Handler IO Cat
@@ -80,6 +91,7 @@ data ServerDog
     , houseTrainedAtHome :: Bool
     , houseTrainedElsewhere :: Bool
     , owner :: ServerHuman
+    , treatCount :: IORef Int32
     }
 
 -- | Whether 'ServerDog' knows the given command.
@@ -108,19 +120,7 @@ describeDog (DogStuff toy likesTreats)
   | otherwise = pure $ "their favorite toy is a " <> toy
 
 rootHandler :: ServerDog -> Handler IO QueryRoot
-rootHandler dog = pure $ viewServerDog dog :<> describeDog :<> catOrDog :<> catOrDogList
-
--- | jml has a stuffed black dog called "Mortgage".
-mortgage :: ServerDog
-mortgage = ServerDog
-           { name = "Mortgage"
-           , nickname = Just "Mort"
-           , barkVolume = 0  -- He's stuffed
-           , knownCommands = mempty  -- He's stuffed
-           , houseTrainedAtHome = True  -- Never been a problem
-           , houseTrainedElsewhere = True  -- Untested in the field
-           , owner = jml
-           }
+rootHandler dog = pure $ viewServerDog dog :<> describeDog :<> catOrDog :<> catOrDogList dog
 
 -- | Our server's internal representation of a 'Human'.
 newtype ServerHuman = ServerHuman Text deriving (Eq, Ord, Show, Generic)
@@ -134,9 +134,35 @@ viewServerHuman (ServerHuman name) = pure (pure name)
 jml :: ServerHuman
 jml = ServerHuman "jml"
 
+type E2ESchema = SchemaRoot IO QueryRoot MutationRoot
+
+rootMutations :: ServerDog -> IORef Int32 -> Handler IO MutationRoot
+rootMutations dog treats = pure
+  $ \count -> do
+    modifyIORef treats (+ count)
+    pure $ viewServerDog dog :<> readIORef treats
+
+schemaHandler :: ServerDog -> IORef Int32 -> SchemaRoot IO QueryRoot MutationRoot
+schemaHandler dog treats = SchemaRoot (rootHandler dog) (rootMutations dog treats)
 
 tests :: IO TestTree
 tests = testSpec "End-to-end tests" $ do
+  treatCountRef <- runIO $ newIORef 0
+
+  let 
+    -- | jml has a stuffed black dog called "Mortgage".
+    mortgage :: ServerDog
+    mortgage = ServerDog
+             { name = "Mortgage"
+             , nickname = Just "Mort"
+             , barkVolume = 0  -- He's stuffed
+             , knownCommands = mempty  -- He's stuffed
+             , houseTrainedAtHome = True  -- Never been a problem
+             , houseTrainedElsewhere = True  -- Untested in the field
+             , owner = jml
+             , treatCount = treatCountRef
+             }
+
   describe "interpretAnonymousQuery" $ do
     it "Handles the simplest possible valid query" $ do
       let query = [r|{
@@ -483,3 +509,106 @@ tests = testSpec "End-to-end tests" $ do
                 ]
               ]
         toJSON (toValue response) `shouldBe` expected
+
+  describe "introspection" $ do
+    treatRef <- runIO $ newIORef 1
+
+    let 
+      run :: Text -> IO Response
+      run query = interpretRequest @E2ESchema (schemaHandler mortgage treatRef) query Nothing mempty
+
+    it "can issue direct queries" $ do
+      response <- run [r|query myQuery {
+         dog {
+           name
+         }
+        }
+      |]
+      response `shouldBeJSON` [json|
+        {
+          "data": {
+            "dog": {
+              "name": "Mortgage"
+            }
+          }
+        }
+      |]
+
+    it "can issue mutations" $ do
+      response <- run [r|mutation goodBoy {
+           giveTreats(count: 2) {
+             dog {
+               name
+             }
+             treats
+           }
+         }
+      |]
+      response `shouldBeJSON` [json|
+        {
+          "data": {
+            "giveTreats": {
+              "dog": {
+                "name": "Mortgage"
+              },
+              "treats": 3
+            }
+          }
+        }
+      |]
+
+    -- it "can fetch the __schema" $ do
+    --   response <- run [r|{
+    --       __schema {
+    --         types {
+    --           name
+    --         }
+    --       }
+    --     }|]
+    --   response `shouldBeJSON` [json|
+    --     {
+    --       "data": {
+    --         "__schema": {
+    --           "types": [
+    --             { "name": "Cat" },
+    --             { "name": "CatCommand" },
+    --             { "name": "CatOrDog" },
+    --             { "name": "Dog" },
+    --             { "name": "DogCommand" },
+    --             { "name": "Human" },
+    --             { "name": "MutationRoot" },
+    --             { "name": "Pet" },
+    --             { "name": "QueryRoot" },
+    --             { "name": "Sentient" }
+    --           ]
+    --         }
+    --       }
+    --     }
+    --   |]
+
+    -- it "can query __types by name" $ do
+    --   response <- run [r|{
+    --       __type(name: "Dog") {
+    --         name
+    --         fields {
+    --           name
+    --         }
+    --       }
+    --     }|]
+    --   response `shouldBeJSON` [json|
+    --     {
+    --       "data": {
+    --         "__type": {
+    --           "name": "Dog",
+    --           "fields": [
+    --             { "name": "name" },
+    --             { "name": "nickname" },
+    --             { "name": "barkVolume" },
+    --             { "name": "doesKnowCommand" },
+    --             { "name": "isHouseTrained" },
+    --             { "name": "owner" }
+    --           ]
+    --         }
+    --       }
+    --     }
+    --   |]

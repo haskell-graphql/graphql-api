@@ -39,8 +39,10 @@ module GraphQL.Internal.Validation
   , QueryDocument(..)
   , validate
   , getErrors
+  , DefinitionType(..)
+  , getDefinitionType
   -- * Operating on validated documents
-  , Operation
+  , Operation(..)
   , getSelectionSet
   -- * Executing validated documents
   , VariableDefinition(..)
@@ -926,3 +928,29 @@ instance Applicative (Validator e) where
   Validator (Left e) <*> _ = Validator (Left e)
   Validator _ <*> (Validator (Left e)) = Validator (Left e)
   Validator (Right f) <*> Validator (Right x) = Validator (Right (f x))
+
+data DefinitionType = QueryDefinition | MutationDefinition deriving (Eq, Show)
+
+getDefinitionType :: AST.QueryDocument -> Maybe Name -> Maybe DefinitionType
+getDefinitionType doc (Just name) = 
+  case find (operationNamed name) $ getOperationDefinitions doc of
+    Just (AST.Mutation _) -> Just MutationDefinition
+    Just _ -> Just QueryDefinition
+    _ -> Nothing
+getDefinitionType doc Nothing =
+  case getOperationDefinitions doc of
+    [op] -> case op of
+      (AST.Mutation _) -> Just MutationDefinition
+      _ -> Just QueryDefinition
+    _ -> Nothing
+
+getOperationDefinitions :: AST.QueryDocument -> [AST.OperationDefinition]
+getOperationDefinitions = mapMaybe extract . AST.getDefinitions
+  where
+    extract (AST.DefinitionOperation op) = Just op
+    extract _ = Nothing
+
+operationNamed :: Name -> AST.OperationDefinition -> Bool
+operationNamed n (AST.Query    (AST.Node n' _ _ _)) = Just n == n'
+operationNamed n (AST.Mutation (AST.Node n' _ _ _)) = Just n == n'
+operationNamed _ _ = False

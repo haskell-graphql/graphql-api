@@ -8,6 +8,7 @@ import Test.Tasty (defaultMain, testGroup)
 
 import qualified ASTTests
 import qualified EndToEndTests
+import qualified MutationTests
 import qualified OrderedMapTests
 import qualified ResolverTests
 import qualified SchemaTests
@@ -24,6 +25,7 @@ main = do
       [ ASTTests.tests
       , EndToEndTests.tests
       , OrderedMapTests.tests
+      , MutationTests.tests
       , ResolverTests.tests
       , SchemaTests.tests
       , ValidationTests.tests

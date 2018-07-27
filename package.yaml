@@ -74,6 +74,7 @@ tests:
       - aeson-qq
       - tasty
       - tasty-hspec
+      - template-haskell
       - text
       - directory
 

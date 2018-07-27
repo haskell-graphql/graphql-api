@@ -23,6 +23,7 @@ module GraphQL.Internal.Schema
   , ObjectTypeDefinition(..)
   , UnionTypeDefinition(..)
   , ScalarTypeDefinition(..)
+  , TypeExtensionDefinition(..)
   -- ** Input types
   , InputType(..)
   , InputTypeDefinition(..)
@@ -143,7 +144,7 @@ instance DefinesTypes TypeDefinition where
       TypeDefinitionUnion x -> getDefinedTypes x
       TypeDefinitionScalar x  -> getDefinedTypes x
       TypeDefinitionEnum x -> getDefinedTypes x
-      TypeDefinitionInputObject _ -> mempty
+      TypeDefinitionInputObject x -> getDefinedTypes x
       TypeDefinitionTypeExtension _ ->
         panic "TODO: we should remove the 'extend' behaviour entirely"
 
@@ -254,11 +255,19 @@ data InputObjectTypeDefinition = InputObjectTypeDefinition Name (NonEmpty InputO
 instance HasName InputObjectTypeDefinition where
   getName (InputObjectTypeDefinition name _) = name
 
+instance DefinesTypes InputObjectTypeDefinition where
+  getDefinedTypes obj@(InputObjectTypeDefinition name fields) =
+    Map.singleton name (TypeDefinitionInputObject obj) <>
+      foldMap getDefinedTypes fields
+
 data InputObjectFieldDefinition = InputObjectFieldDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                                   deriving (Eq, Ord, Show) -- XXX: spec is unclear about default value for input object field definitions
 
 instance HasName InputObjectFieldDefinition where
   getName (InputObjectFieldDefinition name _ _) = name
+
+instance DefinesTypes InputObjectFieldDefinition where
+  getDefinedTypes (InputObjectFieldDefinition _ annotatedInput _) = getDefinedTypes $ getAnnotatedType annotatedInput
 
 newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
                                   deriving (Eq, Ord, Show)

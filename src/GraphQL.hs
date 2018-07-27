@@ -2,6 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 -- | Interface for GraphQL API.
 --
 -- __Note__: This module is highly subject to change. We're still figuring
@@ -10,14 +11,17 @@ module GraphQL
   (
     -- * Running queries
     interpretQuery
+  , interpretRequest
   , interpretAnonymousQuery
   , Response(..)
     -- * Preparing queries then running them
   , makeSchema
   , compileQuery
   , executeQuery
+  , executeRequest
   , QueryError
   , Schema
+  , SchemaRoot(..)
   , VariableValues
   , Value
   ) where
@@ -30,7 +34,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import GraphQL.API (HasObjectDefinition(..), SchemaError(..))
 import GraphQL.Internal.Execution
   ( VariableValues
-  , ExecutionError
+  , ExecutionError(..)
   , substituteVariables
   )
 import qualified GraphQL.Internal.Execution as Execution
@@ -43,6 +47,9 @@ import GraphQL.Internal.Validation
   , validate
   , getSelectionSet
   , VariableValue
+  , Operation(..)
+  , DefinitionType(..)
+  , getDefinitionType
   )
 import GraphQL.Internal.Output
   ( GraphQLError(..)
@@ -83,6 +90,16 @@ instance GraphQLError QueryError where
   formatError (NonObjectResult v) =
     "Query returned a value that is not an object: " <> show v
 
+toResult :: Result Value -> Response
+toResult (Result errors result) = case result of
+  -- TODO: Prevent this at compile time. Particularly frustrating since
+  -- we *know* that queries and mutations have object definitions
+  ValueObject object ->
+    case NonEmpty.nonEmpty errors of
+      Nothing -> Success object
+      Just errs -> PartialSuccess object (map toError errs)
+  v -> ExecutionFailure (singleError (NonObjectResult v))
+
 -- | Execute a GraphQL query.
 executeQuery
   :: forall api m. (HasResolver m api, Applicative m, HasObjectDefinition api)
@@ -94,17 +111,7 @@ executeQuery
 executeQuery handler document name variables =
   case getOperation document name variables of
     Left e -> pure (ExecutionFailure (singleError e))
-    Right operation -> toResult <$> resolve @m @api handler (Just operation)
-  where
-    toResult (Result errors result) =
-      case result of
-        -- TODO: Prevent this at compile time. Particularly frustrating since
-        -- we *know* that api has an object definition.
-        ValueObject object ->
-          case NonEmpty.nonEmpty errors of
-            Nothing -> Success object
-            Just errs -> PartialSuccess object (map toError errs)
-        v -> ExecutionFailure (singleError (NonObjectResult v))
+    Right (_, ss) -> toResult <$> resolve @m @api handler (Just ss)
 
 -- | Create a GraphQL schema.
 makeSchema :: forall api. HasObjectDefinition api => Either QueryError Schema
@@ -135,6 +142,75 @@ interpretAnonymousQuery
   -> m Response -- ^ The result of running the query.
 interpretAnonymousQuery handler query = interpretQuery @api @m handler query Nothing mempty
 
+data SchemaRoot m query mutation = SchemaRoot
+  { queries   :: Handler m query
+  , mutations :: Handler m mutation
+  }
+
+-- | Execute a query or mutation
+--
+-- Similar to executeQuery, execept requests are dispatched against the
+-- SchemaRoot depending on whether they are a query or mutation
+executeRequest
+  :: forall schema queries mutations m.
+  ( schema ~ SchemaRoot m queries mutations
+  , HasResolver m queries
+  , HasObjectDefinition queries
+  , HasResolver m mutations
+  , HasObjectDefinition mutations
+  , Monad m
+  )
+  => SchemaRoot m queries mutations
+  -> QueryDocument VariableValue
+  -> Maybe Name
+  -> VariableValues
+  -> m Response
+executeRequest (SchemaRoot qh mh) document name variables =
+  case getOperation document name variables of
+    Left e -> pure (ExecutionFailure (singleError e))
+    Right (operation, ss) -> do
+      toResult <$> case operation of
+        Query    _ _ _ -> resolve @m @queries qh (Just ss)
+        Mutation _ _ _ -> resolve @m @mutations mh (Just ss)
+
+-- | Interpret a query or mutation against a SchemaRoot
+interpretRequest
+  :: forall schema queries mutations m.
+  ( schema ~ SchemaRoot m queries mutations
+  , HasResolver m queries
+  , HasObjectDefinition queries
+  , HasResolver m mutations
+  , HasObjectDefinition mutations
+  , Monad m
+  )
+  => SchemaRoot m queries mutations
+  -> Text
+  -> Maybe Name
+  -> VariableValues
+  -> m Response
+interpretRequest (SchemaRoot qh mh) text name variables = case parseQuery text of
+  Left err -> pure (PreExecutionFailure (toError (ParseError err) :| []))
+  Right document ->
+    case getDefinitionType document name of
+      Just operation -> case operation of
+        QueryDefinition    -> run @m @queries qh document
+        MutationDefinition -> run @m @mutations mh document
+      _ -> 
+        let err = maybe NoAnonymousOperation NoSuchOperation name
+        in pure (ExecutionFailure (toError err :| []))
+    where
+      run :: forall n api.
+          ( HasObjectDefinition api
+          , HasResolver n api
+          , Applicative n
+          )
+          => Handler n api -> AST.QueryDocument -> n Response
+      run h doc = case makeSchema @api of
+        Left e -> pure (PreExecutionFailure (toError e :| []))
+        Right schema -> case validate schema doc of
+          Left e -> pure (PreExecutionFailure (toError (ValidationError e) :| []))
+          Right validated -> executeQuery @api h validated name variables
+
 -- | Turn some text into a valid query document.
 compileQuery :: Schema -> Text -> Either QueryError (QueryDocument VariableValue)
 compileQuery schema query = do
@@ -146,8 +222,8 @@ parseQuery :: Text -> Either Text AST.QueryDocument
 parseQuery query = first toS (parseOnly (Parser.queryDocument <* endOfInput) query)
 
 -- | Get an operation from a query document ready to be processed.
-getOperation :: QueryDocument VariableValue -> Maybe Name -> VariableValues -> Either QueryError (SelectionSetByType Value)
+getOperation :: QueryDocument VariableValue -> Maybe Name -> VariableValues -> Either QueryError (Operation VariableValue, SelectionSetByType Value)
 getOperation document name vars = first ExecutionError $ do
   op <- Execution.getOperation document name
   resolved <- substituteVariables op vars
-  pure (getSelectionSet resolved)
+  pure (op, getSelectionSet resolved)
