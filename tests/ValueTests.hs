@@ -66,7 +66,13 @@ tests = testSpec "Value" $ do
             , ("resInt",    toValue @Int32 32)
             ]
       let Right observed = fromValue $ ValueObject' value
-      observed `shouldBe` Resource "text" 32 1.2 False
+      let expected = Resource
+            { resText   = "text"
+            , resInt    = 32
+            , resDouble = 1.2
+            , resBool   = False 
+            }
+      observed `shouldBe` expected
       
   describe "ToValue / FromValue instances" $ do
     prop "Bool" $ prop_roundtripValue @Bool
