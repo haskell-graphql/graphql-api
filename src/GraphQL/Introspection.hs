@@ -20,7 +20,7 @@ module GraphQL.Introspection
   , serialize
   ) where
 
-import Protolude hiding (TypeError)
+import Protolude hiding (TypeError, Enum)
 
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
@@ -43,14 +43,38 @@ type Schema__ = Object "__Schema" '[]
    ]
 
 type Type__ = Object "__Type" '[]
-  '[ Field "kind" Text -- TODO: enum
+  '[ Field "kind" TypeKind__
    , Field "name" Text
-   , Field "fields" (List Field__)
+   , Field "fields" (Maybe (List Field__))
+   , Field "enumValues" (Maybe (List EnumValue__))
+   , Field "inputFields" (Maybe (List InputValue__))
    ]
 
 type Field__ = Object "__Field" '[]
   '[ Field "name" Text
+   , Field "args" (List InputValue__)
    ]
+
+type EnumValue__ = Object "__EnumValue" '[]
+  '[ Field "name" Text
+   ]
+
+type InputValue__ = Object "__InputValue" '[]
+  '[ Field "name" Text
+   ]
+
+data TypeKind = SCALAR
+              | OBJECT
+              | INTERFACE
+              | UNION
+              | ENUM
+              | INPUT_OBJECT
+              | LIST
+              | NON_NULL
+              deriving (Show, Eq, Generic)
+instance GraphQLEnum TypeKind
+
+type TypeKind__ = Enum "__TypeKind" TypeKind
 
 type SchemaField = Field "__schema" Schema__
 type TypeField   = Argument "name" Text :> Field "__type" Type__
@@ -64,7 +88,7 @@ schemaDefinedTypes (SchemaDefinition queries mutations) =
       defined name _ = not $ reserved name
 
 reserved :: Name -> Bool
-reserved name = "__" `T.isPrefixOf` unName name 
+reserved name = "__" `T.isPrefixOf` unName name
 
 serialize :: forall s h q m.
   ( s ~ SchemaRoot h q m
@@ -83,15 +107,14 @@ serialize = do
 collectDefinitions :: ObjectTypeDefinition -> [TypeDefinition]
 collectDefinitions = visitObject
   where
-    visitObject (ObjectTypeDefinition name interfaces fields) = 
+    visitObject (ObjectTypeDefinition name interfaces fields) =
       if reserved name
         then []
-        else 
-          -- FIXME:
+        else
           let fields' = NonEmpty.fromList $ NonEmpty.filter (not . reserved . getName) fields
           in TypeDefinitionObject (ObjectTypeDefinition name interfaces fields') : concatMap visitField fields'
 
-    visitField (FieldDefinition _ args out) = 
+    visitField (FieldDefinition _ args out) =
       visitType out <> concatMap visitArg args
 
     visitArg (ArgumentDefinition _ input _) = case unAnnotatedType input of
@@ -153,31 +176,31 @@ inputObjectFieldDefinitionToAST :: InputObjectFieldDefinition -> AST.InputValueD
 inputObjectFieldDefinitionToAST (InputObjectFieldDefinition name annotatedInput _) = AST.InputValueDefinition name (inputTypeToAST annotatedInput) Nothing -- FIXME
 
 typeToAST :: AnnotatedType GType -> AST.GType
-typeToAST (TypeNamed t) = 
+typeToAST (TypeNamed t) =
   -- AST.TypeNamed $ AST.NamedType $ getName t
   AST.TypeNonNull $ AST.NonNullTypeNamed $ AST.NamedType $ getName t
-typeToAST (TypeList (ListType t)) = 
+typeToAST (TypeList (ListType t)) =
   -- AST.TypeList $ AST.ListType $ AST.TypeNamed $ AST.NamedType $ getName t
-  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $ 
+  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $
   -- AST.TypeNamed $ AST.NamedType $ getName t
   AST.TypeNonNull $ AST.NonNullTypeNamed $ AST.NamedType $ getName t
-typeToAST (TypeNonNull (NonNullTypeNamed t)) = 
+typeToAST (TypeNonNull (NonNullTypeNamed t)) =
   AST.TypeNonNull $ AST.NonNullTypeNamed $ AST.NamedType $ getName t
-typeToAST (TypeNonNull (NonNullTypeList (ListType t))) = 
-  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $ 
+typeToAST (TypeNonNull (NonNullTypeList (ListType t))) =
+  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $
   -- AST.TypeNamed $ AST.NamedType $ getName t
   AST.TypeNonNull $ AST.NonNullTypeNamed $ AST.NamedType $ getName t
 
 inputTypeToAST :: AnnotatedType InputType -> AST.GType
-inputTypeToAST (TypeNamed t) = 
+inputTypeToAST (TypeNamed t) =
   AST.TypeNamed $ AST.NamedType $ getName t
-inputTypeToAST (TypeList (ListType t)) = 
-  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $ 
+inputTypeToAST (TypeList (ListType t)) =
+  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $
   AST.TypeNamed $ AST.NamedType $ getName t
-inputTypeToAST (TypeNonNull (NonNullTypeNamed t)) = 
+inputTypeToAST (TypeNonNull (NonNullTypeNamed t)) =
   AST.TypeNonNull $ AST.NonNullTypeNamed $ AST.NamedType $ getName t
-inputTypeToAST (TypeNonNull (NonNullTypeList (ListType t))) = 
-  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $ 
+inputTypeToAST (TypeNonNull (NonNullTypeList (ListType t))) =
+  AST.TypeNonNull $ AST.NonNullTypeList $ AST.ListType $
   AST.TypeNamed $ AST.NamedType $ getName t
 
 schema :: forall s m queries mutations.
@@ -220,43 +243,56 @@ typeHandler (TypeDefinitionTypeExtension ex) = typeExtensionTypeHandler ex
 
 objectTypeHandler :: Monad m => ObjectTypeDefinition -> Handler m Type__
 objectTypeHandler (ObjectTypeDefinition name _ fields) = pure
-    $ pure "OBJECT"
+    $ pure OBJECT
   :<> pure (unName name)
-  :<> pure (map fieldHandler $ NonEmpty.toList fields)
+  :<> pure (Just . pure $ map fieldHandler $ NonEmpty.toList fields)
+  :<> pure Nothing
+  :<> pure Nothing
 
 enumTypeHandler :: Monad m => EnumTypeDefinition -> Handler m Type__
-enumTypeHandler (EnumTypeDefinition name _) = pure
-    $ pure "ENUM"
+enumTypeHandler (EnumTypeDefinition name values) = pure
+    $ pure ENUM
   :<> pure (unName name)
-  :<> pure [] -- fields
+  :<> pure Nothing
+  :<> pure (Just . pure $ map (pure . pure . unName . getName) values)
+  :<> pure Nothing
 
 unionTypeHandler :: Monad m => UnionTypeDefinition -> Handler m Type__
 unionTypeHandler (UnionTypeDefinition name _) = pure
-    $ pure "UNION"
+    $ pure UNION
   :<> pure (unName name)
-  :<> pure []
+  :<> pure Nothing
+  :<> pure Nothing
+  :<> pure Nothing
 
 interfaceTypeHandler :: Monad m => InterfaceTypeDefinition -> Handler m Type__
 interfaceTypeHandler (InterfaceTypeDefinition name fields) = pure
-    $ pure "UNION"
+    $ pure INTERFACE
   :<> pure (unName name)
-  :<> pure (map fieldHandler $ NonEmpty.toList fields)
+  :<> pure (Just . pure $ map fieldHandler $ NonEmpty.toList fields)
+  :<> pure Nothing
+  :<> pure Nothing
 
 scalarTypeHandler :: Monad m => ScalarTypeDefinition -> Handler m Type__
 scalarTypeHandler (ScalarTypeDefinition name) = pure
-    $ pure "SCALAR"
+    $ pure SCALAR
   :<> pure (unName name)
-  :<> pure []
+  :<> pure Nothing
+  :<> pure Nothing
+  :<> pure Nothing
 
 inputObjectTypeHandler :: Monad m => InputObjectTypeDefinition -> Handler m Type__
-inputObjectTypeHandler (InputObjectTypeDefinition name _) = pure
-    $ pure "INPUT_OBJECT"
+inputObjectTypeHandler (InputObjectTypeDefinition name fields) = pure
+    $ pure INPUT_OBJECT
   :<> pure (unName name)
-  :<> pure []
+  :<> pure Nothing
+  :<> pure Nothing
+  :<> pure (Just . pure $ map (pure . pure . unName . getName) $ NonEmpty.toList fields)
 
 typeExtensionTypeHandler :: Monad m => TypeExtensionDefinition -> Handler m Type__
 typeExtensionTypeHandler (TypeExtensionDefinition obj) = objectTypeHandler obj
 
 fieldHandler :: Monad m => FieldDefinition -> Handler m Field__
-fieldHandler (FieldDefinition name _ _) = pure 
-  $ pure (unName name)
+fieldHandler (FieldDefinition name args _) = pure
+    $ pure (unName name)
+  :<> pure (map (pure . pure . unName . getName) args)

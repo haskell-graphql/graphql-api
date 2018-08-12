@@ -16,6 +16,7 @@ import qualified Data.Map as Map
 import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery, interpretRequest, SchemaRoot(..), Response)
 import GraphQL.API (Object, Field, List, Argument, (:>), Defaultable(..), HasAnnotatedInputType(..))
 import GraphQL.Internal.Syntax.AST (Variable(..))
+import qualified GraphQL.Introspection as Introspection
 import GraphQL.Resolver ((:<>)(..), Handler, unionValue)
 import GraphQL.Value (ToValue(..), FromValue(..), makeName)
 import Test.Tasty (TestTree)
@@ -40,6 +41,8 @@ type QueryRoot = Object "QueryRoot" '[]
    , Argument "dog" DogStuff :> Field "describeDog" Text
    , Field "catOrDog" CatOrDog
    , Field "catOrDogList" (List CatOrDog)
+   , Introspection.SchemaField
+   , Introspection.TypeField
    ]
 
 type DogWithTreats = Object "DogWithTreats" '[]
@@ -120,7 +123,13 @@ describeDog (DogStuff toy likesTreats)
   | otherwise = pure $ "their favorite toy is a " <> toy
 
 rootHandler :: ServerDog -> Handler IO QueryRoot
-rootHandler dog = pure $ viewServerDog dog :<> describeDog :<> catOrDog :<> catOrDogList dog
+rootHandler dog = pure $ 
+  viewServerDog dog :<> 
+  describeDog :<> 
+  catOrDog :<> 
+  catOrDogList dog :<>
+  Introspection.schema @E2ESchema :<>
+  Introspection.type_ @E2ESchema
 
 -- | Our server's internal representation of a 'Human'.
 newtype ServerHuman = ServerHuman Text deriving (Eq, Ord, Show, Generic)
@@ -142,7 +151,7 @@ rootMutations dog treats = pure
     modifyIORef treats (+ count)
     pure $ viewServerDog dog :<> readIORef treats
 
-schemaHandler :: ServerDog -> IORef Int32 -> SchemaRoot IO QueryRoot MutationRoot
+schemaHandler :: ServerDog -> IORef Int32 -> E2ESchema
 schemaHandler dog treats = SchemaRoot (rootHandler dog) (rootMutations dog treats)
 
 tests :: IO TestTree
@@ -557,58 +566,222 @@ tests = testSpec "End-to-end tests" $ do
         }
       |]
 
-    -- it "can fetch the __schema" $ do
-    --   response <- run [r|{
-    --       __schema {
-    --         types {
-    --           name
-    --         }
-    --       }
-    --     }|]
-    --   response `shouldBeJSON` [json|
-    --     {
-    --       "data": {
-    --         "__schema": {
-    --           "types": [
-    --             { "name": "Cat" },
-    --             { "name": "CatCommand" },
-    --             { "name": "CatOrDog" },
-    --             { "name": "Dog" },
-    --             { "name": "DogCommand" },
-    --             { "name": "Human" },
-    --             { "name": "MutationRoot" },
-    --             { "name": "Pet" },
-    --             { "name": "QueryRoot" },
-    --             { "name": "Sentient" }
-    --           ]
-    --         }
-    --       }
-    --     }
-    --   |]
+    it "can fetch the __schema" $ do
+      response <- run [r|{
+          __schema {
+            types {
+              kind
+              name
+            }
+            queryType {
+              name
+            }
+            mutationType {
+              name
+            }
+          }
+        }|]
+      response `shouldBeJSON` [json|
+        {
+          "data": {
+            "__schema": {
+              "types": [
+                { 
+                  "kind": "OBJECT",
+                  "name": "Cat" 
+                },
+                { 
+                  "kind": "ENUM",
+                  "name": "CatCommand" 
+                },
+                { 
+                  "kind": "UNION",
+                  "name": "CatOrDog" 
+                },
+                { 
+                  "kind": "OBJECT",
+                  "name": "Dog" 
+                },
+                { 
+                  "kind": "ENUM",
+                  "name": "DogCommand" 
+                },
+                { 
+                  "kind": "INPUT_OBJECT",
+                  "name": "DogStuff" 
+                },
+                { 
+                  "kind": "OBJECT",
+                  "name": "DogWithTreats" 
+                },
+                { 
+                  "kind": "OBJECT",
+                  "name": "Human" 
+                },
+                { 
+                  "kind": "OBJECT",
+                  "name": "MutationRoot" 
+                },
+                { 
+                  "kind": "INTERFACE",
+                  "name": "Pet"
+                },
+                { 
+                  "kind": "OBJECT",
+                  "name": "QueryRoot" 
+                },
+                { 
+                  "kind": "INTERFACE",
+                  "name": "Sentient" 
+                }
+              ],
+              "queryType": {
+                "name": "QueryRoot"
+              },
+              "mutationType": {
+                "name": "MutationRoot"
+              }
+            }
+          }
+        }
+      |]
 
-    -- it "can query __types by name" $ do
-    --   response <- run [r|{
-    --       __type(name: "Dog") {
-    --         name
-    --         fields {
-    --           name
-    --         }
-    --       }
-    --     }|]
-    --   response `shouldBeJSON` [json|
-    --     {
-    --       "data": {
-    --         "__type": {
-    --           "name": "Dog",
-    --           "fields": [
-    --             { "name": "name" },
-    --             { "name": "nickname" },
-    --             { "name": "barkVolume" },
-    --             { "name": "doesKnowCommand" },
-    --             { "name": "isHouseTrained" },
-    --             { "name": "owner" }
-    --           ]
-    --         }
-    --       }
-    --     }
-    --   |]
+    it "can introspect objects" $ do
+      response <- run [r|{
+          __type(name: "Dog") {
+            kind
+            name
+            fields {
+              name
+            }
+          }
+        }|]
+      response `shouldBeJSON` [json|
+        {
+          "data": {
+            "__type": {
+              "kind": "OBJECT",
+              "name": "Dog",
+              "fields": [
+                { "name": "name" },
+                { "name": "nickname" },
+                { "name": "barkVolume" },
+                { "name": "doesKnowCommand" },
+                { "name": "isHouseTrained" },
+                { "name": "owner" }
+              ]
+            }
+          }
+        }
+      |]
+
+    it "can introspect interfaces" $ do
+      response <- run [r|{
+        __type(name: "Pet") {
+          kind
+          name
+          fields {
+            name
+          }
+        }
+      }|]
+      response `shouldBeJSON` [json|{
+        "data": {
+          "__type": {
+            "kind": "INTERFACE",
+            "name": "Pet",
+            "fields": [
+              { "name": "name" }
+            ]
+          }
+        }
+      }|]
+
+    it "can introspect unions" $ do
+      response <- run [r|{
+        __type(name: "CatOrDog") {
+          kind
+          name
+        }
+      }|]
+      response `shouldBeJSON` [json|{
+        "data": {
+          "__type": {
+            "kind": "UNION",
+            "name": "CatOrDog"
+          }
+        }
+      }|]
+
+    it "can introspect enums" $ do
+      response <- run [r|{
+        __type(name: "DogCommand") {
+          kind
+          name
+          enumValues {
+            name
+          }
+        }
+      }|]
+      response `shouldBeJSON` [json|{
+        "data": {
+          "__type": {
+            "kind": "ENUM",
+            "name": "DogCommand",
+            "enumValues": [
+              { "name": "Sit" },
+              { "name": "Down" },
+              { "name": "Heel" }
+            ]
+          }
+        }
+      }|]
+
+    it "can introspect input objects" $ do
+      response <- run [r|{
+        __type(name: "DogStuff") {
+          kind
+          name
+          inputFields {
+            name
+          }
+        }
+      }|]
+      response `shouldBeJSON` [json|{
+        "data": {
+          "__type": {
+            "kind": "INPUT_OBJECT",
+            "name": "DogStuff",
+            "inputFields": [
+              { "name": "toy" },
+              { "name": "likesTreats" }
+            ]
+          }
+        }
+      }|]
+
+    it "can introspect field input args" $ do
+      response <- run [r|{
+        __type(name: "MutationRoot") {
+          kind
+          fields {
+            name
+            args {
+              name
+            }
+          }
+        }
+      }|]
+      response `shouldBeJSON` [json|{
+        "data": {
+          "__type": {
+            "kind": "OBJECT",
+            "fields": [{
+              "name": "giveTreats",
+              "args": [
+                { "name": "count" }
+              ]
+            }]
+          }
+        }
+      }|]

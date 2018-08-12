@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 796abb771a05858c20303db3e1ddd30cbdf11f24f02e09eed0fe8a9850c43269
+-- hash: 0aae3dfe62e79c389edba2fdfb743c340f8fc3401c67124aa1f623415db39ab8
 
 name:           graphql-api
 version:        0.3.0
@@ -134,9 +134,11 @@ test-suite graphql-api-tests
   build-depends:
       QuickCheck
     , aeson
+    , aeson-diff
     , aeson-qq
     , attoparsec
     , base >=4.9 && <5
+    , bytestring
     , containers
     , directory
     , exceptions
