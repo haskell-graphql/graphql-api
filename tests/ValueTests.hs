@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 module ValueTests (tests) where
 
 import Protolude
@@ -11,6 +12,7 @@ import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
 import GraphQL.Value
   ( Object
+  , Value'(ValueObject')
   , ObjectField'(..)
   , astToVariableValue
   , unionObjects
@@ -18,8 +20,16 @@ import GraphQL.Value
   , objectFromList
   , toValue
   )
-import GraphQL.Internal.Value.FromValue (prop_roundtripValue)
+import GraphQL.Internal.Value.FromValue (FromValue(..), prop_roundtripValue)
 
+data Resource = Resource
+    { resText     :: Text
+    , resInt      :: Int32
+    , resDouble   :: Double
+    , resBool     :: Bool
+    } deriving (Generic, Eq, Show)
+
+instance FromValue Resource
 
 tests :: IO TestTree
 tests = testSpec "Value" $ do
@@ -47,6 +57,23 @@ tests = testSpec "Value" $ do
   describe "Objects" $ do
     prop "have unique fields" $ do
       prop_fieldsUnique
+    -- See https://github.com/haskell-graphql/graphql-api/pull/178 for background
+    it "derives fromValue instances for objects with more than three fields" $ do
+      let Just value = objectFromList 
+            [ ("resText",   toValue @Text "text")
+            , ("resBool",   toValue @Bool False)
+            , ("resDouble", toValue @Double 1.2)
+            , ("resInt",    toValue @Int32 32)
+            ]
+      let Right observed = fromValue $ ValueObject' value
+      let expected = Resource
+            { resText   = "text"
+            , resInt    = 32
+            , resDouble = 1.2
+            , resBool   = False 
+            }
+      observed `shouldBe` expected
+      
   describe "ToValue / FromValue instances" $ do
     prop "Bool" $ prop_roundtripValue @Bool
     prop "Int32" $ prop_roundtripValue @Int32

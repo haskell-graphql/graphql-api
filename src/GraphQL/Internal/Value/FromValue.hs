@@ -100,15 +100,12 @@ instance forall dataName consName records s l p.
                          )) where
   genericFromValue o = M1 . M1 <$> genericFromValue @records o
 
-instance forall wrappedType fieldName rest u s l.
-  ( KnownSymbol fieldName
-  , FromValue wrappedType
-  , GenericFromValue rest
-  ) => GenericFromValue (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType) :*: rest) where
-  genericFromValue object = do
-    l <- getValue @wrappedType @fieldName object
-    r <- genericFromValue @rest object
-    pure (l :*: r)
+
+instance forall l r.
+  ( GenericFromValue l
+  , GenericFromValue r
+  ) => GenericFromValue (l :*: r) where
+  genericFromValue object = liftA2 (:*:) (genericFromValue @l object) (genericFromValue @r object)
 
 -- | Look up a single record field element in the Object.
 getValue :: forall wrappedType fieldName u s l p. (FromValue wrappedType, KnownSymbol fieldName)
