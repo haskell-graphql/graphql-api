@@ -53,11 +53,11 @@ import Protolude
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Name          
+import GraphQL.Internal.Name
   ( Name
   , HasName(..)
   )
-  
+
 -- * Documents
 
 -- | A 'QueryDocument' is something a user might send us.

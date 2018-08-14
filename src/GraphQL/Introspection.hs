@@ -147,30 +147,49 @@ unAnnotatedType (TypeNonNull (NonNullTypeList (ListType t))) = unAnnotatedType t
  -}
 
 typeDefinitionToAST :: TypeDefinition -> AST.TypeDefinition
-typeDefinitionToAST (TypeDefinitionObject o     )   = AST.TypeDefinitionObject $ objectTypeDefinitionToAST o
+typeDefinitionToAST (TypeDefinitionObject o)        = AST.TypeDefinitionObject $ objectTypeDefinitionToAST o
 typeDefinitionToAST (TypeDefinitionInputObject o)   = AST.TypeDefinitionInputObject $ inputObjectTypeDefinitionToAST o
-typeDefinitionToAST (TypeDefinitionInterface _)     = panic "interface"
-typeDefinitionToAST (TypeDefinitionUnion _)         = panic "union"
-typeDefinitionToAST (TypeDefinitionScalar _)        = panic "scalar"
-typeDefinitionToAST (TypeDefinitionEnum _)          = panic "enum"
-typeDefinitionToAST (TypeDefinitionTypeExtension _) = panic "extension"
+typeDefinitionToAST (TypeDefinitionInterface i)     = AST.TypeDefinitionInterface $ interfaceTypeDefinitionToAST i
+typeDefinitionToAST (TypeDefinitionUnion u)         = AST.TypeDefinitionUnion $ unionTypeDefinitionToAST u
+typeDefinitionToAST (TypeDefinitionScalar s)        = AST.TypeDefinitionScalar $ scalarTypeDefinitionToAST s
+typeDefinitionToAST (TypeDefinitionEnum e)          = AST.TypeDefinitionEnum $ enumTypeDefinitionToAST e
+typeDefinitionToAST (TypeDefinitionTypeExtension e) = AST.TypeDefinitionTypeExtension $ extensionTypeDefinitionToAST e
 
 objectTypeDefinitionToAST :: ObjectTypeDefinition -> AST.ObjectTypeDefinition
 objectTypeDefinitionToAST (ObjectTypeDefinition name interfaces fields) =
-  AST.ObjectTypeDefinition name (map interfaceTypeDefinitionToAST interfaces) (NonEmpty.toList $ map fieldDefinitionToAST fields)
+  AST.ObjectTypeDefinition name (map (AST.NamedType . getName) interfaces) (NonEmpty.toList $ map fieldDefinitionToAST fields)
 
 inputObjectTypeDefinitionToAST :: InputObjectTypeDefinition -> AST.InputObjectTypeDefinition
 inputObjectTypeDefinitionToAST (InputObjectTypeDefinition name fields) =
   AST.InputObjectTypeDefinition name (NonEmpty.toList $ map inputObjectFieldDefinitionToAST fields)
 
-interfaceTypeDefinitionToAST :: InterfaceTypeDefinition -> AST.NamedType
-interfaceTypeDefinitionToAST (InterfaceTypeDefinition name _) = AST.NamedType name
+interfaceTypeDefinitionToAST :: InterfaceTypeDefinition -> AST.InterfaceTypeDefinition
+interfaceTypeDefinitionToAST (InterfaceTypeDefinition name fields) =
+  AST.InterfaceTypeDefinition name (NonEmpty.toList $ map fieldDefinitionToAST fields)
+
+unionTypeDefinitionToAST :: UnionTypeDefinition -> AST.UnionTypeDefinition
+unionTypeDefinitionToAST (UnionTypeDefinition name objects) =
+  AST.UnionTypeDefinition name (NonEmpty.toList $ map (AST.NamedType . getName) objects)
+
+scalarTypeDefinitionToAST :: ScalarTypeDefinition -> AST.ScalarTypeDefinition
+scalarTypeDefinitionToAST (ScalarTypeDefinition name) =
+  AST.ScalarTypeDefinition name
+
+enumTypeDefinitionToAST :: EnumTypeDefinition -> AST.EnumTypeDefinition
+enumTypeDefinitionToAST (EnumTypeDefinition name values) =
+  AST.EnumTypeDefinition name $ map (AST.EnumValueDefinition . getName) values
+
+extensionTypeDefinitionToAST :: TypeExtensionDefinition -> AST.TypeExtensionDefinition
+extensionTypeDefinitionToAST (TypeExtensionDefinition obj) =
+  AST.TypeExtensionDefinition $ objectTypeDefinitionToAST obj
 
 fieldDefinitionToAST :: FieldDefinition -> AST.FieldDefinition
-fieldDefinitionToAST (FieldDefinition name args out) = AST.FieldDefinition name (map argToInputValue args) (typeToAST out)
+fieldDefinitionToAST (FieldDefinition name args out) =
+  AST.FieldDefinition name (map argToInputValue args) (typeToAST out)
 
 argToInputValue :: ArgumentDefinition -> AST.InputValueDefinition
-argToInputValue (ArgumentDefinition name annotatedInput _) = AST.InputValueDefinition name (inputTypeToAST annotatedInput) Nothing -- FIXME
+argToInputValue (ArgumentDefinition name annotatedInput _) =
+  AST.InputValueDefinition name (inputTypeToAST annotatedInput) Nothing -- FIXME
 
 inputObjectFieldDefinitionToAST :: InputObjectFieldDefinition -> AST.InputValueDefinition
 inputObjectFieldDefinitionToAST (InputObjectFieldDefinition name annotatedInput _) = AST.InputValueDefinition name (inputTypeToAST annotatedInput) Nothing -- FIXME

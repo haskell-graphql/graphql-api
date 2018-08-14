@@ -50,7 +50,7 @@ type DogWithTreats = Object "DogWithTreats" '[]
    , Field "treats" Int32
    ]
 
-type MutationRoot = Object "MutationRoot" '[] 
+type MutationRoot = Object "MutationRoot" '[]
   '[ Argument "count" Int32 :> Field "giveTreats" DogWithTreats
    ]
 
@@ -123,10 +123,10 @@ describeDog (DogStuff toy likesTreats)
   | otherwise = pure $ "their favorite toy is a " <> toy
 
 rootHandler :: ServerDog -> Handler IO QueryRoot
-rootHandler dog = pure $ 
-  viewServerDog dog :<> 
-  describeDog :<> 
-  catOrDog :<> 
+rootHandler dog = pure $
+  viewServerDog dog :<>
+  describeDog :<>
+  catOrDog :<>
   catOrDogList dog :<>
   Introspection.schema @E2ESchema :<>
   Introspection.type_ @E2ESchema
@@ -158,7 +158,7 @@ tests :: IO TestTree
 tests = testSpec "End-to-end tests" $ do
   treatCountRef <- runIO $ newIORef 0
 
-  let 
+  let
     -- | jml has a stuffed black dog called "Mortgage".
     mortgage :: ServerDog
     mortgage = ServerDog
@@ -522,7 +522,7 @@ tests = testSpec "End-to-end tests" $ do
   describe "introspection" $ do
     treatRef <- runIO $ newIORef 1
 
-    let 
+    let
       run :: Text -> IO Response
       run query = interpretRequest @E2ESchema (schemaHandler mortgage treatRef) query Nothing mempty
 
@@ -586,53 +586,53 @@ tests = testSpec "End-to-end tests" $ do
           "data": {
             "__schema": {
               "types": [
-                { 
+                {
                   "kind": "OBJECT",
-                  "name": "Cat" 
+                  "name": "Cat"
                 },
-                { 
+                {
                   "kind": "ENUM",
-                  "name": "CatCommand" 
+                  "name": "CatCommand"
                 },
-                { 
+                {
                   "kind": "UNION",
-                  "name": "CatOrDog" 
+                  "name": "CatOrDog"
                 },
-                { 
+                {
                   "kind": "OBJECT",
-                  "name": "Dog" 
+                  "name": "Dog"
                 },
-                { 
+                {
                   "kind": "ENUM",
-                  "name": "DogCommand" 
+                  "name": "DogCommand"
                 },
-                { 
+                {
                   "kind": "INPUT_OBJECT",
-                  "name": "DogStuff" 
+                  "name": "DogStuff"
                 },
-                { 
+                {
                   "kind": "OBJECT",
-                  "name": "DogWithTreats" 
+                  "name": "DogWithTreats"
                 },
-                { 
+                {
                   "kind": "OBJECT",
-                  "name": "Human" 
+                  "name": "Human"
                 },
-                { 
+                {
                   "kind": "OBJECT",
-                  "name": "MutationRoot" 
+                  "name": "MutationRoot"
                 },
-                { 
+                {
                   "kind": "INTERFACE",
                   "name": "Pet"
                 },
-                { 
+                {
                   "kind": "OBJECT",
-                  "name": "QueryRoot" 
+                  "name": "QueryRoot"
                 },
-                { 
+                {
                   "kind": "INTERFACE",
-                  "name": "Sentient" 
+                  "name": "Sentient"
                 }
               ],
               "queryType": {
@@ -785,3 +785,7 @@ tests = testSpec "End-to-end tests" $ do
           }
         }
       }|]
+
+    it "can serialize the schema" $ do
+      let expected = "type QueryRoot{dog:Dog!,describeDog(dog:DogStuff!):String!,catOrDog:CatOrDog!,catOrDogList:[CatOrDog!]!}type Dog implements Pet{name:String!,nickname:String!,barkVolume:Int!,doesKnowCommand(dogCommand:DogCommand!):Boolean!,isHouseTrained(atOtherHomes:Boolean):Boolean!,owner:Human!}type Human implements Sentient{name:String!}input DogStuff{toy:String!,likesTreats:Boolean!}union CatOrDog=Cat|Dogtype MutationRoot{giveTreats(count:Int!):DogWithTreats!}type DogWithTreats{dog:Dog!,treats:Int!}\n,schema{query:QueryRoot,mutation:MutationRoot}"
+      Introspection.serialize @E2ESchema `shouldBe` Right expected
