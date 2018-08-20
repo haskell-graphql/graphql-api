@@ -37,8 +37,8 @@ Each item represents the number of "things" we are OK with not being covered.
 COVERAGE_TOLERANCE = {
     ALTERNATIVES: 161,
     BOOLEANS: 8,
-    EXPRESSIONS: 1416,
-    LOCAL_DECLS: 14,
+    EXPRESSIONS: 1412,
+    LOCAL_DECLS: 13,
     TOP_LEVEL_DECLS: 669,
 }
 
