@@ -48,7 +48,7 @@ example = interpretAnonymousQuery @Query root
 
 main :: IO ()
 main = do
-  response <- example "{ description(dogStuff: {toy: \"bone\", likesTreats: true}) }"
+  response <- example "{ description(dogStuff: {_toy: \"bone\", _likesTreats: true}) }"
   putStrLn $ Aeson.encode $ toValue response
   response' <- example "{ description }"
   putStrLn $ Aeson.encode $ toValue response'
