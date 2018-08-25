@@ -35,8 +35,9 @@ module GraphQL.Internal.API
   , getAnnotatedInputType
   ) where
 
-import Protolude hiding (Enum, TypeError)
+import Protolude hiding (Enum, TypeError, (<>))
 
+import Data.Semigroup ((<>))
 import qualified Data.List.NonEmpty as NonEmpty
 import GHC.Generics ((:*:)(..))
 import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
@@ -358,12 +359,12 @@ class GenericAnnotatedInputType (f :: Type -> Type) where
 class GenericInputObjectFieldDefinitions (f :: Type -> Type) where
   genericGetInputObjectFieldDefinitions :: Either SchemaError (NonEmpty Schema.InputObjectFieldDefinition)
 
-instance forall dataName consName records s l p.
+instance forall dataName consName records m p f.
   ( KnownSymbol dataName
   , KnownSymbol consName
   , GenericInputObjectFieldDefinitions records
-  ) => GenericAnnotatedInputType (D1 ('MetaData dataName s l 'False)
-                                  (C1 ('MetaCons consName p 'True) records
+  ) => GenericAnnotatedInputType (D1 ('MetaData dataName m p 'False)
+                                  (C1 ('MetaCons consName f 'True) records
                                   )) where
   genericGetAnnotatedInputType = do
     name <- nameFromSymbol @dataName
@@ -374,17 +375,14 @@ instance forall dataName consName records s l p.
           . Schema.InputObjectTypeDefinition name
         ) (genericGetInputObjectFieldDefinitions @records)
 
-instance forall wrappedType fieldName rest u s l.
-  ( KnownSymbol fieldName
-  , HasAnnotatedInputType wrappedType
-  , GenericInputObjectFieldDefinitions rest
-  ) => GenericInputObjectFieldDefinitions (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType) :*: rest) where
+instance forall l r.
+  ( GenericInputObjectFieldDefinitions l
+  , GenericInputObjectFieldDefinitions r
+  ) => GenericInputObjectFieldDefinitions (l :*: r) where
   genericGetInputObjectFieldDefinitions = do
-    name <- nameFromSymbol @fieldName
-    annotatedInputType <- getAnnotatedInputType @wrappedType
-    let l = Schema.InputObjectFieldDefinition name annotatedInputType Nothing
-    r <- genericGetInputObjectFieldDefinitions @rest
-    pure (NonEmpty.cons l r)
+    l <- genericGetInputObjectFieldDefinitions @l
+    r <- genericGetInputObjectFieldDefinitions @r
+    pure (l <> r)
 
 instance forall wrappedType fieldName u s l.
   ( KnownSymbol fieldName
