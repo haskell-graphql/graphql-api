@@ -64,7 +64,9 @@ instance forall left right.
   genericEnumToValue (L1 gv) = genericEnumToValue gv
   genericEnumToValue (R1 gv) = genericEnumToValue gv
 
-instance forall conName p b. (KnownSymbol conName) => GenericEnumValues (C1 ('MetaCons conName p b) U1) where
+instance forall conName f s.
+   ( KnownSymbol conName
+   ) => GenericEnumValues (C1 ('MetaCons conName f s) U1) where
   genericEnumValues = let name = nameFromSymbol @conName in [name]
   genericEnumFromValue vname =
     case nameFromSymbol @conName of
@@ -86,18 +88,18 @@ instance forall conName p b. (KnownSymbol conName) => GenericEnumValues (C1 ('Me
 
 -- TODO(tom): better type errors using `n`. Also type errors for other
 -- invalid constructors.
-instance forall conName p b sa sb.
+instance forall conName f s sa sb.
   ( TypeError ('Text "Constructor not unary: " ':<>: 'Text conName)
   , KnownSymbol conName
-  ) => GenericEnumValues (C1 ('MetaCons conName p b) (S1 sa sb)) where
+  ) => GenericEnumValues (C1 ('MetaCons conName f s) (S1 sa sb)) where
   genericEnumValues = nonUnaryConstructorError
   genericEnumFromValue = nonUnaryConstructorError
   genericEnumToValue = nonUnaryConstructorError
 
-instance forall conName p b sa sb f.
+instance forall conName f s sa sb r.
   ( TypeError ('Text "Constructor not unary: " ':<>: 'Text conName)
   , KnownSymbol conName
-  ) => GenericEnumValues (C1 ('MetaCons conName p b) (S1 sa sb) :+: f) where
+  ) => GenericEnumValues (C1 ('MetaCons conName f s) (S1 sa sb) :+: r) where
   genericEnumValues = nonUnaryConstructorError
   genericEnumFromValue = nonUnaryConstructorError
   genericEnumToValue = nonUnaryConstructorError

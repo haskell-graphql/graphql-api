@@ -10,6 +10,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
 
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
+import GraphQL.API (HasAnnotatedInputType)
 import GraphQL.Value
   ( Object
   , Value'(ValueObject')
@@ -29,6 +30,7 @@ data Resource = Resource
     , resBool     :: Bool
     } deriving (Generic, Eq, Show)
 
+instance HasAnnotatedInputType
 instance FromValue Resource
 
 tests :: IO TestTree
@@ -59,7 +61,7 @@ tests = testSpec "Value" $ do
       prop_fieldsUnique
     -- See https://github.com/haskell-graphql/graphql-api/pull/178 for background
     it "derives fromValue instances for objects with more than three fields" $ do
-      let Just value = objectFromList 
+      let Just value = objectFromList
             [ ("resText",   toValue @Text "text")
             , ("resBool",   toValue @Bool False)
             , ("resDouble", toValue @Double 1.2)
@@ -70,10 +72,10 @@ tests = testSpec "Value" $ do
             { resText   = "text"
             , resInt    = 32
             , resDouble = 1.2
-            , resBool   = False 
+            , resBool   = False
             }
       observed `shouldBe` expected
-      
+
   describe "ToValue / FromValue instances" $ do
     prop "Bool" $ prop_roundtripValue @Bool
     prop "Int32" $ prop_roundtripValue @Int32

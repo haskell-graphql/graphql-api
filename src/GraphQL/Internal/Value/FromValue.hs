@@ -91,12 +91,12 @@ wrongType expected value = throwError ("Wrong type, should be: `" <> expected <>
 class GenericFromValue (f :: Type -> Type) where
   genericFromValue :: Object' ConstScalar -> Either Text (f p)
 
-instance forall dataName consName records s l p.
+instance forall dataName consName records m p f.
   ( KnownSymbol dataName
   , KnownSymbol consName
   , GenericFromValue records
-  ) => GenericFromValue (D1 ('MetaData dataName s l 'False)
-                         (C1 ('MetaCons consName p 'True) records
+  ) => GenericFromValue (D1 ('MetaData dataName m p 'False)
+                         (C1 ('MetaCons consName f 'True) records
                          )) where
   genericFromValue o = M1 . M1 <$> genericFromValue @records o
 
@@ -108,8 +108,10 @@ instance forall l r.
   genericFromValue object = liftA2 (:*:) (genericFromValue @l object) (genericFromValue @r object)
 
 -- | Look up a single record field element in the Object.
-getValue :: forall wrappedType fieldName u s l p. (FromValue wrappedType, KnownSymbol fieldName)
-         => Object' ConstScalar -> Either Text ((S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) p)
+getValue :: forall wrappedType fieldName u s l p.
+  ( FromValue wrappedType
+  , KnownSymbol fieldName
+  ) => Object' ConstScalar -> Either Text ((S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType)) p)
 getValue (Object' fieldMap) = do
   fieldName <- case nameFromSymbol @fieldName of
     Left err -> throwError ("invalid field name" <> show err)
