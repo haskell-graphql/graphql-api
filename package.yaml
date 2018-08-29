@@ -71,8 +71,13 @@ tests:
       - hspec
       - QuickCheck
       - raw-strings-qq
+      - aeson-diff
+      - aeson-qq
+      - bytestring
       - tasty
       - tasty-hspec
+      - template-haskell
+      - text
       - directory
 
   graphql-api-doctests:

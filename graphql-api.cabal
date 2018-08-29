@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6db006b020fe198ac64b8a50f8335017251389b7c34dfc553675e38eb001a428
+-- hash: 0aae3dfe62e79c389edba2fdfb743c340f8fc3401c67124aa1f623415db39ab8
 
 name:           graphql-api
 version:        0.3.0
@@ -67,6 +67,7 @@ library
       GraphQL.Internal.Value
       GraphQL.Internal.Value.FromValue
       GraphQL.Internal.Value.ToValue
+      GraphQL.Introspection
       GraphQL.Resolver
       GraphQL.Value
   other-modules:
@@ -133,8 +134,11 @@ test-suite graphql-api-tests
   build-depends:
       QuickCheck
     , aeson
+    , aeson-diff
+    , aeson-qq
     , attoparsec
     , base >=4.9 && <5
+    , bytestring
     , containers
     , directory
     , exceptions
@@ -144,15 +148,19 @@ test-suite graphql-api-tests
     , raw-strings-qq
     , tasty
     , tasty-hspec
+    , template-haskell
+    , text
     , transformers
   other-modules:
       ASTTests
       EndToEndTests
       EnumTests
       ExampleSchema
+      MutationTests
       OrderedMapTests
       ResolverTests
       SchemaTests
+      Utils
       ValidationTests
       ValueTests
       Paths_graphql_api

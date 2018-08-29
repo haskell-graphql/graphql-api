@@ -23,6 +23,7 @@ module GraphQL.Internal.Schema
   , ObjectTypeDefinition(..)
   , UnionTypeDefinition(..)
   , ScalarTypeDefinition(..)
+  , TypeExtensionDefinition(..)
   -- ** Input types
   , InputType(..)
   , InputTypeDefinition(..)
@@ -143,7 +144,7 @@ instance DefinesTypes TypeDefinition where
       TypeDefinitionUnion x -> getDefinedTypes x
       TypeDefinitionScalar x  -> getDefinedTypes x
       TypeDefinitionEnum x -> getDefinedTypes x
-      TypeDefinitionInputObject _ -> mempty
+      TypeDefinitionInputObject x -> getDefinedTypes x
       TypeDefinitionTypeExtension _ ->
         panic "TODO: we should remove the 'extend' behaviour entirely"
 
@@ -168,7 +169,7 @@ instance HasName FieldDefinition where
   getName (FieldDefinition name _ _) = name
 
 instance DefinesTypes FieldDefinition where
-  getDefinedTypes (FieldDefinition _ args retVal) = 
+  getDefinedTypes (FieldDefinition _ args retVal) =
     getDefinedTypes (getAnnotatedType retVal) <>
     foldMap getDefinedTypes args
 
@@ -254,11 +255,19 @@ data InputObjectTypeDefinition = InputObjectTypeDefinition Name (NonEmpty InputO
 instance HasName InputObjectTypeDefinition where
   getName (InputObjectTypeDefinition name _) = name
 
+instance DefinesTypes InputObjectTypeDefinition where
+  getDefinedTypes obj@(InputObjectTypeDefinition name fields) =
+    Map.singleton name (TypeDefinitionInputObject obj) <>
+      foldMap getDefinedTypes fields
+
 data InputObjectFieldDefinition = InputObjectFieldDefinition Name (AnnotatedType InputType) (Maybe DefaultValue)
                                   deriving (Eq, Ord, Show) -- XXX: spec is unclear about default value for input object field definitions
 
 instance HasName InputObjectFieldDefinition where
   getName (InputObjectFieldDefinition name _ _) = name
+
+instance DefinesTypes InputObjectFieldDefinition where
+  getDefinedTypes (InputObjectFieldDefinition _ annotatedInput _) = getDefinedTypes $ getAnnotatedType annotatedInput
 
 newtype TypeExtensionDefinition = TypeExtensionDefinition ObjectTypeDefinition
                                   deriving (Eq, Ord, Show)
@@ -274,7 +283,7 @@ instance HasName InputType where
 
 instance DefinesTypes InputType where
   getDefinedTypes inputType =
-    case inputType of 
+    case inputType of
        DefinedInputType typeDefinition -> getDefinedTypes typeDefinition
        BuiltinInputType _ -> mempty
 
@@ -291,7 +300,7 @@ instance HasName InputTypeDefinition where
 
 instance DefinesTypes InputTypeDefinition where
   getDefinedTypes inputTypeDefinition =
-    case inputTypeDefinition of 
+    case inputTypeDefinition of
        InputTypeDefinitionObject typeDefinition -> getDefinedTypes (TypeDefinitionInputObject typeDefinition)
        InputTypeDefinitionScalar typeDefinition -> getDefinedTypes (TypeDefinitionScalar typeDefinition)
        InputTypeDefinitionEnum typeDefinition -> getDefinedTypes (TypeDefinitionEnum typeDefinition)
@@ -337,15 +346,15 @@ doesFragmentTypeApply objectType fragmentType =
 getInputTypeDefinition :: TypeDefinition -> Maybe InputTypeDefinition
 getInputTypeDefinition td =
   case td of
-    TypeDefinitionInputObject itd -> Just (InputTypeDefinitionObject itd) 
-    TypeDefinitionScalar itd -> Just (InputTypeDefinitionScalar itd) 
+    TypeDefinitionInputObject itd -> Just (InputTypeDefinitionObject itd)
+    TypeDefinitionScalar itd -> Just (InputTypeDefinitionScalar itd)
     TypeDefinitionEnum itd -> Just (InputTypeDefinitionEnum itd)
     _ -> Nothing
 
 -- | Create a 'Builtin' type from a 'Name'
--- 
--- Mostly used for the AST validation 
--- theobat: There's probably a better way to do it but can't find it right now 
+--
+-- Mostly used for the AST validation
+-- theobat: There's probably a better way to do it but can't find it right now
 builtinFromName :: Name -> Maybe Builtin
 builtinFromName typeName
   | typeName == getName GInt = Just GInt
@@ -360,7 +369,7 @@ builtinFromName typeName
 -- AST type annotations do not need any validation.
 -- GraphQL annotations are semantic decorations around type names to indicate type composition (list/non null).
 astAnnotationToSchemaAnnotation :: AST.GType -> a -> AnnotatedType a
-astAnnotationToSchemaAnnotation gtype schemaTypeName = 
+astAnnotationToSchemaAnnotation gtype schemaTypeName =
   case gtype of
     AST.TypeNamed _ -> TypeNamed schemaTypeName
     AST.TypeList (AST.ListType astTypeName) -> TypeList (ListType $ astAnnotationToSchemaAnnotation astTypeName schemaTypeName)
