@@ -38,6 +38,7 @@ module GraphQL.Internal.API
 import Protolude hiding (Enum, TypeError)
 
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Semigroup as S ((<>))
 import GHC.Generics ((:*:)(..))
 import GHC.TypeLits (Symbol, KnownSymbol, TypeError, ErrorMessage(..))
 import GHC.Types (Type)
@@ -374,17 +375,14 @@ instance forall dataName consName records s l p.
           . Schema.InputObjectTypeDefinition name
         ) (genericGetInputObjectFieldDefinitions @records)
 
-instance forall wrappedType fieldName rest u s l.
-  ( KnownSymbol fieldName
-  , HasAnnotatedInputType wrappedType
-  , GenericInputObjectFieldDefinitions rest
-  ) => GenericInputObjectFieldDefinitions (S1 ('MetaSel ('Just fieldName) u s l) (Rec0 wrappedType) :*: rest) where
+instance forall a b.
+  ( GenericInputObjectFieldDefinitions a
+  , GenericInputObjectFieldDefinitions b
+  ) => GenericInputObjectFieldDefinitions (a :*: b) where
   genericGetInputObjectFieldDefinitions = do
-    name <- nameFromSymbol @fieldName
-    annotatedInputType <- getAnnotatedInputType @wrappedType
-    let l = Schema.InputObjectFieldDefinition name annotatedInputType Nothing
-    r <- genericGetInputObjectFieldDefinitions @rest
-    pure (NonEmpty.cons l r)
+    l <- genericGetInputObjectFieldDefinitions @a
+    r <- genericGetInputObjectFieldDefinitions @b
+    pure (l S.<> r)
 
 instance forall wrappedType fieldName u s l.
   ( KnownSymbol fieldName
