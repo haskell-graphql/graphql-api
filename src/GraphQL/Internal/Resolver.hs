@@ -53,8 +53,9 @@ import GraphQL.Value
   , FromValue(..)
   , ToValue(..)
   )
-import GraphQL.Internal.Name (Name, HasName(..))
+import GraphQL.Internal.Name (Name, HasName(..), unName)
 import qualified GraphQL.Internal.OrderedMap as OrderedMap
+import GraphQL.Internal.Schema (ObjectTypeDefinition(..))
 import GraphQL.Internal.Output (GraphQLError(..))
 import GraphQL.Internal.Validation
   ( SelectionSetByType
@@ -212,9 +213,16 @@ type family FieldName (a :: Type) = (r :: Symbol) where
   FieldName x = TypeError ('Text "Unexpected branch in FieldName type family. Please file a bug!" ':<>: 'ShowType x)
 
 resolveField :: forall dispatchType (m :: Type -> Type).
-  (BuildFieldResolver m dispatchType, Monad m, KnownSymbol (FieldName dispatchType))
-  => FieldHandler m dispatchType -> m ResolveFieldResult -> Field Value -> m ResolveFieldResult
-resolveField handler nextHandler field =
+  ( BuildFieldResolver m dispatchType
+  , Monad m
+  , KnownSymbol (FieldName dispatchType)
+  ) 
+  => FieldHandler m dispatchType 
+  -> m ResolveFieldResult 
+  -> ObjectTypeDefinition
+  -> Field Value 
+  -> m ResolveFieldResult
+resolveField handler nextHandler defn field =
   -- check name before
   case API.nameFromSymbol @(FieldName dispatchType) of
     Left err -> pure (Result [SchemaError err] (Just GValue.ValueNull))
@@ -225,6 +233,8 @@ resolveField handler nextHandler field =
             Right resolver -> do
               Result errs value <- resolver
               pure (Result errs (Just value))
+      | getName field == "__typename" -> 
+          pure $ Result [] (Just $ GValue.ValueString $ GValue.String $ unName $ getName defn)
       | otherwise -> nextHandler
 
 -- We're using our usual trick of rewriting a type in a closed type
@@ -312,7 +322,6 @@ type family RunFieldsHandler (m :: Type -> Type) (a :: Type) = (r :: Type) where
   RunFieldsHandler m a = TypeError (
     'Text "Unexpected RunFieldsHandler types: " ':<>: 'ShowType a)
 
-
 class RunFields m a where
   -- | Run a single 'Selection' over all possible fields (as specified by the
   -- type @a@), returning exactly one 'GValue.ObjectField' when a field
@@ -321,7 +330,7 @@ class RunFields m a where
   -- Individual implementations are responsible for calling 'runFields' if
   -- they haven't matched the field and there are still candidate fields
   -- within the handler.
-  runFields :: RunFieldsHandler m a -> Field Value -> m ResolveFieldResult
+  runFields :: RunFieldsHandler m a -> ObjectTypeDefinition -> Field Value -> m ResolveFieldResult
 
 instance forall f fs m dispatchType.
          ( BuildFieldResolver m dispatchType
@@ -330,10 +339,10 @@ instance forall f fs m dispatchType.
          , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (f :<> fs) where
-  runFields (handler :<> nextHandlers) field =
-    resolveField @dispatchType @m handler nextHandler field
+  runFields (handler :<> nextHandlers) defn field =
+    resolveField @dispatchType @m handler nextHandler defn field
     where
-      nextHandler = runFields @m @fs nextHandlers field
+      nextHandler = runFields @m @fs nextHandlers defn field
 
 instance forall ksM t m dispatchType.
          ( BuildFieldResolver m dispatchType
@@ -341,8 +350,8 @@ instance forall ksM t m dispatchType.
          , dispatchType ~ FieldResolverDispatchType (API.Field ksM t)
          , Monad m
          ) => RunFields m (API.Field ksM t) where
-  runFields handler field =
-    resolveField @dispatchType @m handler nextHandler field
+  runFields handler defn field =
+    resolveField @dispatchType @m handler nextHandler defn field
     where
       nextHandler = pure (Result [FieldNotFoundError (getName field)] Nothing)
 
@@ -352,8 +361,8 @@ instance forall m a b dispatchType.
          , KnownSymbol (FieldName dispatchType)
          , Monad m
          ) => RunFields m (a :> b) where
-  runFields handler field =
-    resolveField @dispatchType @m handler nextHandler field
+  runFields handler defn field =
+    resolveField @dispatchType @m handler nextHandler defn field
     where
       nextHandler = pure (Result [FieldNotFoundError (getName field)] Nothing)
 
@@ -368,12 +377,12 @@ instance forall typeName interfaces fields m.
   resolve mHandler (Just selectionSet) =
     case getSelectionSet of
       Left err -> throwE err
-      Right ss -> do
+      Right (ss, defn) -> do
         -- Run the handler so the field resolvers have access to the object.
         -- This (and other places, including field resolvers) is where user
         -- code can do things like look up something in a database.
         handler <- mHandler
-        r <- traverse (runFields @m @(RunFieldsType m fields) handler) ss
+        r <- traverse (runFields @m @(RunFieldsType m fields) handler defn) ss
         let (Result errs obj)  = GValue.objectFromOrderedMap . OrderedMap.catMaybes <$> sequenceA r
         pure (Result errs (GValue.ValueObject obj))
 
@@ -391,7 +400,7 @@ instance forall typeName interfaces fields m.
         -- See <https://facebook.github.io/graphql/#sec-Field-Collection> for
         -- more details.
         (SelectionSet ss') <- first ValidationError $ getSelectionSetForType defn selectionSet
-        pure ss'
+        pure (ss', defn)
 
 -- TODO(tom): we're getting to a point where it might make sense to
 -- split resolver into submodules (GraphQL.Resolver.Union  etc.)

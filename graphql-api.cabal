@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6db006b020fe198ac64b8a50f8335017251389b7c34dfc553675e38eb001a428
+-- hash: 24bc26dbd1f77e90690a71683ae20372d13f4729b6073940a17679e5bc18c609
 
 name:           graphql-api
 version:        0.3.0
@@ -133,6 +133,7 @@ test-suite graphql-api-tests
   build-depends:
       QuickCheck
     , aeson
+    , aeson-qq
     , attoparsec
     , base >=4.9 && <5
     , containers
@@ -144,6 +145,7 @@ test-suite graphql-api-tests
     , raw-strings-qq
     , tasty
     , tasty-hspec
+    , text
     , transformers
   other-modules:
       ASTTests

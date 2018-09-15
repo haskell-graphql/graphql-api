@@ -1,14 +1,17 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 module ResolverTests (tests) where
 
 import Protolude hiding (Enum)
 
+import Data.Aeson.QQ (aesonQQ)
+import Text.RawString.QQ (r)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
-import Data.Aeson (encode)
+import Data.Aeson (encode, toJSON)
 import GraphQL
   ( Response(..)
   , interpretAnonymousQuery
@@ -18,12 +21,14 @@ import GraphQL.API
   , Field
   , Argument
   , Enum
+  , Union
   , (:>)
   )
 import GraphQL.Resolver
   ( Handler
   , ResolverError(..)
   , (:<>)(..)
+  , unionValue
   )
 import GraphQL.Internal.Output (singleError)
 
@@ -74,6 +79,28 @@ enumHandler :: Handler IO EnumQuery
 enumHandler = pure $ pure NormalFile
 -- /Enum test
 
+-- Union test
+type Cat = Object "Cat" '[] '[Field "name" Text]
+type Dog = Object "Dog" '[] '[Field "name" Text]
+type CatOrDog = Union "CatOrDog" '[Cat, Dog]
+type UnionQuery = Object "UnionQuery" '[]
+  '[ Argument "isCat" Bool :> Field "catOrDog" CatOrDog
+   ]
+
+dogHandler :: Handler IO Cat
+dogHandler = pure $ pure "Mortgage"
+
+catHandler :: Handler IO Dog
+catHandler = pure $ pure "Felix"
+
+unionHandler :: Handler IO UnionQuery
+unionHandler = pure $ \isCat ->
+  if isCat
+    then unionValue @Cat catHandler
+    else unionValue @Dog dogHandler
+
+-- /Union test
+
 tests :: IO TestTree
 tests = testSpec "TypeAPI" $ do
   describe "tTest" $ do
@@ -94,3 +121,47 @@ tests = testSpec "TypeAPI" $ do
     it "API.Enum works" $ do
       Success object <- interpretAnonymousQuery @EnumQuery enumHandler "{ mode }"
       encode object `shouldBe` "{\"mode\":\"NormalFile\"}"
+
+  describe "Introspection" $ do
+    describe "__typename" $ do
+      it "can describe nested objects" $ do
+        Success object <- interpretAnonymousQuery @Query handler [r|
+          { 
+            __typename
+            test(id: "1") { 
+              __typename 
+              name
+            } 
+          }
+        |]
+
+        toJSON object `shouldBe` [aesonQQ|
+          { 
+            "__typename": "Query",
+            "test": {
+              "__typename": "Foo",
+              "name": "Mort"
+            }
+          }
+        |]
+
+      it "can describe unions" $ do
+        Success object <- interpretAnonymousQuery @UnionQuery unionHandler [r|
+          {
+            __typename
+            catOrDog(isCat: false) {
+              __typename
+              name
+            }
+          }
+        |]
+
+        toJSON object `shouldBe` [aesonQQ|
+          {
+            "__typename": "UnionQuery",
+            "catOrDog": {
+              "__typename": "Dog",
+              "name": "Mortgage"
+            }
+          }
+        |]

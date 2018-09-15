@@ -71,8 +71,10 @@ tests:
       - hspec
       - QuickCheck
       - raw-strings-qq
+      - aeson-qq
       - tasty
       - tasty-hspec
+      - text
       - directory
 
   graphql-api-doctests:
