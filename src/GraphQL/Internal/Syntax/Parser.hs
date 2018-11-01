@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables#-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Description: Parse text into GraphQL ASTs
@@ -37,19 +37,18 @@ import GraphQL.Internal.Name (nameParser)
 getPos :: Parser Int
 getPos = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 
-positioned :: Parser a -> Parser (a, Maybe (Int, Int))
+positioned :: forall a c. Parser a -> Parser ((a -> Maybe (Int, Int) -> c) -> c)
 positioned p = do
   start <- getPos
   content <- p
   end <- getPos
-  return (content, Just (start, end))
+  return $ \x -> x content (Just (start, end))
 
 -- * Document
 
 queryDocument :: Parser AST.QueryDocument
-queryDocument = whiteSpace *> do
-  (content, pos) <- positioned (many1 definition <?> "query document error!")
-  return $ AST.QueryDocument content pos
+queryDocument = whiteSpace *>
+  positioned (many1 definition <?> "query document error!") <*> return AST.QueryDocument
 
 -- | Parser for a schema document.
 schemaDocument :: Parser AST.SchemaDocument
