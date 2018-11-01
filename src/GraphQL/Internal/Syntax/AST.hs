@@ -65,7 +65,7 @@ import GraphQL.Internal.Name
 -- https://facebook.github.io/graphql/#sec-Language.Query-Document
 data QueryDocument = QueryDocument {
   getDefinitions :: [Definition]
-  , position :: (Int, Int)
+  , position :: Maybe (Int, Int)
   } deriving (Eq,Show)
 
 data Definition = DefinitionOperation OperationDefinition

@@ -37,12 +37,12 @@ import GraphQL.Internal.Name (nameParser)
 getPos :: Parser Int
 getPos = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 
-positioned :: Parser a -> Parser (a, (Int, Int))
+positioned :: Parser a -> Parser (a, Maybe (Int, Int))
 positioned p = do
   start <- getPos
   content <- p
   end <- getPos
-  return (content, (start, end))
+  return (content, Just (start, end))
 
 -- * Document
 
