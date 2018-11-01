@@ -93,7 +93,7 @@ tests = testSpec "AST" $ do
                              [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                              ])
                          ])
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
 
     it "parses anonymous query documents" $ do
@@ -112,7 +112,7 @@ tests = testSpec "AST" $ do
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
                            ]))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
 
     it "errors on missing selection set" $ do
@@ -159,7 +159,7 @@ tests = testSpec "AST" $ do
                                ])
                             ])
                          ]))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
 
     it "includes variable definitions" $ do
@@ -189,7 +189,7 @@ tests = testSpec "AST" $ do
                                       ] [] [])
                                  ])
                             ]))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
 
     it "parses anonymous query with variables" $ do
@@ -219,7 +219,7 @@ tests = testSpec "AST" $ do
                                       ] [] [])
                                  ])
                             ]))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
     it "parses anonymous query with variable annotation" $ do
       let query = [r|
@@ -254,7 +254,7 @@ tests = testSpec "AST" $ do
                                       ] [] [])
                                  ])
                             ]))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
     it "parses anonymous query with inline argument (List, Object, Enum, String, Number)" $ do
       -- keys are not quoted for inline objects
@@ -285,7 +285,7 @@ tests = testSpec "AST" $ do
                                       ] [] [])
                                  ])
                             ]))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected
     it "parses anonymous query with fragment" $ do
       -- keys are not quoted for inline objects
@@ -314,5 +314,5 @@ tests = testSpec "AST" $ do
                                 [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
                                 ])    
                             ])))
-                     ]
+                     ] (0, 0)
       parsed `shouldBe` expected

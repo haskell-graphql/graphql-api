@@ -139,7 +139,7 @@ type Operations value = Map (Maybe Name) (Operation value)
 -- The document is known to be syntactically valid, as we've got its AST.
 -- Here, we confirm that it's semantically valid (modulo types).
 validate :: Schema -> AST.QueryDocument -> Either (NonEmpty ValidationError) (QueryDocument VariableValue)
-validate schema (AST.QueryDocument defns) = runValidator $ do
+validate schema (AST.QueryDocument defns _) = runValidator $ do
   let (operations, fragments) = splitBy splitDefns defns
   let (anonymous, maybeNamed) = splitBy splitOps operations
   (frags, visitedFrags) <- resolveFragmentDefinitions =<< validateFragmentDefinitions schema fragments

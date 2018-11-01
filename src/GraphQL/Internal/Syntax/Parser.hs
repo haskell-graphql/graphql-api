@@ -28,15 +28,28 @@ import Data.Attoparsec.Text
   , scientific
   , sepBy1
   )
+import qualified Data.Attoparsec.Internal.Types as AT
 
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Syntax.Tokens (tok, whiteSpace)
 import GraphQL.Internal.Name (nameParser)
 
+getPos :: Parser Int
+getPos = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
+
+positioned :: Parser a -> Parser (a, (Int, Int))
+positioned p = do
+  start <- getPos
+  content <- p
+  end <- getPos
+  return (content, (start, end))
+
 -- * Document
 
 queryDocument :: Parser AST.QueryDocument
-queryDocument = whiteSpace *> (AST.QueryDocument <$> many1 definition) <?> "query document error!"
+queryDocument = whiteSpace *> do
+  (content, pos) <- positioned (many1 definition <?> "query document error!")
+  return $ AST.QueryDocument content pos
 
 -- | Parser for a schema document.
 schemaDocument :: Parser AST.SchemaDocument

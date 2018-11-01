@@ -18,7 +18,7 @@ import GraphQL.Internal.Name (unName)
 -- * Document
 
 queryDocument :: AST.QueryDocument -> Text
-queryDocument (AST.QueryDocument defs) = (`snoc` '\n') . mconcat $ definition <$> defs
+queryDocument (AST.QueryDocument defs _) = (`snoc` '\n') . mconcat $ definition <$> defs
 
 definition :: AST.Definition -> Text
 definition (AST.DefinitionOperation x) = operationDefinition x

@@ -53,17 +53,20 @@ import Protolude
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
 
 import GraphQL.Internal.Arbitrary (arbitraryText)
-import GraphQL.Internal.Name          
+import GraphQL.Internal.Name
   ( Name
   , HasName(..)
   )
-  
+
 -- * Documents
 
 -- | A 'QueryDocument' is something a user might send us.
 --
 -- https://facebook.github.io/graphql/#sec-Language.Query-Document
-newtype QueryDocument = QueryDocument { getDefinitions :: [Definition] } deriving (Eq,Show)
+data QueryDocument = QueryDocument {
+  getDefinitions :: [Definition]
+  , position :: (Int, Int)
+  } deriving (Eq,Show)
 
 data Definition = DefinitionOperation OperationDefinition
                 | DefinitionFragment  FragmentDefinition
