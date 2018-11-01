@@ -48,7 +48,7 @@ tests = testSpec "Validation" $ do
                       ]
                     )
                   )
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` []
 
     it "Treats anonymous queries as valid" $ do
@@ -61,7 +61,7 @@ tests = testSpec "Validation" $ do
                           [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                           ])
                       ]))
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` []
 
     it "Treats anonymous queries with variables as valid" $ do
@@ -83,7 +83,7 @@ tests = testSpec "Validation" $ do
                                  ] [] [])
                             ])
                        ]))
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` []
     it "Treats anonymous queries with annotated variables as valid ([[Boolean]]!)" $ do
       let doc = AST.QueryDocument
@@ -106,7 +106,7 @@ tests = testSpec "Validation" $ do
                                  ] [] [])
                             ])
                        ]))
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` []
 
     it "Detects duplicate operation names" $ do
@@ -125,7 +125,7 @@ tests = testSpec "Validation" $ do
                       ]
                     )
                   )
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` [DuplicateOperation me]
 
     it "Detects duplicate anonymous operations" $ do
@@ -140,7 +140,7 @@ tests = testSpec "Validation" $ do
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                     ]
                   )
-                ]
+                ] (0, 0)
       let errors = getErrors schema doc
       errors `shouldBe` [MixedAnonymousOperations 2 []]
       formatErrors errors `shouldBe` ["Multiple anonymous operations defined. Found 2"]
@@ -157,7 +157,7 @@ tests = testSpec "Validation" $ do
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                     ]
                   ))
-                ]
+                ] (0, 0)
       let errors = getErrors schema doc
       errors `shouldBe` [MixedAnonymousOperations 1 [Just "houseTrainedQuery"]]
       formatErrors errors `shouldBe` ["Document contains both anonymous operations (1) and named operations ([Just (Name {unName = \"houseTrainedQuery\"})])"]
@@ -181,7 +181,7 @@ tests = testSpec "Validation" $ do
                                  ] [] [])
                             ])
                        ]))
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "MyNonExistingType"]
 
     it "Detects unused variable definition" $ do
@@ -201,7 +201,7 @@ tests = testSpec "Validation" $ do
                                  [] [] [])
                             ])
                        ]))
-                ]
+                ] (0, 0)
       getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
 
     it "Treats anonymous queries with inline arguments as valid" $ do
@@ -224,7 +224,7 @@ tests = testSpec "Validation" $ do
                                       ] [] [])
                                  ])
                             ]))
-                     ]
+                     ] (0, 0)
       getErrors schema doc `shouldBe` []
     it "Detects non-existent fragment type" $ do
       let doc = AST.QueryDocument
@@ -241,7 +241,7 @@ tests = testSpec "Validation" $ do
                                 [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
                                 ])    
                             ])))
-                     ]
+                     ] (0, 0)
       getErrors schema doc `shouldBe` [TypeConditionNotFound "Dog"]
 
   describe "findDuplicates" $ do
