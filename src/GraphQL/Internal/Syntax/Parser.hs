@@ -55,8 +55,8 @@ schemaDocument :: Parser AST.SchemaDocument
 schemaDocument = whiteSpace *> (AST.SchemaDocument <$> many1 typeDefinition) <?> "type document error"
 
 definition :: Parser AST.Definition
-definition = AST.DefinitionOperation <$> operationDefinition
-         <|> AST.DefinitionFragment  <$> fragmentDefinition
+definition = positioned operationDefinition <*> return AST.DefinitionOperation
+         <|>  positioned  fragmentDefinition <*> return AST.DefinitionFragment
          <?> "definition error!"
 
 operationDefinition :: Parser AST.OperationDefinition

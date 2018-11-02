@@ -162,8 +162,8 @@ validate schema AST.QueryDocument {getDefinitions = defns} = runValidator $ do
     splitBy :: (a -> Either b c) -> [a] -> ([b], [c])
     splitBy f xs = partitionEithers (map f xs)
 
-    splitDefns (AST.DefinitionOperation op) = Left op
-    splitDefns (AST.DefinitionFragment frag) = Right frag
+    splitDefns (AST.DefinitionOperation op _) = Left op
+    splitDefns (AST.DefinitionFragment frag _) = Right frag
 
     splitOps (AST.AnonymousQuery ss) = Left ss
     splitOps (AST.Query node@(AST.Node maybeName _ _ _)) = Right (maybeName, (Query, node))

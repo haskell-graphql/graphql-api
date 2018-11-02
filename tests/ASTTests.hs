@@ -92,7 +92,7 @@ tests = testSpec "AST" $ do
                            (AST.Field Nothing dog [] []
                              [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                              ])
-                         ])
+                         ]) $ Just (0, 108)
                      ] (Just (0, 108))
       parsed `shouldBe` expected
 
@@ -111,7 +111,7 @@ tests = testSpec "AST" $ do
                              (AST.Field Nothing dog [] []
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
-                           ]))
+                           ])) $ Just (0, 114)
                      ] (Just (0, 114))
       parsed `shouldBe` expected
 
@@ -147,7 +147,7 @@ tests = testSpec "AST" $ do
                            (AST.Field Nothing dog [] []
                              [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                              ])
-                         ])
+                         ]) $ Just (0,131)
                      , AST.DefinitionOperation
                        (AST.Query
                         (AST.Node (pure "getName") [] []
@@ -158,7 +158,7 @@ tests = testSpec "AST" $ do
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
                             ])
-                         ]))
+                         ])) $ Just (131,315)
                      ] (Just (0, 315))
       parsed `shouldBe` expected
 
@@ -188,7 +188,7 @@ tests = testSpec "AST" $ do
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
-                            ]))
+                            ])) $ Just (21, 240)
                      ] (Just (21, 240))
       parsed `shouldBe` expected
 
@@ -218,7 +218,7 @@ tests = testSpec "AST" $ do
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
-                            ]))
+                            ])) $ Just (21, 223)
                      ] (Just (21, 223))
       parsed `shouldBe` expected
     it "parses anonymous query with variable annotation" $ do
@@ -253,7 +253,7 @@ tests = testSpec "AST" $ do
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
-                            ]))
+                            ])) $ Just (21, 216)
                      ] (Just (21, 216))
       parsed `shouldBe` expected
     it "parses anonymous query with inline argument (List, Object, Enum, String, Number)" $ do
@@ -277,14 +277,14 @@ tests = testSpec "AST" $ do
                                      (AST.Field Nothing "isHousetrained"
                                       [ AST.Argument "atOtherHomes"
                                           (AST.ValueList (AST.ListValue [
-                                            (AST.ValueObject (AST.ObjectValue [
-                                              (AST.ObjectField "testKey" (AST.ValueInt 123)),
-                                              (AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string")))
-                                            ]))
+                                            AST.ValueObject (AST.ObjectValue [
+                                              AST.ObjectField "testKey" (AST.ValueInt 123),
+                                              AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string"))
+                                            ])
                                           ]))
                                       ] [] [])
                                  ])
-                            ]))
+                            ])) (Just (21,216))
                      ] (Just (21, 216))
       parsed `shouldBe` expected
     it "parses anonymous query with fragment" $ do
@@ -301,18 +301,18 @@ tests = testSpec "AST" $ do
                     |]
       let Right parsed = parseOnly Parser.queryDocument query
       let expected = AST.QueryDocument
-                     [(AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
+                     [AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
                         (AST.NamedType "Dog") [] [
                           AST.SelectionField (AST.Field Nothing "name" [] [] [])
-                        ])),
-                        (AST.DefinitionOperation
+                        ]) $ Just (21, 116),
+                        AST.DefinitionOperation
                          (AST.Query
                            (AST.Node Nothing
                             [] []
                             [AST.SelectionField
                               (AST.Field Nothing dog [] []
                                 [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
-                                ])    
-                            ])))
+                                ])
+                            ])) $ Just (116, 253)
                      ] (Just (21, 253))
       parsed `shouldBe` expected

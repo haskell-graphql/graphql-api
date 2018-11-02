@@ -69,8 +69,8 @@ data QueryDocument = QueryDocument {
   } deriving (Eq,Show)
 
 type PositionInfo = Maybe (Int, Int)
-data Definition = DefinitionOperation OperationDefinition
-                | DefinitionFragment  FragmentDefinition
+data Definition = DefinitionOperation OperationDefinition PositionInfo
+                | DefinitionFragment  FragmentDefinition PositionInfo
                 deriving (Eq,Show)
 
 -- | A 'SchemaDocument' is a document that defines a GraphQL schema.

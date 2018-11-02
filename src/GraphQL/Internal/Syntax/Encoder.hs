@@ -1,3 +1,4 @@
+{-# Language NamedFieldPuns #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Description: Turn GraphQL ASTs into text
@@ -18,11 +19,11 @@ import GraphQL.Internal.Name (unName)
 -- * Document
 
 queryDocument :: AST.QueryDocument -> Text
-queryDocument (AST.QueryDocument defs _) = (`snoc` '\n') . mconcat $ definition <$> defs
+queryDocument AST.QueryDocument {getDefinitions = defs} = (`snoc` '\n') . mconcat $ definition <$> defs
 
 definition :: AST.Definition -> Text
-definition (AST.DefinitionOperation x) = operationDefinition x
-definition (AST.DefinitionFragment  x) = fragmentDefinition x
+definition (AST.DefinitionOperation x _) = operationDefinition x
+definition (AST.DefinitionFragment  x _) = fragmentDefinition x
 
 schemaDocument :: AST.SchemaDocument -> Text
 schemaDocument (AST.SchemaDocument defs) = (`snoc` '\n') . mconcat $ typeDefinition <$> defs

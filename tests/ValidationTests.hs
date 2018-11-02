@@ -47,7 +47,7 @@ tests = testSpec "Validation" $ do
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
-                  )
+                  ) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
 
@@ -60,7 +60,7 @@ tests = testSpec "Validation" $ do
                         (AST.Field Nothing dog [] []
                           [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                           ])
-                      ]))
+                      ])) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
 
@@ -82,7 +82,7 @@ tests = testSpec "Validation" $ do
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
                             ])
-                       ]))
+                       ])) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
     it "Treats anonymous queries with annotated variables as valid ([[Boolean]]!)" $ do
@@ -105,7 +105,7 @@ tests = testSpec "Validation" $ do
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
                             ])
-                       ]))
+                       ])) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
 
@@ -117,14 +117,14 @@ tests = testSpec "Validation" $ do
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
-                  )
+                  ) Nothing
                 , AST.DefinitionOperation
                   ( AST.Query
                     ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                       ]
                     )
-                  )
+                  ) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` [DuplicateOperation me]
 
@@ -134,12 +134,12 @@ tests = testSpec "Validation" $ do
                   ( AST.AnonymousQuery
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                     ]
-                  )
+                  ) Nothing
                 , AST.DefinitionOperation
                   ( AST.AnonymousQuery
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                     ]
-                  )
+                  ) Nothing
                 ] Nothing
       let errors = getErrors schema doc
       errors `shouldBe` [MixedAnonymousOperations 2 []]
@@ -151,12 +151,12 @@ tests = testSpec "Validation" $ do
                   ( AST.AnonymousQuery
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                     ]
-                  )
+                  ) Nothing
                 , AST.DefinitionOperation
                   ( AST.Query (AST.Node (pure "houseTrainedQuery") [] []
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                     ]
-                  ))
+                  )) Nothing
                 ] Nothing
       let errors = getErrors schema doc
       errors `shouldBe` [MixedAnonymousOperations 1 [Just "houseTrainedQuery"]]
@@ -180,7 +180,7 @@ tests = testSpec "Validation" $ do
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
                             ])
-                       ]))
+                       ]))  Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "MyNonExistingType"]
 
@@ -200,7 +200,7 @@ tests = testSpec "Validation" $ do
                                 (AST.Field Nothing "isHousetrained"
                                  [] [] [])
                             ])
-                       ]))
+                       ])) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
 
@@ -223,7 +223,7 @@ tests = testSpec "Validation" $ do
                                           ]))
                                       ] [] [])
                                  ])
-                            ]))
+                            ])) Nothing
                      ] Nothing
       getErrors schema doc `shouldBe` []
     it "Detects non-existent fragment type" $ do
@@ -231,7 +231,7 @@ tests = testSpec "Validation" $ do
                   [(AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
                     (AST.NamedType "Dog") [] [
                       AST.SelectionField (AST.Field Nothing "name" [] [] [])
-                      ])),
+                      ]) Nothing),
                         (AST.DefinitionOperation
                          (AST.Query
                            (AST.Node Nothing
@@ -239,8 +239,8 @@ tests = testSpec "Validation" $ do
                             [AST.SelectionField
                               (AST.Field Nothing dog [] []
                                 [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
-                                ])    
-                            ])))
+                                ])
+                            ])) Nothing)
                      ] Nothing
       getErrors schema doc `shouldBe` [TypeConditionNotFound "Dog"]
 
