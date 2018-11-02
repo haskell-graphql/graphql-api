@@ -37,34 +37,32 @@ import GraphQL.Internal.Name (nameParser)
 getPos :: Parser Int
 getPos = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 
-positioned :: forall a c. Parser a -> Parser ((a -> Maybe (Int, Int) -> c) -> c)
+positioned :: forall a. Parser (Maybe (Int, Int) -> a) -> Parser a
 positioned p = do
   start <- getPos
-  content <- p
+  creator <- p
   end <- getPos
-  return $ \x -> x content (Just (start, end))
+  return $ creator $ Just (start, end)
 
 -- * Document
 
 queryDocument :: Parser AST.QueryDocument
-queryDocument = whiteSpace *>
-  positioned (many1 definition <?> "query document error!") <*> return AST.QueryDocument
+queryDocument = whiteSpace *> positioned ( AST.QueryDocument <$> many1 definition <?> "query document error!")
 
 -- | Parser for a schema document.
 schemaDocument :: Parser AST.SchemaDocument
 schemaDocument = whiteSpace *> (AST.SchemaDocument <$> many1 typeDefinition) <?> "type document error"
 
 definition :: Parser AST.Definition
-definition = positioned operationDefinition <*> return AST.DefinitionOperation
-         <|>  positioned  fragmentDefinition <*> return AST.DefinitionFragment
-         <?> "definition error!"
+definition = positioned content
+  where
+  content =AST.DefinitionOperation <$> operationDefinition <|> AST.DefinitionFragment <$> fragmentDefinition <?> "definition error!"
 
 operationDefinition :: Parser AST.OperationDefinition
-operationDefinition =
-      AST.Query    <$ tok "query"    <*> node
-  <|> AST.Mutation <$ tok "mutation" <*> node
-  <|> (AST.AnonymousQuery <$> selectionSet)
-  <?> "operationDefinition error!"
+operationDefinition = AST.Query    <$ tok "query"    <*> node
+                <|> AST.Mutation <$ tok "mutation" <*> node
+                <|> (AST.AnonymousQuery <$> selectionSet)
+                <?> "operationDefinition error!"
 
 node :: Parser AST.Node
 node = AST.Node <$> optional nameParser
