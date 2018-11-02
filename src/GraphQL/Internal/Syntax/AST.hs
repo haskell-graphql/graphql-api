@@ -79,9 +79,9 @@ data Definition = DefinitionOperation OperationDefinition PositionInfo
 newtype SchemaDocument = SchemaDocument [TypeDefinition] deriving (Eq, Show)
 
 data OperationDefinition
-  = Query Node
-  | Mutation Node
-  | AnonymousQuery SelectionSet
+  = Query Node PositionInfo
+  | Mutation Node PositionInfo
+  | AnonymousQuery SelectionSet PositionInfo
   deriving (Eq,Show)
 
 data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet

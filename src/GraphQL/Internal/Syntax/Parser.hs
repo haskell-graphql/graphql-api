@@ -59,7 +59,9 @@ definition = positioned content
   content =AST.DefinitionOperation <$> operationDefinition <|> AST.DefinitionFragment <$> fragmentDefinition <?> "definition error!"
 
 operationDefinition :: Parser AST.OperationDefinition
-operationDefinition = AST.Query    <$ tok "query"    <*> node
+operationDefinition = positioned content
+  where
+    content = AST.Query    <$ tok "query"    <*> node
                 <|> AST.Mutation <$ tok "mutation" <*> node
                 <|> (AST.AnonymousQuery <$> selectionSet)
                 <?> "operationDefinition error!"

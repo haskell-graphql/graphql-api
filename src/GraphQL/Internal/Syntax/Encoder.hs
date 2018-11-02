@@ -29,9 +29,9 @@ schemaDocument :: AST.SchemaDocument -> Text
 schemaDocument (AST.SchemaDocument defs) = (`snoc` '\n') . mconcat $ typeDefinition <$> defs
 
 operationDefinition :: AST.OperationDefinition -> Text
-operationDefinition (AST.Query    n) = "query "    <> node n
-operationDefinition (AST.Mutation n) = "mutation " <> node n
-operationDefinition (AST.AnonymousQuery ss) = selectionSet ss
+operationDefinition (AST.Query    n _) = "query "    <> node n
+operationDefinition (AST.Mutation n _) = "mutation " <> node n
+operationDefinition (AST.AnonymousQuery ss _) = selectionSet ss
 
 node :: AST.Node -> Text
 node (AST.Node (Just name) vds ds ss) =
