@@ -84,7 +84,7 @@ data OperationDefinition
   | AnonymousQuery SelectionSet PositionInfo
   deriving (Eq,Show)
 
-data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet
+data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet PositionInfo
             deriving (Eq,Show)
 
 data VariableDefinition = VariableDefinition Variable GType (Maybe DefaultValue)

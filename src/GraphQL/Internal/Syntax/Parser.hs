@@ -67,7 +67,7 @@ operationDefinition = positioned content
                 <?> "operationDefinition error!"
 
 node :: Parser AST.Node
-node = AST.Node <$> optional nameParser
+node = positioned $ AST.Node <$> optional nameParser
                 <*> optempty variableDefinitions
                 <*> optempty directives
                 <*> selectionSet

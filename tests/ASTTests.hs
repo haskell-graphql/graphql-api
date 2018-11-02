@@ -112,7 +112,7 @@ tests = testSpec "AST" $ do
                              (AST.Field Nothing dog [] []
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
-                           ]) $ Just (0, 114)
+                           ] $ Just (6, 114)) $ Just (0, 114)
                        ) $ Just (0, 114)
                      ] (Just (0, 114))
       parsed `shouldBe` expected
@@ -161,7 +161,7 @@ tests = testSpec "AST" $ do
                                [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                                ])
                             ])
-                         ]) $ Just (131,315)
+                         ] $ Just (137,315)) $ Just (131,315)
                        ) $ Just (131,315)
                      ] (Just (0, 315))
       parsed `shouldBe` expected
@@ -192,7 +192,8 @@ tests = testSpec "AST" $ do
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
-                            ]) $ Just (21, 240)
+                            ] $ Just (27, 240)
+                           ) $ Just (21, 240)
                          ) $ Just (21, 240)
                      ] (Just (21, 240))
       parsed `shouldBe` expected
@@ -223,7 +224,8 @@ tests = testSpec "AST" $ do
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
-                            ]) $ Just (21, 223)
+                            ] $ Just (27, 223)
+                           ) $ Just (21, 223)
                          ) $ Just (21, 223)
                      ] (Just (21, 223))
       parsed `shouldBe` expected
@@ -259,7 +261,8 @@ tests = testSpec "AST" $ do
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
                                  ])
-                            ]) $ Just (21, 216)
+                            ] $ Just (27, 216)
+                           ) $ Just (21, 216)
                          ) $ Just (21, 216)
                      ] (Just (21, 216))
       parsed `shouldBe` expected
@@ -291,7 +294,8 @@ tests = testSpec "AST" $ do
                                           ]))
                                       ] [] [])
                                  ])
-                            ]) $ Just (21, 216)
+                            ] $ Just (27, 216)
+                           ) $ Just (21, 216)
                          ) $ Just (21,216)
                      ] (Just (21, 216))
       parsed `shouldBe` expected
@@ -321,7 +325,8 @@ tests = testSpec "AST" $ do
                               (AST.Field Nothing dog [] []
                                 [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
                                 ])
-                            ]) $ Just (116, 253)
+                            ] $ Just (122, 253)
+                           ) $ Just (116, 253)
                          ) $ Just (116, 253)
                      ] (Just (21, 253))
       parsed `shouldBe` expected

@@ -45,7 +45,7 @@ tests = testSpec "Validation" $ do
                   ( AST.Query
                     ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                      ]
+                      ] Nothing
                     ) Nothing
                   ) Nothing
                 ] Nothing
@@ -60,7 +60,7 @@ tests = testSpec "Validation" $ do
                         (AST.Field Nothing dog [] []
                           [ AST.SelectionField (AST.Field Nothing someName [] [] [])
                           ])
-                      ]) Nothing
+                      ] Nothing) Nothing
                   ) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
@@ -83,7 +83,7 @@ tests = testSpec "Validation" $ do
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
                             ])
-                       ]) Nothing
+                       ] Nothing) Nothing
                     ) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
@@ -107,7 +107,7 @@ tests = testSpec "Validation" $ do
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
                             ])
-                       ]) Nothing
+                       ] Nothing) Nothing
                     ) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` []
@@ -118,14 +118,14 @@ tests = testSpec "Validation" $ do
                   ( AST.Query
                     ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                      ]
+                      ] Nothing
                     ) Nothing
                   ) Nothing
                 , AST.DefinitionOperation
                   ( AST.Query
                     ( AST.Node me [] []
                       [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                      ]
+                      ] Nothing
                     ) Nothing
                   ) Nothing
                 ] Nothing
@@ -158,7 +158,7 @@ tests = testSpec "Validation" $ do
                 , AST.DefinitionOperation
                   ( AST.Query (AST.Node (pure "houseTrainedQuery") [] []
                     [ AST.SelectionField (AST.Field Nothing someName [] [] [])
-                    ]
+                    ] Nothing
                     ) Nothing
                   ) Nothing
                 ] Nothing
@@ -184,7 +184,7 @@ tests = testSpec "Validation" $ do
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
                             ])
-                       ]) Nothing
+                       ] Nothing) Nothing
                     )  Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` [VariableTypeNotFound (AST.Variable "atOtherHomes") "MyNonExistingType"]
@@ -205,7 +205,7 @@ tests = testSpec "Validation" $ do
                                 (AST.Field Nothing "isHousetrained"
                                  [] [] [])
                             ])
-                       ]) Nothing
+                       ] Nothing) Nothing
                     ) Nothing
                 ] Nothing
       getErrors schema doc `shouldBe` [UnusedVariables (Set.fromList [AST.Variable "atOtherHomes"])]
@@ -229,7 +229,7 @@ tests = testSpec "Validation" $ do
                                           ]))
                                       ] [] [])
                                  ])
-                            ]) Nothing
+                            ] Nothing) Nothing
                          ) Nothing
                      ] Nothing
       getErrors schema doc `shouldBe` []
@@ -247,7 +247,7 @@ tests = testSpec "Validation" $ do
                               (AST.Field Nothing dog [] []
                                 [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
                                 ])
-                            ]) Nothing
+                            ] Nothing) Nothing
                          ) Nothing
                      ] Nothing
       getErrors schema doc `shouldBe` [TypeConditionNotFound "Dog"]

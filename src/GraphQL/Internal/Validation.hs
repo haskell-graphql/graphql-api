@@ -166,8 +166,8 @@ validate schema AST.QueryDocument {getDefinitions = defns} = runValidator $ do
     splitDefns (AST.DefinitionFragment frag _) = Right frag
 
     splitOps (AST.AnonymousQuery ss _) = Left ss
-    splitOps (AST.Query node@(AST.Node maybeName _ _ _) _) = Right (maybeName, (Query, node))
-    splitOps (AST.Mutation node@(AST.Node maybeName _ _ _) _) = Right (maybeName, (Mutation, node))
+    splitOps (AST.Query node@(AST.Node maybeName _ _ _ _) _) = Right (maybeName, (Query, node))
+    splitOps (AST.Mutation node@(AST.Node maybeName _ _ _ _) _) = Right (maybeName, (Mutation, node))
 
     assertAllFragmentsUsed :: Fragments value -> Set (Maybe Name) -> Validation ()
     assertAllFragmentsUsed fragments used =
@@ -181,7 +181,7 @@ validateOperations schema fragments ops = do
   deduped <- lift (mapErrors DuplicateOperation (makeMap ops))
   traverse validateNode deduped
   where
-    validateNode (operationType, AST.Node _ vars directives ss) =
+    validateNode (operationType, AST.Node _ vars directives ss _) =
       operationType <$> lift (validateVariableDefinitions schema vars)
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet schema fragments ss
