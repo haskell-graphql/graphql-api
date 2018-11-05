@@ -48,7 +48,7 @@ def get_report_summary():
 
     Assumes that ``stack test --coverage`` has already been run.
     """
-    process = subprocess.Popen(["stack", "hpc", "report", "--all"], stderr=subprocess.PIPE)
+    process = subprocess.Popen(["stack", "hpc", "report", "tmp/all.tix"], stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     return stderr
 
@@ -177,12 +177,12 @@ def format_entry(key, result, desired, actual):
 def main():
     report = parse_report_summary(get_report_summary())
     comparison = compare_coverage(report, COVERAGE_TOLERANCE)
-    all_same = True
+    more_missings = False
     for key, value in sorted(comparison.items()):
-        if value != 0:
-            all_same = False
+        if value < 0:
+            more_missings = True
         print format_entry(key, value, COVERAGE_TOLERANCE.get(key, 0), report[key])
-    sys.exit(0 if all_same else 2)
+    sys.exit(2 if more_missings else 0)
 
 
 if __name__ == '__main__':

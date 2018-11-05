@@ -67,7 +67,7 @@ jobs:
           #
           # Build with --coverage to ratchet our test coverage.
           name: Tests
-          command: STACK_YAML=stack-8.2.yaml stack test --skip-ghc-check --no-terminal --pedantic --coverage
+          command: STACK_YAML=stack-8.2.yaml stack test --skip-ghc-check --no-terminal --pedantic --coverage && ./scripts/patch_tix.sh
       - store_artifacts:
           path: /root/project/.stack-work/install/x86_64-linux/lts-10.4/8.2.2/hpc
       - run:
