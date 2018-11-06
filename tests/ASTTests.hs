@@ -183,6 +183,7 @@ tests = testSpec "AST" $ do
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))
                                 (Just (AST.ValueBoolean True))
+                                (Just (45,74))
                             ] []
                             [ AST.SelectionField
                                 (AST.Field Nothing dog [] []
@@ -215,6 +216,7 @@ tests = testSpec "AST" $ do
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))
                                 (Just (AST.ValueBoolean True))
+                                (Just (28,57))
                             ] []
                             [ AST.SelectionField
                                 (AST.Field Nothing dog [] []
@@ -252,6 +254,7 @@ tests = testSpec "AST" $ do
                                   )
                                 )
                                 Nothing
+                                (Just (28,50))
                             ] []
                             [ AST.SelectionField
                                 (AST.Field Nothing dog [] []

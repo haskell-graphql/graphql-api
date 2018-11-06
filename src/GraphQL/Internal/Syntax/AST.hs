@@ -87,7 +87,7 @@ data OperationDefinition
 data Node = Node (Maybe Name) [VariableDefinition] [Directive] SelectionSet PositionInfo
             deriving (Eq,Show)
 
-data VariableDefinition = VariableDefinition Variable GType (Maybe DefaultValue)
+data VariableDefinition = VariableDefinition Variable GType (Maybe DefaultValue) PositionInfo
                           deriving (Eq,Show)
 
 newtype Variable = Variable Name deriving (Eq, Ord, Show)

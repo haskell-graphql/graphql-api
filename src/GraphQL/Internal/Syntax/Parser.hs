@@ -76,11 +76,11 @@ variableDefinitions :: Parser [AST.VariableDefinition]
 variableDefinitions = parens (many1 variableDefinition)
 
 variableDefinition :: Parser AST.VariableDefinition
-variableDefinition =
+variableDefinition = positioned (
   AST.VariableDefinition <$> variable
                          <*  tok ":"
                          <*> type_
-                         <*> optional defaultValue
+                         <*> optional defaultValue)
 
 defaultValue :: Parser AST.DefaultValue
 defaultValue = tok "=" *> value

@@ -74,6 +74,7 @@ tests = testSpec "Validation" $ do
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "Boolean"))
                            (Just (AST.ValueBoolean True))
+                           Nothing
                        ] []
                        [ AST.SelectionField
                            (AST.Field Nothing dog [] []
@@ -97,6 +98,7 @@ tests = testSpec "Validation" $ do
                            (AST.TypeNonNull (AST.NonNullTypeList (AST.ListType 
                             (AST.TypeList (AST.ListType (AST.TypeNamed (AST.NamedType "Boolean"))))
                            )))
+                           Nothing
                            Nothing
                        ] []
                        [ AST.SelectionField
@@ -175,6 +177,7 @@ tests = testSpec "Validation" $ do
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "MyNonExistingType"))
                            (Just (AST.ValueBoolean True))
+                           Nothing
                        ] []
                        [ AST.SelectionField
                            (AST.Field Nothing dog [] []
@@ -198,6 +201,7 @@ tests = testSpec "Validation" $ do
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "String"))
                            (Just (AST.ValueBoolean True))
+                           Nothing
                        ] []
                        [ AST.SelectionField
                            (AST.Field Nothing dog [] []

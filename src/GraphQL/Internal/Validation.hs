@@ -658,7 +658,7 @@ validateVariableDefinitions schema vars = do
 
 -- | Ensure that a variable definition is a valid one.
 validateVariableDefinition :: Schema -> AST.VariableDefinition -> Validation VariableDefinition
-validateVariableDefinition schema (AST.VariableDefinition var varType value) =
+validateVariableDefinition schema (AST.VariableDefinition var varType value _) =
   VariableDefinition var
     <$> validateTypeAssertion schema var varType
     <*> traverse validateDefaultValue value

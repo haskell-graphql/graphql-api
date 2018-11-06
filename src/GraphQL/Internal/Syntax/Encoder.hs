@@ -48,7 +48,7 @@ variableDefinitions :: [AST.VariableDefinition] -> Text
 variableDefinitions = parensCommas variableDefinition
 
 variableDefinition :: AST.VariableDefinition -> Text
-variableDefinition (AST.VariableDefinition var ty dv) =
+variableDefinition (AST.VariableDefinition var ty dv _) =
   variable var <> ":" <> type_ ty <> maybe mempty defaultValue dv
 
 defaultValue :: AST.DefaultValue -> Text
