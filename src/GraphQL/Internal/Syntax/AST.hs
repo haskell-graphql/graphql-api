@@ -97,9 +97,9 @@ instance Arbitrary Variable where
 
 type SelectionSet = [Selection]
 
-data Selection = SelectionField Field
-               | SelectionFragmentSpread FragmentSpread
-               | SelectionInlineFragment InlineFragment
+data Selection = SelectionField Field PositionInfo
+               | SelectionFragmentSpread FragmentSpread PositionInfo
+               | SelectionInlineFragment InlineFragment PositionInfo
                  deriving (Eq,Show)
 
 data Field = Field (Maybe Alias) Name [Argument] [Directive] SelectionSet

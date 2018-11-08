@@ -61,9 +61,9 @@ selectionSet :: AST.SelectionSet -> Text
 selectionSet = bracesCommas selection
 
 selection :: AST.Selection -> Text
-selection (AST.SelectionField          x) = field x
-selection (AST.SelectionInlineFragment x) = inlineFragment x
-selection (AST.SelectionFragmentSpread x) = fragmentSpread x
+selection (AST.SelectionField          x _) = field x
+selection (AST.SelectionInlineFragment x _) = inlineFragment x
+selection (AST.SelectionFragmentSpread x _) = fragmentSpread x
 
 field :: AST.Field -> Text
 field (AST.Field alias name args ds ss) =

@@ -92,11 +92,11 @@ selectionSet :: Parser AST.SelectionSet
 selectionSet = braces $ many1 selection
 
 selection :: Parser AST.Selection
-selection = AST.SelectionField <$> field
+selection = positioned (AST.SelectionField <$> field
             -- Inline first to catch `on` case
         <|> AST.SelectionInlineFragment <$> inlineFragment
         <|> AST.SelectionFragmentSpread <$> fragmentSpread
-        <?> "selection error!"
+        <?> "selection error!")
 
 field :: Parser AST.Field
 field = AST.Field <$> option empty (pure <$> alias)

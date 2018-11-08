@@ -497,14 +497,14 @@ traverseFragmentSpreads f selection =
 validateSelection :: Schema -> AST.Selection -> Validation (Selection' UnresolvedFragmentSpread AST.Value)
 validateSelection schema selection =
   case selection of
-    AST.SelectionField (AST.Field alias name args directives ss) ->
+    AST.SelectionField (AST.Field alias name args directives ss) _ ->
       SelectionField <$> (Field' alias name
                            <$> validateArguments args
                            <*> validateDirectives directives
                            <*> childSegments ss)
-    AST.SelectionFragmentSpread (AST.FragmentSpread name directives) ->
+    AST.SelectionFragmentSpread (AST.FragmentSpread name directives) _ ->
       SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)
-    AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) ->
+    AST.SelectionInlineFragment (AST.InlineFragment typeCond directives ss) _ ->
       SelectionInlineFragment <$> (InlineFragment
                                     <$> traverse (validateTypeCondition schema) typeCond
                                     <*> validateDirectives directives

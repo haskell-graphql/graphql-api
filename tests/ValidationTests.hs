@@ -44,7 +44,7 @@ tests = testSpec "Validation" $ do
                 [ AST.DefinitionOperation
                   ( AST.Query
                     ( AST.Node me [] []
-                      [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                      [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                       ] Nothing
                     ) Nothing
                   ) Nothing
@@ -58,8 +58,9 @@ tests = testSpec "Validation" $ do
                     (AST.Node Nothing [] []
                       [ AST.SelectionField
                         (AST.Field Nothing dog [] []
-                          [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                          [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                           ])
+                        Nothing
                       ] Nothing) Nothing
                   ) Nothing
                 ] Nothing
@@ -83,7 +84,9 @@ tests = testSpec "Validation" $ do
                                  [ AST.Argument "atOtherHomes"
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
+                                Nothing
                             ])
+                           Nothing
                        ] Nothing) Nothing
                     ) Nothing
                 ] Nothing
@@ -108,7 +111,9 @@ tests = testSpec "Validation" $ do
                                  [ AST.Argument "atOtherHomes"
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
+                                Nothing
                             ])
+                           Nothing
                        ] Nothing) Nothing
                     ) Nothing
                 ] Nothing
@@ -119,14 +124,14 @@ tests = testSpec "Validation" $ do
                 [ AST.DefinitionOperation
                   ( AST.Query
                     ( AST.Node me [] []
-                      [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                      [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                       ] Nothing
                     ) Nothing
                   ) Nothing
                 , AST.DefinitionOperation
                   ( AST.Query
                     ( AST.Node me [] []
-                      [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                      [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                       ] Nothing
                     ) Nothing
                   ) Nothing
@@ -137,12 +142,12 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   ( AST.AnonymousQuery
-                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                     ] Nothing
                   ) Nothing
                 , AST.DefinitionOperation
                   ( AST.AnonymousQuery
-                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                     ] Nothing
                   ) Nothing
                 ] Nothing
@@ -154,12 +159,12 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                 [ AST.DefinitionOperation
                   ( AST.AnonymousQuery
-                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                     ] Nothing
                   ) Nothing
                 , AST.DefinitionOperation
                   ( AST.Query (AST.Node (pure "houseTrainedQuery") [] []
-                    [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                    [ AST.SelectionField (AST.Field Nothing someName [] [] []) Nothing
                     ] Nothing
                     ) Nothing
                   ) Nothing
@@ -186,7 +191,9 @@ tests = testSpec "Validation" $ do
                                  [ AST.Argument "atOtherHomes"
                                      (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                  ] [] [])
+                                Nothing
                             ])
+                           Nothing
                        ] Nothing) Nothing
                     )  Nothing
                 ] Nothing
@@ -208,7 +215,9 @@ tests = testSpec "Validation" $ do
                             [ AST.SelectionField
                                 (AST.Field Nothing "isHousetrained"
                                  [] [] [])
+                                Nothing
                             ])
+                           Nothing
                        ] Nothing) Nothing
                     ) Nothing
                 ] Nothing
@@ -232,7 +241,9 @@ tests = testSpec "Validation" $ do
                                             ])
                                           ]))
                                       ] [] [])
+                                     Nothing
                                  ])
+                                Nothing
                             ] Nothing) Nothing
                          ) Nothing
                      ] Nothing
@@ -241,7 +252,7 @@ tests = testSpec "Validation" $ do
       let doc = AST.QueryDocument
                   [AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
                     (AST.NamedType "Dog") [] [
-                      AST.SelectionField (AST.Field Nothing "name" [] [] [])
+                      AST.SelectionField (AST.Field Nothing "name" [] [] []) Nothing
                       ]) Nothing,
                         AST.DefinitionOperation
                          (AST.Query
@@ -249,8 +260,9 @@ tests = testSpec "Validation" $ do
                             [] []
                             [AST.SelectionField
                               (AST.Field Nothing dog [] []
-                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
+                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" []) Nothing
                                 ])
+                              Nothing
                             ] Nothing) Nothing
                          ) Nothing
                      ] Nothing

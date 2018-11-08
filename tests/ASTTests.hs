@@ -90,8 +90,9 @@ tests = testSpec "AST" $ do
                        (AST.AnonymousQuery
                          [ AST.SelectionField
                            (AST.Field Nothing dog [] []
-                             [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                             [ AST.SelectionField (AST.Field Nothing someName [] [] []) (Just (56,84))
                              ])
+                           (Just (25,107))
                          ] $ Just (0, 108)
                        ) $ Just (0, 108)
                      ] (Just (0, 108))
@@ -110,8 +111,9 @@ tests = testSpec "AST" $ do
                          (AST.Node Nothing [] []
                            [ AST.SelectionField
                              (AST.Field Nothing dog [] []
-                               [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                               [ AST.SelectionField (AST.Field Nothing someName [] [] []) (Just (62,90))
                                ])
+                             (Just (31,113))
                            ] $ Just (6, 114)) $ Just (0, 114)
                        ) $ Just (0, 114)
                      ] (Just (0, 114))
@@ -147,8 +149,9 @@ tests = testSpec "AST" $ do
                        (AST.AnonymousQuery
                          [ AST.SelectionField
                            (AST.Field Nothing dog [] []
-                             [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                             [ AST.SelectionField (AST.Field Nothing someName [] [] []) (Just (56,84))
                              ])
+                           (Just (25,107))
                          ] $ Just (0,131)
                        ) $ Just (0,131)
                      , AST.DefinitionOperation
@@ -158,9 +161,11 @@ tests = testSpec "AST" $ do
                            (AST.Field Nothing dog [] []
                             [ AST.SelectionField
                               (AST.Field Nothing "owner" [] []
-                               [ AST.SelectionField (AST.Field Nothing someName [] [] [])
+                               [ AST.SelectionField (AST.Field Nothing someName [] [] []) (Just (236,266))
                                ])
+                              (Just (201,291))
                             ])
+                           (Just (170,314))
                          ] $ Just (137,315)) $ Just (131,315)
                        ) $ Just (131,315)
                      ] (Just (0, 315))
@@ -192,7 +197,9 @@ tests = testSpec "AST" $ do
                                       [ AST.Argument "atOtherHomes"
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
+                                     (Just (130,196))
                                  ])
+                                 (Just (100,218))
                             ] $ Just (27, 240)
                            ) $ Just (21, 240)
                          ) $ Just (21, 240)
@@ -225,7 +232,9 @@ tests = testSpec "AST" $ do
                                       [ AST.Argument "atOtherHomes"
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
+                                     (Just (113,179))
                                  ])
+                                (Just (83,201))
                             ] $ Just (27, 223)
                            ) $ Just (21, 223)
                          ) $ Just (21, 223)
@@ -263,7 +272,9 @@ tests = testSpec "AST" $ do
                                       [ AST.Argument "atOtherHomes"
                                           (AST.ValueVariable (AST.Variable "atOtherHomes"))
                                       ] [] [])
+                                     (Just (106,172))
                                  ])
+                                (Just (76,194))
                             ] $ Just (27, 216)
                            ) $ Just (21, 216)
                          ) $ Just (21, 216)
@@ -296,7 +307,9 @@ tests = testSpec "AST" $ do
                                             ])
                                           ]))
                                       ] [] [])
+                                      (Just (81,172))
                                  ])
+                                (Just (51,194))
                             ] $ Just (27, 216)
                            ) $ Just (21, 216)
                          ) $ Just (21,216)
@@ -318,7 +331,7 @@ tests = testSpec "AST" $ do
       let expected = AST.QueryDocument
                      [AST.DefinitionFragment (AST.FragmentDefinition "dogTest"
                         (AST.NamedType "Dog") [] [
-                          AST.SelectionField (AST.Field Nothing "name" [] [] [])
+                          AST.SelectionField (AST.Field Nothing "name" [] [] []) (Just (69,94))
                         ]) $ Just (21, 116),
                         AST.DefinitionOperation
                          (AST.Query
@@ -326,8 +339,9 @@ tests = testSpec "AST" $ do
                             [] []
                             [AST.SelectionField
                               (AST.Field Nothing dog [] []
-                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" [])
+                                [AST.SelectionFragmentSpread (AST.FragmentSpread "dogTest" []) (Just (176,209))
                                 ])
+                              (Just (146,231))
                             ] $ Just (122, 253)
                            ) $ Just (116, 253)
                          ) $ Just (116, 253)
