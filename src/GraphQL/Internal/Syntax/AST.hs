@@ -68,6 +68,10 @@ data QueryDocument = QueryDocument {
   , position :: PositionInfo
   } deriving (Eq,Show)
 
+-- | PositionInfo for a start position and an end position.
+--
+-- When the AST is constructed elsewhere(not by parsing), for encoding as an example,
+-- the PositionInfo shall be Nothing
 type PositionInfo = Maybe (Int, Int)
 data Definition = DefinitionOperation OperationDefinition PositionInfo
                 | DefinitionFragment  FragmentDefinition PositionInfo
