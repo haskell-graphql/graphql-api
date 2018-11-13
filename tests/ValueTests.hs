@@ -83,10 +83,10 @@ tests = testSpec "Value" $ do
     prop "Non-empty lists" $ forAll (arbitraryNonEmpty @Int32) prop_roundtripValue
   describe "AST" $ do
     it "Objects converted from AST have unique fields" $ do
-      let input = AST.ObjectValue [ AST.ObjectField "foo" (AST.ValueString (AST.StringValue "bar"))
-                                  , AST.ObjectField "foo" (AST.ValueString (AST.StringValue "qux"))
+      let input = AST.ObjectValue [ AST.ObjectField "foo" (AST.ValueString (AST.StringValue "bar") Nothing)
+                                  , AST.ObjectField "foo" (AST.ValueString (AST.StringValue "qux") Nothing)
                                   ]
-      astToVariableValue (AST.ValueObject input) `shouldBe` Nothing
+      astToVariableValue (AST.ValueObject input Nothing) `shouldBe` Nothing
 
 
 -- | All of the fields in an object should have unique names.

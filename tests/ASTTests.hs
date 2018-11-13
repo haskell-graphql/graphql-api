@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- | Tests for AST, including parser and encoder.
 module ASTTests (tests) where
@@ -11,7 +12,7 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (arbitrary, forAll, resize)
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
-
+import qualified Data.String                 as String
 import GraphQL.Value (String(..))
 import GraphQL.Internal.Name (Name)
 import qualified GraphQL.Internal.Syntax.AST as AST
@@ -27,6 +28,11 @@ dog = "dog"
 someName :: Name
 someName = "name"
 
+noPos :: Either a AST.Value -> Either a AST.Value
+noPos (Left v) = Left v
+noPos (Right v) = Right (AST.setPos (const Nothing) v)
+
+
 tests :: IO TestTree
 tests = testSpec "AST" $ do
   describe "Parser and encoder" $ do
@@ -35,45 +41,45 @@ tests = testSpec "AST" $ do
       actual `shouldBe` Right kitchenSink
     describe "parsing numbers" $ do
       it "works for some integers" $ do
-        parseOnly Parser.value "1" `shouldBe` Right (AST.ValueInt 1)
+        parseOnly Parser.value "1" `shouldBe` Right (AST.ValueInt 1 $ Just(0,1))
       prop "works for all integers" $ do
-        \x -> parseOnly Parser.value (show x) == Right (AST.ValueInt x)
+        \x -> parseOnly Parser.value (show x) == Right (AST.ValueInt x (Just (0,  length (show x :: String.String))))
       it "works for some floats" $ do
-        parseOnly Parser.value "1.5" `shouldBe` Right (AST.ValueFloat 1.5)
+        parseOnly Parser.value "1.5" `shouldBe` Right (AST.ValueFloat 1.5 $ Just(0,3))
       it "treats floats as floats even if they end with .0" $ do
-        parseOnly Parser.value "0.0" `shouldBe` Right (AST.ValueFloat 0.0)
+        parseOnly Parser.value "0.0" `shouldBe` Right (AST.ValueFloat 0.0 $ Just(0,3))
       prop "works for floats" $ do
-        \x -> parseOnly Parser.value (show x) == Right (AST.ValueFloat x)
+        \x -> parseOnly Parser.value (show x) == Right (AST.ValueFloat x (Just (0,  length (show x :: String.String))))
     describe "strings" $ do
       prop "works for all strings" $ do
         \(String x) ->
-          let input = AST.ValueString (AST.StringValue x)
+          let input = AST.ValueString (AST.StringValue x) Nothing
               output = Encoder.value input in
-          parseOnly Parser.value output == Right input
+          noPos (parseOnly Parser.value output) == Right input
       it "handles unusual strings" $ do
-        let input = AST.ValueString (AST.StringValue "\fh\244")
+        let input = AST.ValueString (AST.StringValue "\fh\244") (Just (0,10))
         let output = Encoder.value input
         -- \f is \u000c
         output `shouldBe` "\"\\u000ch\244\""
         parseOnly Parser.value output `shouldBe` Right input
     describe "parsing values" $ do
       prop "works for all literal values" $ do
-        forAll (resize 3 arbitrary) $ \x -> parseOnly Parser.value (Encoder.value x) `shouldBe` Right x
+        forAll (resize 3 arbitrary) $ \x -> noPos (parseOnly Parser.value (Encoder.value x)) `shouldBe` Right x
       it "parses ununusual objects" $ do
         let input = AST.ValueObject
                     (AST.ObjectValue
                      [ AST.ObjectField "s"
-                       (AST.ValueString (AST.StringValue "\224\225v^6{FPDk\DC3\a")),
-                       AST.ObjectField "Hsr" (AST.ValueInt 0)
-                     ])
+                       $ AST.ValueString (AST.StringValue "\224\225v^6{FPDk\DC3\a")  (Just (3,28)),
+                       AST.ObjectField "Hsr" (AST.ValueInt 0 (Just (32,33)) )
+                     ]) (Just (0,34))
         let output = Encoder.value input
         parseOnly Parser.value output `shouldBe` Right input
       it "parses lists of floats" $ do
         let input = AST.ValueList
                       (AST.ListValue
-                       [ AST.ValueFloat 1.5
-                       , AST.ValueFloat 1.5
-                       ])
+                       [ AST.ValueFloat 1.5 $ Just (1,5)
+                       , AST.ValueFloat 1.5 $ Just (5,8)
+                       ])  (Just (0,9))
         let output = Encoder.value input
         output `shouldBe` "[1.5,1.5]"
         parseOnly Parser.value output `shouldBe` Right input
@@ -187,7 +193,7 @@ tests = testSpec "AST" $ do
                             [ AST.VariableDefinition
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))
-                                (Just (AST.ValueBoolean True))
+                                (Just (AST.ValueBoolean True $Just ( 70 , 74)))
                                 (Just (45,74))
                             ] []
                             [ AST.SelectionField
@@ -195,7 +201,7 @@ tests = testSpec "AST" $ do
                                  [ AST.SelectionField
                                      (AST.Field Nothing "isHousetrained"
                                       [ AST.Argument "atOtherHomes"
-                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes") (Just (159 , 172)))
                                       ] [] [])
                                      (Just (130,196))
                                  ])
@@ -222,7 +228,7 @@ tests = testSpec "AST" $ do
                             [ AST.VariableDefinition
                                 (AST.Variable "atOtherHomes")
                                 (AST.TypeNamed (AST.NamedType "Boolean"))
-                                (Just (AST.ValueBoolean True))
+                                (Just (AST.ValueBoolean True $Just (53, 57)))
                                 (Just (28,57))
                             ] []
                             [ AST.SelectionField
@@ -230,7 +236,7 @@ tests = testSpec "AST" $ do
                                  [ AST.SelectionField
                                      (AST.Field Nothing "isHousetrained"
                                       [ AST.Argument "atOtherHomes"
-                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes") $Just (142, 155))
                                       ] [] [])
                                      (Just (113,179))
                                  ])
@@ -270,7 +276,7 @@ tests = testSpec "AST" $ do
                                  [ AST.SelectionField
                                      (AST.Field Nothing "isHousetrained"
                                       [ AST.Argument "atOtherHomes"
-                                          (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                          (AST.ValueVariable (AST.Variable "atOtherHomes") $Just (135, 148))
                                       ] [] [])
                                      (Just (106,172))
                                  ])
@@ -302,10 +308,10 @@ tests = testSpec "AST" $ do
                                       [ AST.Argument "atOtherHomes"
                                           (AST.ValueList (AST.ListValue [
                                             AST.ValueObject (AST.ObjectValue [
-                                              AST.ObjectField "testKey" (AST.ValueInt 123),
-                                              AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string"))
-                                            ])
-                                          ]))
+                                              AST.ObjectField "testKey" (AST.ValueInt 123  (Just (121, 126))),
+                                              AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string")  (Just (138, 146)))
+                                            ]) $ Just (111, 147)
+                                          ])  (Just (110, 148)))
                                       ] [] [])
                                       (Just (81,172))
                                  ])

@@ -1,7 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Description: The GraphQL AST
@@ -23,6 +26,7 @@ module GraphQL.Internal.Syntax.AST
   , FragmentDefinition(..)
   , TypeCondition
   , Value(..)
+  , Position(..)
   , StringValue(..)
   , ListValue(..)
   , ObjectValue(..)
@@ -51,7 +55,6 @@ module GraphQL.Internal.Syntax.AST
 import Protolude
 
 import Test.QuickCheck (Arbitrary(..), listOf, oneof)
-
 import GraphQL.Internal.Arbitrary (arbitraryText)
 import GraphQL.Internal.Name
   ( Name
@@ -130,20 +133,42 @@ type TypeCondition = NamedType
 
 -- * Values
 
-data Value = ValueVariable Variable
-           | ValueInt Int32
+data Value  = ValueVariable Variable PositionInfo
+           | ValueInt Int32 PositionInfo
            -- GraphQL Float is double precison
-           | ValueFloat Double
-           | ValueBoolean Bool
-           | ValueString StringValue
-           | ValueEnum Name
-           | ValueList ListValue
-           | ValueObject ObjectValue
-           | ValueNull
+           | ValueFloat Double PositionInfo
+           | ValueBoolean Bool PositionInfo
+           | ValueString StringValue PositionInfo
+           | ValueEnum Name PositionInfo
+           | ValueList ListValue PositionInfo
+           | ValueObject ObjectValue PositionInfo
+           | ValueNull PositionInfo
            deriving (Eq, Show)
 
+class Position a where
+  setPos :: (PositionInfo -> PositionInfo) -> a -> a
+
+instance Position Value where
+  setPos f (ValueNull p) = ValueNull (f p)
+  setPos f (ValueVariable x p) = ValueVariable x (f p)
+  setPos f (ValueInt x p) = ValueInt x (f p)
+  setPos f (ValueFloat x p) = ValueFloat x (f p)
+  setPos f (ValueBoolean x p) = ValueBoolean x (f p)
+  setPos f (ValueString x p) = ValueString x (f p)
+  setPos f (ValueEnum x p) = ValueEnum x (f p)
+  setPos f (ValueList x p) = ValueList (setPos f x) (f p)
+  setPos f (ValueObject x p) = ValueObject (setPos f x) (f p)
+
+-- TODO: Use Rep
+instance Position ListValue where
+  setPos f (ListValue x) = ListValue (map (setPos f) x)
+instance Position ObjectValue where
+  setPos f (ObjectValue x) = ObjectValue (map (setPos f) x)
+instance Position ObjectField where
+  setPos f (ObjectField x v) = ObjectField x (setPos f v)
+  
 instance Arbitrary Value where
-  arbitrary = oneof [ ValueVariable <$> arbitrary
+  arbitrary = oneof $ map (<*> pure Nothing) [ ValueVariable <$> arbitrary
                     , ValueInt <$> arbitrary
                     , ValueFloat <$> arbitrary
                     , ValueBoolean <$> arbitrary

@@ -103,17 +103,17 @@ fragmentDefinition (AST.FragmentDefinition name (AST.NamedType tc) ds ss) =
 -- * Values
 
 value :: AST.Value -> Text
-value (AST.ValueVariable x) = variable x
+value (AST.ValueVariable x _) = variable x
 -- TODO: This will be replaced with `decimal` Buidler
-value (AST.ValueInt      x) = pack $ show x
+value (AST.ValueInt      x _) = pack $ show x
 -- TODO: This will be replaced with `decimal` Buidler
-value (AST.ValueFloat    x) = pack $ show x
-value (AST.ValueBoolean  x) = booleanValue x
-value (AST.ValueString   x) = stringValue x
-value (AST.ValueEnum     x) = unName x
-value (AST.ValueList     x) = listValue x
-value (AST.ValueObject   x) = objectValue x
-value AST.ValueNull = "null"
+value (AST.ValueFloat    x _) = pack $ show x
+value (AST.ValueBoolean  x _) = booleanValue x
+value (AST.ValueString   x _) = stringValue x
+value (AST.ValueEnum     x _) = unName x
+value (AST.ValueList     x _) = listValue x
+value (AST.ValueObject   x _) = objectValue x
+value (AST.ValueNull       _) = "null"
 
 booleanValue :: Bool -> Text
 booleanValue True  = "true"

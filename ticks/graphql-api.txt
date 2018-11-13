@@ -1,4 +1,5 @@
 module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Syntax.AST" {
   tick "getDefinitions" [future];
   tick "position" [future];
+  tick "setPos" [future];
 }

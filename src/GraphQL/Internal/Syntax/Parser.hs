@@ -149,7 +149,7 @@ typeCondition = namedType
 -- This will try to pick the first type it can parse. If you are working with
 -- explicit types use the `typedValue` parser.
 value :: Parser AST.Value
-value = tok (AST.ValueVariable <$> (variable <?> "variable")
+value = positioned (tok (AST.ValueVariable <$> (variable <?> "variable")
   <|> (number <?> "number")
   <|> AST.ValueNull     <$  tok "null"
   <|> AST.ValueBoolean  <$> (booleanValue <?> "booleanValue")
@@ -158,7 +158,7 @@ value = tok (AST.ValueVariable <$> (variable <?> "variable")
   <|> AST.ValueEnum     <$> (nameParser <?> "name")
   <|> AST.ValueList     <$> (listValue <?> "listValue")
   <|> AST.ValueObject   <$> (objectValue <?> "objectValue")
-  <?> "value error!")
+  <?> "value error!"))
   where
     number =  do
       (numText, num) <- match (tok scientific)

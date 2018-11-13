@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -187,28 +186,28 @@ instance Arbitrary ConstScalar where
 constScalarToAST :: ConstScalar -> AST.Value
 constScalarToAST scalar =
   case scalar of
-    ConstInt x -> AST.ValueInt x
-    ConstFloat x -> AST.ValueFloat x
-    ConstBoolean x -> AST.ValueBoolean x
-    ConstString (String x) -> AST.ValueString (AST.StringValue x)
-    ConstEnum x -> AST.ValueEnum x
-    ConstNull -> AST.ValueNull
+    ConstInt x -> AST.ValueInt x Nothing
+    ConstFloat x -> AST.ValueFloat x Nothing
+    ConstBoolean x -> AST.ValueBoolean x Nothing
+    ConstString (String x) -> AST.ValueString (AST.StringValue x) Nothing
+    ConstEnum x -> AST.ValueEnum x Nothing
+    ConstNull -> AST.ValueNull Nothing
 
 -- | Convert a variable scalar to an AST.Value
 variableToAST :: UnresolvedVariableScalar -> AST.Value
-variableToAST (Left variable) = AST.ValueVariable variable
+variableToAST (Left variable) = AST.ValueVariable variable Nothing
 variableToAST (Right constant) = constScalarToAST constant
 
 -- | Convert a value from the AST into a variable scalar, presuming it /is/ a
 -- scalar.
 astToScalar :: AST.Value -> Maybe UnresolvedVariableScalar
-astToScalar (AST.ValueInt x) = pure $ Right $ ConstInt x
-astToScalar (AST.ValueFloat x) = pure $ Right $ ConstFloat x
-astToScalar (AST.ValueBoolean x) = pure $ Right $ ConstBoolean x
-astToScalar (AST.ValueString (AST.StringValue x)) = pure $ Right $ ConstString (String x)
-astToScalar (AST.ValueEnum x) = pure $ Right $ ConstEnum x
-astToScalar AST.ValueNull = pure $ Right ConstNull
-astToScalar (AST.ValueVariable x) = pure $ Left x
+astToScalar (AST.ValueInt x _) = pure $ Right $ ConstInt x
+astToScalar (AST.ValueFloat x _) = pure $ Right $ ConstFloat x
+astToScalar (AST.ValueBoolean x _) = pure $ Right $ ConstBoolean x
+astToScalar (AST.ValueString (AST.StringValue x) _) = pure $ Right $ ConstString (String x)
+astToScalar (AST.ValueEnum x _) = pure $ Right $ ConstEnum x
+astToScalar (AST.ValueNull _)= pure $ Right ConstNull
+astToScalar (AST.ValueVariable x _) = pure $ Left x
 astToScalar _ = empty
 
 
@@ -318,15 +317,15 @@ instance ToJSON scalar => ToJSON (Object' scalar) where
 -- This is a stop-gap until we have proper conversion of user queries into
 -- canonical forms.
 astToValue' :: (AST.Value -> scalar) -> AST.Value -> Maybe (Value' scalar)
-astToValue' f x@(AST.ValueInt _) = pure (ValueScalar' (f x))
-astToValue' f x@(AST.ValueFloat _) = pure (ValueScalar' (f x))
-astToValue' f x@(AST.ValueBoolean _) = pure (ValueScalar' (f x))
-astToValue' f x@(AST.ValueString (AST.StringValue _)) = pure (ValueScalar' (f x))
-astToValue' f x@(AST.ValueEnum _) = pure (ValueScalar' (f x))
-astToValue' f AST.ValueNull = pure (ValueScalar' (f AST.ValueNull))
-astToValue' f x@(AST.ValueVariable _) = pure (ValueScalar' (f x))
-astToValue' f (AST.ValueList (AST.ListValue xs)) = ValueList' . List' <$> traverse (astToValue' f) xs
-astToValue' f (AST.ValueObject (AST.ObjectValue fields)) = do
+astToValue' f x@(AST.ValueInt _ _) = pure (ValueScalar' (f x))
+astToValue' f x@(AST.ValueFloat _ _) = pure (ValueScalar' (f x))
+astToValue' f x@(AST.ValueBoolean _ _) = pure (ValueScalar' (f x))
+astToValue' f x@(AST.ValueString (AST.StringValue _) _) = pure (ValueScalar' (f x))
+astToValue' f x@(AST.ValueEnum _ _) = pure (ValueScalar' (f x))
+astToValue' f x@(AST.ValueNull _)= pure (ValueScalar' (f x))
+astToValue' f x@(AST.ValueVariable _ _) = pure (ValueScalar' (f x))
+astToValue' f (AST.ValueList (AST.ListValue xs) _) = ValueList' . List' <$> traverse (astToValue' f) xs
+astToValue' f (AST.ValueObject (AST.ObjectValue fields) _) = do
   fields' <- traverse toObjectField fields
   object <- makeObject fields'
   pure (ValueObject' object)
@@ -338,7 +337,7 @@ astToValue' f (AST.ValueObject (AST.ObjectValue fields)) = do
 -- Will fail if the AST value contains duplicate object fields, or is
 -- otherwise invalid.
 astToVariableValue :: HasCallStack => AST.Value -> Maybe UnresolvedVariableValue
-astToVariableValue ast = astToValue' convertScalar ast
+astToVariableValue = astToValue' convertScalar
   where
     convertScalar x =
       case astToScalar x of
@@ -361,7 +360,7 @@ variableValueToAST = valueToAST' variableToAST
 -- stop-gap until we have QuickCheck generators for the AST.
 valueToAST' :: (scalar -> AST.Value) -> Value' scalar -> AST.Value
 valueToAST' f (ValueScalar' x) = f x
-valueToAST' f (ValueList' (List' xs)) = AST.ValueList (AST.ListValue (map (valueToAST' f) xs))
-valueToAST' f (ValueObject' (Object' fields)) = AST.ValueObject (AST.ObjectValue (map toObjectField (OrderedMap.toList fields)))
+valueToAST' f (ValueList' (List' xs)) = AST.ValueList (AST.ListValue (map (valueToAST' f) xs)) Nothing
+valueToAST' f (ValueObject' (Object' fields)) = AST.ValueObject (AST.ObjectValue (map toObjectField (OrderedMap.toList fields))) Nothing
   where
     toObjectField (name, value) = AST.ObjectField name (valueToAST' f value)

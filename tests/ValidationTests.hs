@@ -74,7 +74,7 @@ tests = testSpec "Validation" $ do
                        [ AST.VariableDefinition
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "Boolean"))
-                           (Just (AST.ValueBoolean True))
+                           (Just (AST.ValueBoolean True Nothing))
                            Nothing
                        ] []
                        [ AST.SelectionField
@@ -82,7 +82,7 @@ tests = testSpec "Validation" $ do
                             [ AST.SelectionField
                                 (AST.Field Nothing "isHousetrained"
                                  [ AST.Argument "atOtherHomes"
-                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes") Nothing)
                                  ] [] [])
                                 Nothing
                             ])
@@ -109,7 +109,7 @@ tests = testSpec "Validation" $ do
                             [ AST.SelectionField
                                 (AST.Field Nothing "isHousetrained"
                                  [ AST.Argument "atOtherHomes"
-                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes") Nothing)
                                  ] [] [])
                                 Nothing
                             ])
@@ -181,7 +181,7 @@ tests = testSpec "Validation" $ do
                        [ AST.VariableDefinition
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "MyNonExistingType"))
-                           (Just (AST.ValueBoolean True))
+                           (Just (AST.ValueBoolean True Nothing))
                            Nothing
                        ] []
                        [ AST.SelectionField
@@ -189,7 +189,7 @@ tests = testSpec "Validation" $ do
                             [ AST.SelectionField
                                 (AST.Field Nothing "isHousetrained"
                                  [ AST.Argument "atOtherHomes"
-                                     (AST.ValueVariable (AST.Variable "atOtherHomes"))
+                                     (AST.ValueVariable (AST.Variable "atOtherHomes") Nothing)
                                  ] [] [])
                                 Nothing
                             ])
@@ -207,7 +207,7 @@ tests = testSpec "Validation" $ do
                        [ AST.VariableDefinition
                            (AST.Variable "atOtherHomes")
                            (AST.TypeNamed (AST.NamedType "String"))
-                           (Just (AST.ValueBoolean True))
+                           (Just (AST.ValueBoolean True Nothing))
                            Nothing
                        ] []
                        [ AST.SelectionField
@@ -236,10 +236,10 @@ tests = testSpec "Validation" $ do
                                       [ AST.Argument "atOtherHomes"
                                           (AST.ValueList (AST.ListValue [
                                             AST.ValueObject (AST.ObjectValue [
-                                              AST.ObjectField "testKey" (AST.ValueInt 123),
-                                              AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string"))
-                                            ])
-                                          ]))
+                                              AST.ObjectField "testKey" (AST.ValueInt 123 Nothing),
+                                              AST.ObjectField "anotherKey" (AST.ValueString (AST.StringValue "string") Nothing)
+                                            ]) Nothing
+                                          ]) Nothing)
                                       ] [] [])
                                      Nothing
                                  ])
