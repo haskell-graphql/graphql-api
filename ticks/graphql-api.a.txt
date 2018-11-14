@@ -1,0 +1,763 @@
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Value.ToValue" {
+  tick function "toValue" on line 29;
+}
+
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Value.FromValue" {
+  inside "getValue" {
+    tick "throwError (\"invalid field name\" <> show err)" on line 115;
+    tick "throwError (\"Key not found: \" <> show fieldName)" on line 122;
+  }
+  tick function "wrongType" on line 87;
+  inside "fromValue" {
+    tick "wrongType \"genericFromValue only works with objects.\" v" on line 48;
+  }
+  tick function "fromValue" on line 78;
+  inside "fromValue" {
+    tick "Left \"Cannot construct NonEmpty from empty list\"" on line 73;
+    tick "wrongType \"List\" v" on line 75;
+  }
+  inside "fromValue" {
+    tick "wrongType \"List\" v" on line 68;
+  }
+  inside "fromValue" {
+    tick "wrongType \"String\" v" on line 64;
+  }
+  inside "fromValue" {
+    tick "wrongType \"Bool\" v" on line 60;
+  }
+  inside "fromValue" {
+    tick "wrongType \"Double\" v" on line 56;
+  }
+  inside "fromValue" {
+    tick "wrongType \"Int\" v" on line 52;
+  }
+  tick function "genericFromValue" on line 134;
+}
+
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Value" {
+  tick function "valueToAST'" on line 362;
+  inside "astToValue'" {
+    tick "pure (ValueScalar' (f x))" on line 321;
+    tick "pure (ValueScalar' (f x))" on line 325;
+  }
+  inside "astToScalar" {
+    tick "pure $ Right $ ConstFloat x" on line 205;
+    tick "pure $ Right ConstNull" on line 209;
+    tick "empty" on line 211;
+  }
+  inside "astToVariableValue" {
+    tick "panic (\"Non-scalar passed to convertScalar, bug in astToValue': \" <> show x)" on line 345;
+  }
+  tick function "constScalarToAST" on line 187;
+  tick function "variableToAST" on line 198;
+  tick function "variableValueToAST" on line 353;
+  tick function "valueToAST" on line 349;
+  tick function "toObject" on line 148;
+  inside "genObject" {
+    tick "(genValue n)" on line 277;
+  }
+  tick function "genValue" on line 101;
+  tick "ObjectField' name value" on line 285;
+  tick "ValueScalar' ConstNull" on line 144;
+  tick "ValueList' x" on line 138;
+  tick function "compare" on line 216;
+  tick function "compare" on line 161;
+  tick function "compare" on line 258;
+  tick function "showsPrec" on line 258;
+  tick function "fmap" on line 258;
+  tick function "compare" on line 77;
+  tick function "fmap" on line 77;
+  tick function "==" on line 226;
+  tick function "compare" on line 226;
+  tick function "showsPrec" on line 226;
+  tick function "fmap" on line 226;
+  tick function "==" on line 279;
+  tick function "compare" on line 279;
+  tick function "showsPrec" on line 279;
+  tick function "fmap" on line 279;
+  tick function "arbitrary" on line 288;
+  tick function "foldMap" on line 261;
+  tick function "arbitrary" on line 246;
+  inside "traverse" {
+    tick "List'" on line 232;
+  }
+  tick function "foldMap" on line 229;
+  tick function "arbitrary" on line 97;
+  inside "traverse" {
+    tick "ValueList'" on line 86;
+  }
+  inside "foldMap" {
+    tick "foldMap f values" on line 81;
+    tick "foldMap f obj" on line 82;
+  }
+  tick function "arbitrary" on line 177;
+  inside "toJSON" {
+    tick "toJSON x" on line 165;
+  }
+}
+
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Validation" {
+  inside "resolveVariables" {
+    tick "throwE (UndefinedVariable variable)" on line 725;
+  }
+  inside "validateValues" {
+    tick "throwE (InvalidValue astValue)" on line 716;
+  }
+  inside "getVariables" {
+    tick "(const Set.empty)" on line 707;
+  }
+  inside "validateDefaultValue" {
+    tick "throwE $ InvalidValue defaultValue" on line 695;
+    tick "throwE $ InvalidDefaultValue defaultValue" on line 699;
+    tick "constant" on line 700;
+  }
+  inside "validateVariableTypeBuiltin" {
+    tick "(BuiltinInputType builtin)" on line 689;
+  }
+  inside "validateVariableTypeDefinition" {
+    tick "throwE (VariableTypeIsNotInputType var $ getName typeDef)" on line 680;
+    tick "(DefinedInputType value)" on line 681;
+  }
+  inside "validateTypeAssertion" {
+    tick "var" on line 672;
+  }
+  inside "validateVariableDefinitions" {
+    tick "DuplicateVariableDefinition" on line 657;
+  }
+  tick function "emptyVariableDefinitions" on line 650;
+  inside "validateArguments" {
+    tick "DuplicateArgument" on line 627;
+  }
+  inside "validateDirectives" {
+    tick function "validateDirective" on line 750;
+    tick "validateDirective" on line 747;
+    tick "DuplicateDirective" on line 748;
+  }
+  inside "validateSelection" {
+    tick "SelectionFragmentSpread <$> (UnresolvedFragmentSpread name <$> validateDirectives directives)" on line 506;
+  }
+  inside "validateFragmentDefinitions" {
+    tick "FragmentDefinition name" on line 566;
+    tick "schema" on line 569;
+    tick "DuplicateFragmentDefinition" on line 563;
+    tick "(name, value)" on line 563;
+  }
+  inside "traverseFragmentSpreads" {
+    tick "f" on line 494;
+    tick "directives" on line 488;
+    tick "SelectionFragmentSpread <$> f x" on line 490;
+    tick "directives" on line 492;
+  }
+  inside "resolveSelection" {
+    tick function "resolveFragmentSpread" on line 524;
+    tick "resolveFragmentSpread" on line 522;
+  }
+  inside "resolveFragmentDefinitions" {
+    tick function "resolveFragment'" on line 604;
+    tick function "resolveSpread" on line 607;
+    tick function "resolveFragment" on line 602;
+    tick "fst" on line 598;
+    tick "foldMap snd mapWithVisited" on line 598;
+    tick "resolveFragment" on line 592;
+  }
+  inside "mergeFields" {
+    tick function "mergeSelectionSets" on line 296;
+    tick "throwE (MismatchedNames (name field1) (name field2))" on line 275;
+    tick "throwE (MismatchedArguments (name field1))" on line 276;
+    tick at position 283:29-288:27;
+    tick "throwE (IncompatibleFields (name field1))" on line 289;
+  }
+  inside "groupByResponseKey" {
+    tick "mergeFields" on line 363;
+    tick "flattenSelectionSet (typeConds <> Set.singleton typeCond) ss" on line 351;
+    tick "flattenSelectionSet typeConds ss" on line 355;
+  }
+  inside "validateSelectionSet" {
+    tick "fragments" on line 235;
+  }
+  inside "validateOperation" {
+    tick "vars" on line 194;
+    tick at position 202:61-210:35;
+  }
+  inside "validateOperations" {
+    tick "schema" on line 187;
+    tick "fragments" on line 187;
+  }
+  inside "validate" {
+    tick "pure" on line 174;
+    tick "used" on line 174;
+    tick "(throwE (UnusedFragments unused))" on line 175;
+    tick "Right (maybeName, (Mutation, node))" on line 170;
+    tick "frags" on line 149;
+    tick "mempty" on line 149;
+    tick "(visitedFrags <> usedFrags)" on line 150;
+    tick "frags" on line 154;
+    tick "mempty" on line 154;
+    tick "(visitedFrags <> usedFrags)" on line 155;
+    tick "emptyVariableDefinitions" on line 157;
+    tick "emptyVariableDefinitions" on line 158;
+  }
+  inside "getSelectionSet" {
+    tick "ss" on line 131;
+  }
+  tick "variableType" on line 637;
+  tick "defaultValue" on line 638;
+  tick function "compare" on line 621;
+  tick function "showsPrec" on line 621;
+  tick function "fmap" on line 621;
+  tick function "fold" on line 621;
+  tick function "==" on line 257;
+  tick function "compare" on line 257;
+  tick function "showsPrec" on line 257;
+  tick function "fmap" on line 257;
+  tick function "==" on line 245;
+  tick function "compare" on line 245;
+  tick function "showsPrec" on line 245;
+  tick function "fmap" on line 245;
+  tick function "==" on line 241;
+  tick function "compare" on line 241;
+  tick function "showsPrec" on line 241;
+  tick function "==" on line 639;
+  tick function "compare" on line 639;
+  tick function "showsPrec" on line 639;
+  tick function "==" on line 733;
+  tick function "compare" on line 733;
+  tick function "showsPrec" on line 733;
+  tick function "fmap" on line 733;
+  tick function "==" on line 434;
+  tick function "showsPrec" on line 434;
+  tick function "fmap" on line 434;
+  tick function "==" on line 399;
+  tick function "showsPrec" on line 399;
+  tick function "==" on line 393;
+  tick function "showsPrec" on line 393;
+  tick function "fmap" on line 393;
+  tick function "foldMap" on line 393;
+  tick function "traverse" on line 393;
+  tick function "==" on line 460;
+  tick function "showsPrec" on line 460;
+  tick function "==" on line 539;
+  tick function "showsPrec" on line 539;
+  tick function "==" on line 445;
+  tick function "showsPrec" on line 445;
+  tick function "==" on line 114;
+  tick function "showsPrec" on line 114;
+  tick function "==" on line 109;
+  tick function "showsPrec" on line 109;
+  tick function "showsPrec" on line 819;
+  tick function "==" on line 893;
+  tick function "showsPrec" on line 893;
+  inside "<*>" {
+    tick "Validator (Left (e1 <> e2))" on line 926;
+    tick "Validator (Left e)" on line 928;
+  }
+  inside "formatError" {
+    tick "\"More than one operation named '\" <> show maybeName <> \"'\"" on line 822;
+    tick "\"More than one argument named '\" <> show name <> \"'\"" on line 826;
+    tick "\"More than one fragment named '\" <> show name <> \"'\"" on line 827;
+    tick "\"No fragment named '\" <> show name <> \"'\"" on line 828;
+    tick "\"More than one directive named '\" <> show name <> \"'\"" on line 829;
+    tick "\"More than one variable defined with name '\" <> show name <> \"'\"" on line 830;
+    tick "\"Fragment '\" <> show name <> \"' contains a fragment spread that refers back to itself.\"" on line 831;
+    tick "\"Fragments defined but not used: \" <> show names" on line 832;
+    tick "\"Variables defined but not used: \" <> show names" on line 833;
+    tick "\"No definition for variable: \" <> show variable" on line 834;
+    tick "\"Invalid value (maybe an object has duplicate field names?): \" <> show value" on line 835;
+    tick "\"Invalid default value, contains variables: \" <> show value" on line 836;
+    tick "\"Two different names given for same response key: \" <> show name1 <> \", \" <> show name2" on line 837;
+    tick "\"Two different sets of arguments given for same response key: \" <> show name" on line 838;
+    tick "\"Field \" <> show name <> \" has a leaf in one place and a non-leaf in another.\"" on line 839;
+    tick "\"Type condition \" <> show name <> \" not found in schema.\"" on line 840;
+    tick "\"Type named \" <> show name <> \" for variable \" <> show var <> \" is not in the schema.\"" on line 841;
+    tick "\"Type named \" <> show name <> \" for variable \" <> show var <> \" is not an input type.\"" on line 842;
+  }
+  inside "traverse" {
+    tick "vars" on line 125;
+    tick "f" on line 125;
+    tick "Mutation vars <$> traverse f directives <*> traverse f selectionSet" on line 126;
+  }
+  inside "foldMap" {
+    tick "f" on line 121;
+    tick "foldMap f directives `mappend` foldMap f selectionSet" on line 122;
+  }
+  tick function "fmap" on line 117;
+  tick function "traverse" on line 454;
+  tick function "foldMap" on line 451;
+  tick function "fmap" on line 448;
+  tick function "traverse" on line 552;
+  tick function "foldMap" on line 548;
+  tick function "fmap" on line 544;
+  tick function "traverse" on line 471;
+  tick function "foldMap" on line 467;
+  tick function "fmap" on line 463;
+  tick function "traverse" on line 425;
+  tick function "foldMap" on line 418;
+  tick function "fmap" on line 414;
+  tick function "getName" on line 411;
+  tick function "traverse" on line 440;
+  tick function "foldMap" on line 437;
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Syntax.Tokens" {
+  inside "whiteSpace" {
+    tick "manyTill anyChar endOfLine *> whiteSpace" on line 26;
+  }
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Syntax.Parser" {
+  tick function "enumValueDefinition" on line 310;
+  tick function "enumValueDefinitions" on line 307;
+  tick function "enumTypeDefinition" on line 301;
+  tick function "scalarTypeDefinition" on line 296;
+  tick function "interfaces" on line 264;
+  tick function "unionMembers" on line 293;
+  tick function "unionTypeDefinition" on line 286;
+  inside "nonNullType" {
+    tick "AST.NonNullTypeList" on line 240;
+    tick "tok \"!\"" on line 240;
+    tick "\"nonNullType error!\"" on line 241;
+  }
+  inside "type_" {
+    tick "\"type_ error!\"" on line 230;
+  }
+  inside "stringValue" {
+    tick "fail err" on line 180;
+  }
+  inside "objectValue" {
+    tick "\"objectField\"" on line 208;
+  }
+  inside "value" {
+    tick "pure (AST.ValueInt (floor r))" on line 169;
+    tick "\"variable\"" on line 152;
+    tick "\"number\"" on line 153;
+    tick "\"booleanValue\"" on line 155;
+    tick "\"stringValue\"" on line 156;
+    tick "\"name\"" on line 158;
+    tick "\"listValue\"" on line 159;
+    tick "\"objectValue\"" on line 160;
+    tick "\"value error!\"" on line 161;
+  }
+  tick function "inputValueDefinition" on line 322;
+  tick function "argumentsDefinition" on line 277;
+  tick function "fieldDefinition" on line 270;
+  tick function "fieldDefinitions" on line 267;
+  tick function "objectTypeDefinition" on line 257;
+  tick function "typeExtensionDefinition" on line 329;
+  tick function "interfaceTypeDefinition" on line 280;
+  tick function "inputValueDefinitions" on line 319;
+  tick function "inputObjectTypeDefinition" on line 313;
+  tick function "typeDefinition" on line 246;
+  tick function "schemaDocument" on line 54;
+  inside "selection" {
+    tick "\"selection error!\"" on line 99;
+  }
+  inside "operationDefinition" {
+    tick "\"operationDefinition error!\"" on line 67;
+  }
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Syntax.Encoder" {
+  inside "spaces" {
+    tick "\"\\SP\"" on line 245;
+  }
+  tick function "spaced" on line 230;
+  tick function "enumValueDefinition" on line 210;
+  tick function "enumTypeDefinition" on line 205;
+  tick function "scalarTypeDefinition" on line 202;
+  tick function "namedType" on line 151;
+  tick function "interfaces" on line 176;
+  tick function "unionMembers" on line 199;
+  tick function "unionTypeDefinition" on line 195;
+  tick function "nonNullType" on line 157;
+  tick function "listType" on line 154;
+  inside "type_" {
+    tick "listType x" on line 147;
+    tick "nonNullType x" on line 148;
+  }
+  inside "fragmentSpread" {
+    tick "directives" on line 86;
+  }
+  inside "inlineFragment" {
+    tick at position 94:3-95:36;
+  }
+  inside "fragmentDefinition" {
+    tick "directives" on line 100;
+  }
+  tick function "inputValueDefinition" on line 220;
+  tick function "argumentsDefinition" on line 188;
+  tick function "fieldDefinition" on line 182;
+  tick function "fieldDefinitions" on line 179;
+  tick function "objectTypeDefinition" on line 170;
+  tick function "typeExtensionDefinition" on line 224;
+  tick function "interfaceTypeDefinition" on line 191;
+  tick function "inputValueDefinitions" on line 217;
+  tick function "inputObjectTypeDefinition" on line 213;
+  tick function "typeDefinition" on line 161;
+  inside "node" {
+    tick "directives" on line 40;
+    tick at position 43:6-45:20;
+  }
+  inside "operationDefinition" {
+    tick "selectionSet ss" on line 34;
+  }
+  tick function "schemaDocument" on line 29;
+}
+
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Syntax.AST" {
+  tick "getDefinitions" on line 70;
+  tick "position" on line 71;
+  tick function "showsPrec" on line 182;
+  tick function "showsPrec" on line 197;
+  tick function "showsPrec" on line 146;
+  tick function "showsPrec" on line 192;
+  tick function "showsPrec" on line 187;
+  tick function "showsPrec" on line 117;
+  tick function "==" on line 206;
+  tick function "showsPrec" on line 206;
+  tick function "showsPrec" on line 122;
+  tick function "compare" on line 222;
+  tick function "showsPrec" on line 222;
+  tick function "==" on line 126;
+  tick function "showsPrec" on line 126;
+  tick function "showsPrec" on line 110;
+  tick function "showsPrec" on line 113;
+  tick function "showsPrec" on line 130;
+  tick function "compare" on line 228;
+  tick function "showsPrec" on line 228;
+  tick function "compare" on line 224;
+  tick function "showsPrec" on line 224;
+  tick function "compare" on line 213;
+  tick function "showsPrec" on line 213;
+  tick function "showsPrec" on line 98;
+  tick function "showsPrec" on line 95;
+  tick function "showsPrec" on line 92;
+  tick function "showsPrec" on line 81;
+  tick function "showsPrec" on line 72;
+  tick function "==" on line 252;
+  tick function "showsPrec" on line 252;
+  tick function "==" on line 247;
+  tick function "showsPrec" on line 247;
+  tick function "==" on line 242;
+  tick function "showsPrec" on line 242;
+  tick function "==" on line 255;
+  tick function "showsPrec" on line 255;
+  tick function "==" on line 258;
+  tick function "showsPrec" on line 258;
+  tick function "==" on line 261;
+  tick function "showsPrec" on line 261;
+  tick function "==" on line 267;
+  tick function "showsPrec" on line 267;
+  tick function "==" on line 264;
+  tick function "showsPrec" on line 264;
+  tick function "==" on line 270;
+  tick function "showsPrec" on line 270;
+  tick function "==" on line 273;
+  tick function "showsPrec" on line 273;
+  tick function "==" on line 239;
+  tick function "showsPrec" on line 239;
+  tick function "==" on line 86;
+  tick function "showsPrec" on line 86;
+  inside "setPos" {
+    tick "p" on line 152;
+    tick "p" on line 153;
+    tick "p" on line 154;
+    tick "p" on line 155;
+    tick "p" on line 156;
+    tick "p" on line 157;
+    tick "p" on line 158;
+    tick "p" on line 159;
+    tick "p" on line 160;
+  }
+}
+
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Schema" {
+  inside "astAnnotationToSchemaAnnotation" {
+    tick "schemaTypeName" on line 365;
+  }
+  inside "doesFragmentTypeApply" {
+    tick function "branchOf" on line 332;
+    tick "objectType `branchOf` union" on line 328;
+    tick "False" on line 329;
+  }
+  inside "getAnnotatedType" {
+    tick "getAnnotatedType t" on line 99;
+  }
+  tick function "showsPrec" on line 108;
+  tick function "compare" on line 104;
+  tick function "showsPrec" on line 104;
+  tick function "showsPrec" on line 92;
+  tick function "compare" on line 205;
+  tick function "showsPrec" on line 205;
+  tick function "showsPrec" on line 227;
+  tick function "showsPrec" on line 246;
+  tick function "showsPrec" on line 237;
+  tick function "compare" on line 258;
+  tick function "showsPrec" on line 258;
+  tick function "showsPrec" on line 269;
+  tick function "showsPrec" on line 285;
+  tick function "compare" on line 252;
+  tick function "showsPrec" on line 252;
+  tick function "showsPrec" on line 176;
+  tick function "showsPrec" on line 165;
+  tick function "showsPrec" on line 110;
+  tick function "showsPrec" on line 127;
+  tick function "==" on line 264;
+  tick function "compare" on line 264;
+  tick function "showsPrec" on line 264;
+  tick function "showsPrec" on line 151;
+  tick function "showsPrec" on line 185;
+  tick function "compare" on line 194;
+  tick function "showsPrec" on line 194;
+  tick function "==" on line 58;
+  tick function "compare" on line 58;
+  tick function "showsPrec" on line 58;
+  inside "getDefinedTypes" {
+    tick "typeDefinition" on line 295;
+    tick "getDefinedTypes (TypeDefinitionScalar typeDefinition)" on line 296;
+  }
+  inside "getDefinedTypes" {
+    tick "enum" on line 243;
+  }
+  tick function "getDefinedTypes" on line 211;
+  inside "getDefinedTypes" {
+    tick "(TypeDefinitionUnion defn)" on line 201;
+  }
+  inside "getDefinedTypes" {
+    tick "getDefinedTypes x" on line 142;
+    tick "getDefinedTypes x" on line 144;
+    tick "panic \"TODO: we should remove the 'extend' behaviour entirely\"" on line 148;
+  }
+  tick function "getName" on line 267;
+  tick function "getName" on line 197;
+  tick function "getName" on line 188;
+  tick function "getName" on line 168;
+  tick function "getName" on line 154;
+  tick function "getName" on line 130;
+  tick function "getName" on line 117;
+  tick function "getName" on line 288;
+  tick function "getName" on line 272;
+  tick function "getName" on line 261;
+  tick function "getName" on line 255;
+  tick function "getName" on line 249;
+  tick function "getName" on line 208;
+  tick function "getName" on line 102;
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Resolver" {
+  inside "symbolText" {
+    tick "Proxy" on line 470;
+  }
+  inside "resolveField" {
+    tick "pure (Result [SchemaError err] (Just GValue.ValueNull))" on line 220;
+  }
+  tick function "throwE" on line 137;
+  tick "_label" on line 429;
+  tick "_value" on line 429;
+  tick function "showsPrec" on line 84;
+  tick function "==" on line 84;
+  tick function "showsPrec" on line 129;
+  tick function "==" on line 129;
+  inside "resolve" {
+    tick "throwE MissingSelectionSet" on line 464;
+  }
+  tick function "runUnion" on line 455;
+  inside "resolve" {
+    tick "throwE MissingSelectionSet" on line 367;
+    tick "SchemaError" on line 382;
+    tick "ValidationError" on line 393;
+    tick "throwE err" on line 370;
+  }
+  inside "runFields" {
+    tick "Nothing" on line 358;
+  }
+  inside "runFields" {
+    tick function "nextHandler" on line 347;
+    tick "nextHandler" on line 345;
+  }
+  inside "buildFieldResolver" {
+    tick "SchemaError" on line 284;
+    tick "valueMissing @t argName" on line 286;
+    tick "(InvalidValue argName)" on line 287;
+  }
+  inside "buildFieldResolver" {
+    tick "SchemaError" on line 268;
+    tick "(InvalidValue argName)" on line 272;
+  }
+  inside "resolve" {
+    tick "(pure . ok) GValue.ValueNull" on line 193;
+  }
+  inside "resolve" {
+    tick "throwE (SubSelectionOnLeaf ss)" on line 185;
+  }
+  inside "resolve" {
+    tick "throwE (SubSelectionOnLeaf ss)" on line 173;
+  }
+  inside "resolve" {
+    tick "throwE (SubSelectionOnLeaf ss)" on line 168;
+  }
+  tick function "resolve" on line 162;
+  inside "resolve" {
+    tick "throwE (SubSelectionOnLeaf ss)" on line 158;
+  }
+  inside "formatError" {
+    tick "\"Schema error: \" <> formatError e" on line 88;
+    tick "\"Validation errors: \" <> Text.intercalate \", \" (map formatError (NonEmpty.toList errs))" on line 96;
+    tick "\"Tried to get values within leaf field: \" <> show ss" on line 98;
+    tick "\"Tried to treat object as if it were leaf field.\"" on line 100;
+  }
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Output" {
+  inside "unsafeMakeObject" {
+    tick "panic $ \"Object has duplicate keys: \" <> show fields" on line 69;
+  }
+  tick function "==" on line 98;
+  tick function "compare" on line 98;
+  tick function "showsPrec" on line 98;
+  tick function "compare" on line 86;
+  tick function "showsPrec" on line 86;
+  tick function "==" on line 61;
+  tick function "compare" on line 61;
+  tick function "showsPrec" on line 61;
+  tick function "formatError" on line 122;
+  tick function "toJSON" on line 82;
+  inside "toValue" {
+    tick "unsafeMakeObject [(\"errors\", toValue e)]" on line 74;
+  }
+  inside "toValue" {
+    tick at position 90:39-92:56;
+  }
+  tick function "toValue" on line 103;
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.OrderedMap" {
+  inside "unionWithM" {
+    tick "(liftMM f)" on line 160;
+  }
+  tick function "compare" on line 73;
+  tick function "showsPrec" on line 73;
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Name" {
+  inside "makeName" {
+    tick "(const (NameError name))" on line 63;
+  }
+  inside "nameFromSymbol" {
+    tick "Proxy" on line 78;
+  }
+  inside "unsafeMakeName" {
+    tick "panic (show e)" on line 50;
+  }
+  tick function "==" on line 74;
+  tick function "showsPrec" on line 74;
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Execution" {
+  inside "replaceVariable" {
+    tick "ValueList' . List' <$> traverse (replaceVariable vars) xs" on line 77;
+    tick "vars" on line 78;
+  }
+  inside "getOperation" {
+    tick "(NoSuchOperation name)" on line 58;
+    tick "throwError NoAnonymousOperation" on line 62;
+    tick "throwError (NoSuchOperation name)" on line 63;
+  }
+  tick function "==" on line 96;
+  tick function "formatError" on line 99;
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.Arbitrary" {
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.API.Enum" {
+  tick function "nonUnaryConstructorError" on line 106;
+  tick function "invalidEnumName" on line 27;
+  tick function "genericEnumValues" on line 101;
+  tick function "genericEnumFromValue" on line 102;
+  tick function "genericEnumToValue" on line 103;
+  tick function "genericEnumValues" on line 93;
+  tick function "genericEnumFromValue" on line 94;
+  tick function "genericEnumToValue" on line 95;
+  inside "genericEnumFromValue" {
+    tick "(\"Not a valid choice for enum: \" <> show vname)" on line 73;
+    tick "invalidEnumName x" on line 82;
+  }
+  inside "genericEnumFromValue" {
+    tick "R1 <$> x" on line 60;
+    tick "L1" on line 61;
+    tick "panic \"Can't have two successful branches in Haskell\"" on line 62;
+  }
+  inside "genericEnumToValue" {
+    tick "gv" on line 65;
+  }
+}
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL.Internal.API" {
+  inside "dropNonNull" {
+    tick "Schema.TypeList t" on line 255;
+    tick "x" on line 256;
+    tick "x" on line 257;
+  }
+  inside "nameFromSymbol" {
+    tick "NameError" on line 105;
+  }
+  tick function "==" on line 97;
+  tick function "showsPrec" on line 97;
+  inside "genericGetInputObjectFieldDefinitions" {
+    tick function "l" on line 394;
+    tick "(l :| [])" on line 395;
+  }
+  inside "genericGetInputObjectFieldDefinitions" {
+    tick "(l S.<> r)" on line 385;
+  }
+  inside "genericGetAnnotatedInputType" {
+    tick "Schema.InputObjectTypeDefinition name" on line 375;
+  }
+  inside "getAnnotatedInputType" {
+    tick "NameError" on line 351;
+  }
+  tick function "getAnnotatedInputType" on line 342;
+  tick function "getAnnotatedInputType" on line 339;
+  inside "getAnnotatedInputType" {
+    tick "Schema.GString" on line 336;
+  }
+  inside "getAnnotatedInputType" {
+    tick "Schema.GInt" on line 330;
+  }
+  tick function "getAnnotatedType" on line 310;
+  inside "getAnnotatedType" {
+    tick "NameError" on line 298;
+  }
+  tick function "getAnnotatedType" on line 289;
+  tick function "getAnnotatedType" on line 286;
+  inside "getUnionTypeObjectTypeDefinitions" {
+    tick "Left err" on line 176;
+  }
+  inside "getFieldDefinitions" {
+    tick "Left err" on line 159;
+  }
+  tick function "getFieldDefinition" on line 205;
+  tick function "defaultFor" on line 133;
+  tick function "formatError" on line 100;
+}
+
+module "graphql-api-0.3.0-D3fLjHM6zzlFEnk1Mq1QvI:GraphQL" {
+  inside "parseQuery" {
+    tick "toS" on line 146;
+  }
+  inside "compileQuery" {
+    tick "ParseError" on line 141;
+    tick "ValidationError" on line 142;
+  }
+  inside "makeSchema" {
+    tick "SchemaError" on line 111;
+  }
+  inside "executeQuery" {
+    tick "ExecutionFailure (singleError (NonObjectResult v))" on line 107;
+  }
+  inside "interpretQuery" {
+    tick "pure (PreExecutionFailure (toError err :| []))" on line 125;
+    tick "variables" on line 126;
+  }
+  inside "interpretAnonymousQuery" {
+    tick "mempty" on line 136;
+  }
+  tick function "==" on line 72;
+  tick function "showsPrec" on line 72;
+  inside "formatError" {
+    tick "\"Couldn't parse query document: \" <> e" on line 76;
+    tick "\"Validation errors:\\n\" <> mconcat [\"  \" <> formatError e <> \"\\n\" | e <- NonEmpty.toList es]" on line 78;
+    tick "\"Schema error: \" <> formatError e" on line 82;
+    tick "\"Query returned a value that is not an object: \" <> show v" on line 84;
+  }
+}
+

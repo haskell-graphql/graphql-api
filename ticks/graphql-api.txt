@@ -1,5 +1,19 @@
 module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Syntax.AST" {
   tick "getDefinitions" [future];
   tick "position" [future];
-  tick "setPos" [future];
+  inside "setPos" {
+    tick "p" [future];
+  }
+}
+
+module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Value" {
+  inside "constScalarToAST" {
+    tick "Nothing";
+  }
+  inside "variableToAST" {
+    tick "Nothing";
+  }
+  inside "valueToAST'" {
+    tick "Nothing";
+  }
 }

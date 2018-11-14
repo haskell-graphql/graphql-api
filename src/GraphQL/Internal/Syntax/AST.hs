@@ -166,7 +166,7 @@ instance Position ObjectValue where
   setPos f (ObjectValue x) = ObjectValue (map (setPos f) x)
 instance Position ObjectField where
   setPos f (ObjectField x v) = ObjectField x (setPos f v)
-  
+
 instance Arbitrary Value where
   arbitrary = oneof $ map (<*> pure Nothing) [ ValueVariable <$> arbitrary
                     , ValueInt <$> arbitrary
