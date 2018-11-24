@@ -109,6 +109,8 @@ data Selection = SelectionField Field PositionInfo
                | SelectionInlineFragment InlineFragment PositionInfo
                  deriving (Eq,Show)
 
+-- Field, FragmentSpread and InlineFragment do not need PositionInfo
+-- because their Position is equal to its Selection parent
 data Field = Field (Maybe Alias) Name [Argument] [Directive] SelectionSet
              deriving (Eq,Show)
 
