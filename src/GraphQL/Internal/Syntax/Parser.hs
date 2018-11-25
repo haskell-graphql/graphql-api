@@ -51,7 +51,7 @@ queryDocument = whiteSpace *> positioned ( AST.QueryDocument <$> many1 definitio
 
 -- | Parser for a schema document.
 schemaDocument :: Parser AST.SchemaDocument
-schemaDocument = whiteSpace *> (AST.SchemaDocument <$> many1 typeDefinition) <?> "type document error"
+schemaDocument = whiteSpace *> positioned ((AST.SchemaDocument <$> many1 typeDefinition) <?> "type document error")
 
 definition :: Parser AST.Definition
 definition = positioned content

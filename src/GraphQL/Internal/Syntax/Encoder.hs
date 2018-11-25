@@ -26,7 +26,7 @@ definition (AST.DefinitionOperation x _) = operationDefinition x
 definition (AST.DefinitionFragment  x _) = fragmentDefinition x
 
 schemaDocument :: AST.SchemaDocument -> Text
-schemaDocument (AST.SchemaDocument defs) = (`snoc` '\n') . mconcat $ typeDefinition <$> defs
+schemaDocument (AST.SchemaDocument defs _) = (`snoc` '\n') . mconcat $ typeDefinition <$> defs
 
 operationDefinition :: AST.OperationDefinition -> Text
 operationDefinition (AST.Query    n _) = "query "    <> node n

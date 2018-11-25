@@ -83,7 +83,7 @@ data Definition = DefinitionOperation OperationDefinition PositionInfo
 -- | A 'SchemaDocument' is a document that defines a GraphQL schema.
 --
 -- https://facebook.github.io/graphql/#sec-Type-System
-newtype SchemaDocument = SchemaDocument [TypeDefinition] deriving (Eq, Show)
+data SchemaDocument = SchemaDocument [TypeDefinition] PositionInfo deriving (Eq, Show)
 
 data OperationDefinition
   = Query Node PositionInfo
