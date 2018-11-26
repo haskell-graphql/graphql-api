@@ -1,9 +1,17 @@
 module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Syntax.AST" {
-  tick "getDefinitions" [future];
-  tick "position" [future];
+  tick "getDefinitions" ;
+  tick "position" ;
   inside "setPos" {
-    tick "p" [future];
+    tick "p" ;
   }
+}
+
+module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Syntax.Encoder" {
+  tick function "schemaDocument" [future];
+}
+
+module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Syntax.Parser" {
+  tick function "schemaDocument" [future];
 }
 
 module "GRAPHQL_API_MIX_PATH/GraphQL.Internal.Value" {
