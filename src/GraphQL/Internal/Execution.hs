@@ -18,6 +18,7 @@ module GraphQL.Internal.Execution
 
 import Protolude
 
+import qualified Data.Aeson as Aeson
 import qualified Data.Map as Map
 import GraphQL.Value
   ( Name
@@ -109,3 +110,7 @@ instance GraphQLError ExecutionError where
 -- GraphQL allows the values of variables to be specified, but doesn't provide
 -- a way for doing so in the language.
 type VariableValues = Map Variable Value
+
+-- | The raw (textual and/or aeson based) version of the 'Request' datatype.
+-- See <http://graphql.org/learn/serving-over-http/#post-request>.
+data RawPostRequest = RawPostRequest Text (Maybe Text) Aeson.Object deriving (Eq, Show)
