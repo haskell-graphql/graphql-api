@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6192b08a549b4ef2c1e68125b1ed4a870690aa6e26e4276c70bcee2f12b74f13
+-- hash: e921bbdc9931b5b0b16603d36a3252522602c736862259ef71abdecf046541e2
 
 name:           graphql-api
 version:        0.3.0
@@ -125,7 +125,7 @@ test-suite graphql-api-doctests
 
 test-suite graphql-api-tests
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Main.hs
   hs-source-dirs:
       tests
   default-extensions: NoImplicitPrelude OverloadedStrings RecordWildCards TypeApplications
@@ -151,6 +151,7 @@ test-suite graphql-api-tests
       OrderedMapSpec
       ResolverSpec
       SchemaSpec
+      Spec
       ValidationSpec
       ValueSpec
       Paths_graphql_api

@@ -62,7 +62,7 @@ executables:
 
 tests:
   graphql-api-tests:
-    main: Spec.hs
+    main: Main.hs
     source-dirs: tests
     dependencies:
       - aeson
