@@ -108,11 +108,8 @@ data QueryDocument value
   deriving (Eq, Show)
 
 
--- | The type of an operation
 data OperationType
-  -- | Represents a Mutation operation
   = Mutation
-  -- | Represents a Query operation
   | Query
   deriving (Eq, Show)
 
