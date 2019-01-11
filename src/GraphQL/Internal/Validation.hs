@@ -188,9 +188,6 @@ validateOperations schema fragments ops = do
                     <*> lift (validateDirectives directives)
                     <*> validateSelectionSet schema fragments ss
 
--- TODO: Either make operation type (Query, Mutation) a parameter of an
--- Operation constructor or give all the fields accessors. This duplication is
--- driving me batty.
 validateOperation :: Operation AST.Value -> Validation (Operation VariableValue)
 validateOperation (Operation operationType vars directives selectionSet) = do
   validValues <- Operation operationType vars <$> validateValues directives <*> validateValues selectionSet
