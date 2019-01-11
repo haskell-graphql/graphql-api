@@ -2,14 +2,13 @@
 {-# LANGUAGE DataKinds #-}
 
 -- | Tests for query validation.
-module ValidationTests (tests) where
+module ValidationSpec (spec) where
 
 import Protolude
 
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck ((===))
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Hspec
 import qualified Data.Set as Set
 
 import GraphQL.Internal.Name (Name)
@@ -36,8 +35,8 @@ dog = "dog"
 schema :: Schema
 schema = emptySchema
 
-tests :: IO TestTree
-tests = testSpec "Validation" $ do
+spec :: Spec
+spec = describe "Validation" $ do
   describe "getErrors" $ do
     it "Treats simple queries as valid" $ do
       let doc = AST.QueryDocument

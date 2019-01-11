@@ -1,7 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 
 -- | Tests for AST, including parser and encoder.
-module ASTTests (tests) where
+module ASTSpec (spec) where
 
 import Protolude
 
@@ -9,8 +9,7 @@ import Data.Attoparsec.Text (parseOnly)
 import Text.RawString.QQ (r)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (arbitrary, forAll, resize)
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Hspec
 
 import GraphQL.Value (String(..))
 import GraphQL.Internal.Name (Name)
@@ -27,8 +26,8 @@ dog = "dog"
 someName :: Name
 someName = "name"
 
-tests :: IO TestTree
-tests = testSpec "AST" $ do
+spec :: Spec
+spec = describe "AST" $ do
   describe "Parser and encoder" $ do
     it "roundtrips on minified documents" $ do
       let actual = Encoder.queryDocument <$> parseOnly Parser.queryDocument kitchenSink

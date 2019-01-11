@@ -1,12 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-module ResolverTests (tests) where
+module ResolverSpec (spec) where
 
 import Protolude hiding (Enum)
 
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Hspec
 
 import Data.Aeson (encode)
 import GraphQL
@@ -74,8 +73,8 @@ enumHandler :: Handler IO EnumQuery
 enumHandler = pure $ pure NormalFile
 -- /Enum test
 
-tests :: IO TestTree
-tests = testSpec "TypeAPI" $ do
+spec :: Spec
+spec = describe "TypeAPI" $ do
   describe "tTest" $ do
     it "works in a simple case" $ do
       Right (Success object) <- runExceptT (interpretAnonymousQuery @T tHandler "{ t(x: 12) }")

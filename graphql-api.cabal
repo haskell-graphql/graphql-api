@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6db006b020fe198ac64b8a50f8335017251389b7c34dfc553675e38eb001a428
+-- hash: 6192b08a549b4ef2c1e68125b1ed4a870690aa6e26e4276c70bcee2f12b74f13
 
 name:           graphql-api
 version:        0.3.0
@@ -142,19 +142,17 @@ test-suite graphql-api-tests
     , hspec
     , protolude >=0.2.1
     , raw-strings-qq
-    , tasty
-    , tasty-hspec
     , transformers
   other-modules:
-      ASTTests
-      EndToEndTests
+      ASTSpec
+      EndToEndSpec
       EnumTests
       ExampleSchema
-      OrderedMapTests
-      ResolverTests
-      SchemaTests
-      ValidationTests
-      ValueTests
+      OrderedMapSpec
+      ResolverSpec
+      SchemaSpec
+      ValidationSpec
+      ValueSpec
       Paths_graphql_api
   default-language: Haskell2010
 
