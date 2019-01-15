@@ -6,7 +6,7 @@
 --
 -- These tests function both as examples of how to use the API, as well as
 -- sanity checks on our reasoning.
-module EndToEndTests (tests) where
+module EndToEndSpec (spec) where
 
 import Protolude
 
@@ -17,8 +17,7 @@ import GraphQL.API (Object, Field, List, Argument, (:>), Defaultable(..), HasAnn
 import GraphQL.Internal.Syntax.AST (Variable(..))
 import GraphQL.Resolver ((:<>)(..), Handler, unionValue)
 import GraphQL.Value (ToValue(..), FromValue(..), makeName)
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Hspec
 import Text.RawString.QQ (r)
 
 import ExampleSchema
@@ -135,8 +134,8 @@ jml :: ServerHuman
 jml = ServerHuman "jml"
 
 
-tests :: IO TestTree
-tests = testSpec "End-to-end tests" $ do
+spec :: Spec
+spec = describe "End-to-end tests" $ do
   describe "interpretAnonymousQuery" $ do
     it "Handles the simplest possible valid query" $ do
       let query = [r|{

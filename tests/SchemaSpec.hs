@@ -1,11 +1,10 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
-module SchemaTests (tests) where
+module SchemaSpec (spec) where
 
 import Protolude hiding (Down, Enum)
 
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Hspec
 
 import GraphQL.API
   ( Field
@@ -45,8 +44,8 @@ import GraphQL.Internal.Schema
   )
 import ExampleSchema
 
-tests :: IO TestTree
-tests = testSpec "Type" $ do
+spec :: Spec
+spec = describe "Type" $ do
   describe "Field" $
     it "encodes correctly" $ do
     getFieldDefinition @(Field "hello" Int) `shouldBe` Right (FieldDefinition "hello" [] (TypeNonNull (NonNullTypeNamed (BuiltinType GInt))))
