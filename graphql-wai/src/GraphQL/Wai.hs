@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | Basic WAI handlers for graphql-api
 module GraphQL.Wai
@@ -15,8 +16,8 @@ import Network.HTTP.Types.Header (hContentType)
 import Network.HTTP.Types.Status (status200, status400)
 
 import GraphQL (interpretAnonymousQuery)
-import GraphQL.API (HasObjectDefinition)
-import GraphQL.Resolver (HasResolver, Handler)
+import GraphQL.API (HasObjectDefinition, Object)
+import GraphQL.Resolver (HasResolver, Handler, OperationResolverConstraint)
 import GraphQL.Value (toValue)
 
 
@@ -27,7 +28,12 @@ import GraphQL.Value (toValue)
 -- If you have a 'Cat' type and a corresponding 'catHandler' then you
 -- can use "toApplication @Cat catHandler".
 toApplication
-  :: forall r. (HasResolver IO r, HasObjectDefinition r)
+  :: forall r typeName interfaces fields.
+  ( HasResolver IO r
+  , r ~ Object typeName interfaces fields
+  , OperationResolverConstraint IO fields typeName interfaces
+  , HasObjectDefinition r
+  )
   => Handler IO r -> Application
 toApplication handler = app
   where
