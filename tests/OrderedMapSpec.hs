@@ -1,11 +1,10 @@
-module OrderedMapTests (tests) where
+module OrderedMapSpec (spec) where
 
 import Protolude
 
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (Gen, arbitrary, forAll)
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Hspec
 
 import qualified Data.Map as Map
 import GraphQL.Internal.OrderedMap (OrderedMap)
@@ -15,8 +14,8 @@ import qualified GraphQL.Internal.OrderedMap as OrderedMap
 orderedMaps :: Gen (OrderedMap Int Int)
 orderedMaps = arbitrary
 
-tests :: IO TestTree
-tests = testSpec "OrderedMap" $ do
+spec :: Spec
+spec = describe "OrderedMap" $ do
   describe "Integrity" $ do
     prop "fromList . toList == id" $ do
       forAll orderedMaps (\x -> OrderedMap.orderedMap (OrderedMap.toList x) == Just x)

@@ -1,12 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
-module ValueTests (tests) where
+module ValueSpec (spec) where
 
 import Protolude
 
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (forAll)
-import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe, shouldSatisfy)
+import Test.Hspec
 
 import qualified GraphQL.Internal.Syntax.AST as AST
 import GraphQL.Internal.Arbitrary (arbitraryText, arbitraryNonEmpty)
@@ -31,8 +30,8 @@ data Resource = Resource
 
 instance FromValue Resource
 
-tests :: IO TestTree
-tests = testSpec "Value" $ do
+spec :: Spec
+spec = describe "Value" $ do
   describe "unionObject" $ do
     it "returns empty on empty list" $ do
       unionObjects [] `shouldBe` (objectFromList [] :: Maybe Object)

@@ -2,17 +2,15 @@
 --
 -- Contains everything you need to write handlers for your GraphQL schema.
 module GraphQL.Resolver
-  ( ResolverError(..)
-  , HasResolver(..)
-  , (:<>)(..)
-  , Result(..)
-  , unionValue
+  ( module Export
   ) where
 
-import GraphQL.Internal.Resolver
+import GraphQL.Internal.Resolver as Export
   ( ResolverError(..)
   , HasResolver(..)
+  , OperationResolverConstraint
   , (:<>)(..)
   , Result(..)
   , unionValue
+  , resolveOperation
   )
