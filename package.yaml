@@ -21,9 +21,11 @@ extra-source-files:
 # NB the "redundant constraints" warning is a GHC bug: https://ghc.haskell.org/trac/ghc/ticket/11099
 ghc-options: -Wall -fno-warn-redundant-constraints
 default-extensions:
+  - DerivingStrategies
   - NoImplicitPrelude
   - OverloadedStrings
   - RecordWildCards
+  - StandaloneDeriving
   - TypeApplications
 
 dependencies:

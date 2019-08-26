@@ -212,8 +212,8 @@ directive = AST.Directive
 -- * Type Reference
 
 type_ :: Parser AST.GType
-type_ = AST.TypeList    <$> listType
-    <|> AST.TypeNonNull <$> nonNullType
+type_ = AST.TypeNonNull <$> nonNullType
+    <|> AST.TypeList    <$> listType
     <|> AST.TypeNamed   <$> namedType
     <?> "type_ error!"
 
