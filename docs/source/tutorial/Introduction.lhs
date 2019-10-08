@@ -16,7 +16,7 @@ import System.Random
 
 import GraphQL
 import GraphQL.API (Object, Field, Argument, (:>), Union)
-import GraphQL.Resolver (Handler, (:<>)(..), unionValue)
+import GraphQL.Resolver (Handler, (:<>)(..), unionValue, returns, handlerError)
 ```
 
 ## A simple GraphQL service
@@ -99,7 +99,7 @@ Here's a `Handler` for `Hello`:
 hello :: Handler IO Hello
 hello = pure greeting
   where
-    greeting who = pure ("Hello " <> who <> "!")
+    greeting who = returns ("Hello " <> who <> "!")
 ```
 
 The type signature, `Handler IO Hello` shows that it's a `Handler` for
@@ -115,7 +115,9 @@ to run actions in the base monad.
 
 The second layer of the handler, the implementation of `greeting`, produces
 the value of the `greeting` field. It is monadic so that it will only be
-executed when the field was requested.
+executed when the field was requested.  It uses the 'returns' function to
+return the value for the field in the monad (technically, the Applicative
+context which is OK because a Monad is Applicative).
 
 Each field handler is a separate monadic action so we only perform the side
 effects for fields present in the query.
@@ -123,6 +125,21 @@ effects for fields present in the query.
 This handler is in `Identity` because it doesn't do anything particularly
 monadic. It could be in `IO` or `STM` or `ExceptT Text IO` or whatever you
 would like.
+
+### Errors in handlers
+
+It's possible that a handler will encounter an error as well (for example, the argument might be looked up in a database and the user might specify a non-existent user).  To help support GraphQL-compliant errors, a handler can use the `handlerError` function with the error text.
+
+Here's a modified `Handler` for `Hello`:
+
+```haskell
+helloFancy :: Handler IO Hello
+helloFancy = pure greeting
+  where
+    greeting who = if who == ""
+                   then handlerError "I need to know your name!"
+                   else returns ("Hello " <> who <> "!")
+```
 
 ### Running queries
 
@@ -174,15 +191,15 @@ And its handler:
 calculator :: Handler IO Calculator
 calculator = pure (add :<> subtract')
   where
-    add a b = pure (a + b)
-    subtract' a b = pure (a - b)
+    add a b = returns (a + b)
+    subtract' a b = returns (a - b)
 ```
 
 This handler introduces a new operator, `:<>` (pronounced "birdface"), which
 is used to compose two existing handlers into a new handler. It's inspired by
 the operator for monoids, `<>`.
 
-Note that we still need `pure` for each individual handler.
+Note that we use `returns` for each individual handler.
 
 ## Nesting Objects
 
@@ -238,7 +255,7 @@ We write nested handlers the same way we write the top-level handler:
 user :: Handler IO User
 user = pure name
   where
-    name = pure "Mort"
+    name = returns "Mort"
 
 query :: Handler IO Query
 query = pure user
