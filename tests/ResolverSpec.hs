@@ -48,7 +48,7 @@ tHandler = pure $
   :<> (\x -> if x == 99 then handlerError "missed 99th value" else returns x)
   :<> returns . Just . (returns . (*2))
   :<> (\dArg -> if dArg == 9.9 then handlerError "bad 9.9 value" else returns dArg)
-  :<> pure ([ returns 0, returns 7, handlerError "no number 9" ])
+  :<> returns ([ returns 0, returns 7, handlerError "no number 9" ])
   :<> (\_nArg -> returns $ Just $ return $ returns "fred")
   :<> returns Nothing
 

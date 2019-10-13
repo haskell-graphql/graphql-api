@@ -29,10 +29,10 @@ catOrDog = pure $ do
 
 catOrDogList :: Handler IO CatOrDogList
 catOrDogList = pure $
-  pure [ unionValue @MiniCat (miniCat "Felix")
-       , unionValue @MiniCat (miniCat "Mini")
-       , unionValue @MiniDog miniDog
-       ]
+  returns [ unionValue @MiniCat (miniCat "Felix")
+          , unionValue @MiniCat (miniCat "Mini")
+          , unionValue @MiniDog miniDog
+          ]
 
 main :: IO ()
 main = do

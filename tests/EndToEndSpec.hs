@@ -57,10 +57,10 @@ catOrDog = do
 
 catOrDogList :: Handler IO (List CatOrDog)
 catOrDogList =
-  pure [ unionValue @Cat (catHandler "Felix the Cat" (Just "felix") 42)
-       , unionValue @Cat (catHandler "Henry" Nothing 10)
-       , unionValue @Dog (viewServerDog mortgage)
-       ]
+  returns [ unionValue @Cat (catHandler "Felix the Cat" (Just "felix") 42)
+          , unionValue @Cat (catHandler "Henry" Nothing 10)
+          , unionValue @Dog (viewServerDog mortgage)
+          ]
 
 catHandler :: Text -> Maybe Text -> Int32 -> Handler IO Cat
 catHandler name nickName meowVolume = pure $

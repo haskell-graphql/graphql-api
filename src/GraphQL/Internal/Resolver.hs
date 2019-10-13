@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -219,11 +220,13 @@ instance forall m. (Applicative m) => HasResolver m Bool where
   resolve _ (Just ss) = throwE (SubSelectionOnLeaf ss)
 
 instance forall m hg. (Monad m, Applicative m, HasResolver m hg) => HasResolver m (API.List hg) where
-  type Handler m (API.List hg) = m [Handler m hg]
+  type Handler m (API.List hg) = m (HandlerResult [Handler m hg])
   resolve handler selectionSet = do
-    h <- handler
-    let a = traverse (flip (resolve @m @hg) selectionSet) h
-    map aggregateResults a
+    handler >>= \case
+      Right h ->
+        let a = traverse (flip (resolve @m @hg) selectionSet) h
+        in map aggregateResults a
+      Left err -> pure $ gotHandlerErr err
 
 instance forall m ksN enum. (Applicative m, API.GraphQLEnum enum) => HasResolver m (API.Enum ksN enum) where
   type Handler m (API.Enum ksN enum) = m (HandlerResult enum)
