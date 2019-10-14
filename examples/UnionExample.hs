@@ -6,7 +6,7 @@ import Protolude
 import qualified Data.Aeson as Aeson
 import GraphQL.API (Field, List, Object, Union)
 import GraphQL (interpretAnonymousQuery)
-import GraphQL.Resolver (Handler, (:<>)(..), unionValue)
+import GraphQL.Resolver (Handler, (:<>)(..), unionValue, returns)
 import GraphQL.Value (ToValue(..))
 
 -- Slightly reduced example from the spec
@@ -17,10 +17,10 @@ type CatOrDog = Object "Me" '[] '[Field "myPet" (Union "CatOrDog" '[MiniCat, Min
 type CatOrDogList = Object "CatOrDogList" '[] '[Field "pets" (List (Union "CatOrDog" '[MiniCat, MiniDog]))]
 
 miniCat :: Text -> Handler IO MiniCat
-miniCat name = pure (pure name :<> pure 32)
+miniCat name = pure (returns name :<> returns 32)
 
 miniDog :: Handler IO MiniDog
-miniDog = pure (pure 100)
+miniDog = pure (returns 100)
 
 catOrDog :: Handler IO CatOrDog
 catOrDog = pure $ do
@@ -29,10 +29,10 @@ catOrDog = pure $ do
 
 catOrDogList :: Handler IO CatOrDogList
 catOrDogList = pure $
-  pure [ unionValue @MiniCat (miniCat "Felix")
-       , unionValue @MiniCat (miniCat "Mini")
-       , unionValue @MiniDog miniDog
-       ]
+  returns [ unionValue @MiniCat (miniCat "Felix")
+          , unionValue @MiniCat (miniCat "Mini")
+          , unionValue @MiniDog miniDog
+          ]
 
 main :: IO ()
 main = do

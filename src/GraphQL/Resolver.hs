@@ -13,4 +13,6 @@ import GraphQL.Internal.Resolver as Export
   , Result(..)
   , unionValue
   , resolveOperation
+  , returns
+  , handlerError
   )

@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import GraphQL (makeSchema, compileQuery, executeQuery, interpretAnonymousQuery, interpretQuery)
 import GraphQL.API (Object, Field, List, Argument, (:>), Defaultable(..), HasAnnotatedInputType(..))
 import GraphQL.Internal.Syntax.AST (Variable(..))
-import GraphQL.Resolver ((:<>)(..), Handler, unionValue)
+import GraphQL.Resolver ((:<>)(..), Handler, unionValue, returns)
 import GraphQL.Value (ToValue(..), FromValue(..), makeName)
 import Test.Hspec
 import Text.RawString.QQ (r)
@@ -57,17 +57,17 @@ catOrDog = do
 
 catOrDogList :: Handler IO (List CatOrDog)
 catOrDogList =
-  pure [ unionValue @Cat (catHandler "Felix the Cat" (Just "felix") 42)
-       , unionValue @Cat (catHandler "Henry" Nothing 10)
-       , unionValue @Dog (viewServerDog mortgage)
-       ]
+  returns [ unionValue @Cat (catHandler "Felix the Cat" (Just "felix") 42)
+          , unionValue @Cat (catHandler "Henry" Nothing 10)
+          , unionValue @Dog (viewServerDog mortgage)
+          ]
 
 catHandler :: Text -> Maybe Text -> Int32 -> Handler IO Cat
 catHandler name nickName meowVolume = pure $
-  pure name :<>
-  pure (pure <$> nickName) :<>
-  pure . const False :<>  -- doesn't know any commands
-  pure meowVolume
+  returns name :<>
+  returns (returns <$> nickName) :<>
+  returns . const False :<>  -- doesn't know any commands
+  returns meowVolume
 
 -- | Our server's internal representation of a 'Dog'.
 data ServerDog
@@ -94,17 +94,17 @@ isHouseTrained dog (Just True) = houseTrainedElsewhere dog
 -- | Present 'ServerDog' for GraphQL.
 viewServerDog :: ServerDog -> Handler IO Dog
 viewServerDog dog@ServerDog{..} = pure $
-  pure name :<>
-  pure (fmap pure nickname) :<>
-  pure barkVolume :<>
-  pure . doesKnowCommand dog :<>
-  pure . isHouseTrained dog :<>
+  returns name :<>
+  returns (fmap returns nickname) :<>
+  returns barkVolume :<>
+  returns . doesKnowCommand dog :<>
+  returns . isHouseTrained dog :<>
   viewServerHuman owner
 
 describeDog :: DogStuff -> Handler IO Text
 describeDog (DogStuff toy likesTreats)
-  | likesTreats = pure $ "likes treats and their favorite toy is a " <> toy
-  | otherwise = pure $ "their favorite toy is a " <> toy
+  | likesTreats = returns $ "likes treats and their favorite toy is a " <> toy
+  | otherwise = returns $ "their favorite toy is a " <> toy
 
 rootHandler :: ServerDog -> Handler IO QueryRoot
 rootHandler dog = pure $ viewServerDog dog :<> describeDog :<> catOrDog :<> catOrDogList
@@ -127,7 +127,7 @@ newtype ServerHuman = ServerHuman Text deriving (Eq, Ord, Show, Generic)
 
 -- | Present a 'ServerHuman' as a GraphQL 'Human'.
 viewServerHuman :: ServerHuman -> Handler IO Human
-viewServerHuman (ServerHuman name) = pure (pure name)
+viewServerHuman (ServerHuman name) = pure (returns name)
 
 -- | It me.
 jml :: ServerHuman

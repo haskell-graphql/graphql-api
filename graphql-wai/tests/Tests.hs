@@ -11,7 +11,7 @@ import GraphQL.Resolver
 type Cat = Object "Cat" '[] '[Field "name" Text]
 
 catHandler :: Handler IO Cat
-catHandler = pure (pure "Felix")
+catHandler = pure (returns "Felix")
 
 test1 :: Session ()
 test1 = do

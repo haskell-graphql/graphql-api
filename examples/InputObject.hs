@@ -11,7 +11,7 @@ import qualified Data.Aeson as Aeson
 
 import GraphQL
 import GraphQL.API
-import GraphQL.Resolver (Handler)
+import GraphQL.Resolver (Handler, returns)
 import GraphQL.Value (FromValue, toValue)
 
 data DogStuff = DogStuff { _toy :: Text, _likesTreats :: Bool } deriving (Show, Generic)
@@ -30,8 +30,8 @@ root = pure description
 
 description :: DogStuff -> Handler IO Text
 description (DogStuff toy likesTreats)
-  | likesTreats = pure $ "likes treats and their favorite toy is a " <> toy
-  | otherwise = pure $ "their favorite toy is a " <> toy
+  | likesTreats = returns $ "likes treats and their favorite toy is a " <> toy
+  | otherwise = returns $ "their favorite toy is a " <> toy
 
 -- | Show input object usage
 --
